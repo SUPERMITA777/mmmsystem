@@ -104,7 +104,6 @@ export default function MenuPage() {
   }
 
   function handleSaveProducto(producto: Producto) {
-    // TODO: Implementar guardado
     console.log("Guardar producto:", producto);
     alert("Producto guardado correctamente");
   }
@@ -112,14 +111,11 @@ export default function MenuPage() {
   async function handleDuplicateCategoria(id: string) {
     try {
       setLoading(true);
-      // 1. Get original category
       const { data: originalCat } = await supabase.from("categorias").select("*").eq("id", id).single();
       if (!originalCat) return;
 
-      // 2. Destructure to remove fields that should be auto-generated
       const { id: _, created_at, updated_at, ...categoryData } = originalCat;
 
-      // 3. Insert new category
       const { data: newCat, error: catError } = await supabase
         .from("categorias")
         .insert([{
@@ -131,11 +127,9 @@ export default function MenuPage() {
 
       if (catError) throw catError;
 
-      // 4. Get original products
       const { data: products } = await supabase.from("productos").select("*").eq("categoria_id", id);
 
       if (products && products.length > 0) {
-        // 5. Insert duplicated products
         const duplicatedProducts = products.map(p => {
           const { id: __, created_at: ___, updated_at: ____, ...productData } = p;
           return {
@@ -191,52 +185,51 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-slate-500">Cargando...</div>
+      <div className="flex items-center justify-center h-screen bg-[#1a1a2e]">
+        <div className="text-gray-400">Cargando...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100">
+    <div className="h-screen flex flex-col bg-[#1a1a2e]">
       {/* Header con acciones */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
+      <div className="bg-[#1a1a2e] border-b border-[#2a2a40] px-6 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-6">
             <button
               onClick={() => setTipoMenu("delivery")}
-              className={`px-4 py-2 font-medium text-sm rounded-lg transition-colors ${tipoMenu === "delivery"
-                ? "bg-purple-600 text-white"
-                : "text-slate-600 hover:bg-slate-100"
+              className={`px-1 py-2 font-medium text-sm transition-colors border-b-2 ${tipoMenu === "delivery"
+                ? "border-white text-white"
+                : "border-transparent text-gray-500 hover:text-gray-300"
                 }`}
             >
               Delivery
             </button>
             <button
               onClick={() => setTipoMenu("takeaway")}
-              className={`px-4 py-2 font-medium text-sm rounded-lg transition-colors ${tipoMenu === "takeaway"
-                ? "bg-purple-600 text-white"
-                : "text-slate-600 hover:bg-slate-100"
+              className={`px-1 py-2 font-medium text-sm transition-colors border-b-2 ${tipoMenu === "takeaway"
+                ? "border-white text-white"
+                : "border-transparent text-gray-500 hover:text-gray-300"
                 }`}
             >
               Take Away
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">
+          <div className="flex items-center gap-1">
+            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
               <Download size={16} />
               Exportar menú
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">
+            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
               <Upload size={16} />
               Importar menú
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">
+            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
               <DollarSign size={16} />
               Precios
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-sm">
-              <Plus size={16} />
+            <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm transition-colors">
               Adicionales
             </button>
           </div>
@@ -300,4 +293,3 @@ export default function MenuPage() {
     </div>
   );
 }
-

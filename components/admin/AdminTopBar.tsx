@@ -4,19 +4,19 @@ import { ChevronDown } from "lucide-react";
 
 export function AdminTopBar() {
   return (
-    <header className="h-16 flex items-center justify-between px-6 border-b border-slate-200 bg-white">
-      <div className="text-sm font-semibold text-slate-700">
-        MMM Pizza
+    <header className="h-14 flex items-center justify-between px-6 border-b border-[#2a2a40] bg-[#0f0f1a]">
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500">≡</span>
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold">
+        <button className="rounded-full border border-gray-600 px-4 py-1.5 text-xs font-semibold text-gray-300 hover:bg-white/5 transition-colors">
           Ver tienda
         </button>
-        <button className="rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-700">
+        <button className="rounded-full border border-purple-500 px-4 py-1.5 text-xs font-semibold text-purple-400 hover:bg-purple-500/10 transition-colors">
           Soporte
         </button>
-        <button className="flex items-center gap-1 text-xs font-medium text-slate-700">
+        <button className="flex items-center gap-1 text-xs font-medium text-gray-300 hover:text-white transition-colors">
           MMM Pizza
           <ChevronDown size={14} />
         </button>
@@ -24,4 +24,3 @@ export function AdminTopBar() {
     </header>
   );
 }
-
