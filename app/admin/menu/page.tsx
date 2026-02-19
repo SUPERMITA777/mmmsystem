@@ -188,59 +188,57 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#1a1a2e]">
-        <div className="text-gray-400">Cargando...</div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-gray-500">Cargando...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#1a1a2e]">
-      {/* Header con acciones */}
-      <div className="bg-[#1a1a2e] border-b border-[#2a2a40] px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => setTipoMenu("delivery")}
-              className={`px-1 py-2 font-medium text-sm transition-colors border-b-2 ${tipoMenu === "delivery"
-                ? "border-white text-white"
-                : "border-transparent text-gray-500 hover:text-gray-300"
-                }`}
-            >
-              Delivery
-            </button>
-            <button
-              onClick={() => setTipoMenu("takeaway")}
-              className={`px-1 py-2 font-medium text-sm transition-colors border-b-2 ${tipoMenu === "takeaway"
-                ? "border-white text-white"
-                : "border-transparent text-gray-500 hover:text-gray-300"
-                }`}
-            >
-              Take Away
-            </button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
-              <Download size={16} />
-              Exportar menú
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
-              <Upload size={16} />
-              Importar menú
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-gray-200 rounded-lg text-sm transition-colors">
-              <DollarSign size={16} />
-              Precios
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm transition-colors">
-              Adicionales
-            </button>
-          </div>
+    <div className="h-screen flex flex-col">
+      {/* Header con tabs y acciones */}
+      <div className="px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <button
+            onClick={() => setTipoMenu("delivery")}
+            className={`px-1 py-2 font-semibold text-sm transition-colors border-b-2 ${tipoMenu === "delivery"
+              ? "border-gray-900 text-gray-900"
+              : "border-transparent text-gray-400 hover:text-gray-600"
+              }`}
+          >
+            Delivery
+          </button>
+          <button
+            onClick={() => setTipoMenu("takeaway")}
+            className={`px-1 py-2 font-semibold text-sm transition-colors border-b-2 ${tipoMenu === "takeaway"
+              ? "border-gray-900 text-gray-900"
+              : "border-transparent text-gray-400 hover:text-gray-600"
+              }`}
+          >
+            Take Away
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
+            <Download size={15} />
+            Exportar menú
+          </button>
+          <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
+            <Upload size={15} />
+            Importar menú
+          </button>
+          <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
+            <DollarSign size={15} />
+            Precios
+          </button>
+          <button className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm transition-colors font-medium">
+            Adicionales
+          </button>
         </div>
       </div>
 
-      {/* Contenido principal - tres columnas */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Contenido principal - tres columnas en cards */}
+      <div className="flex-1 flex overflow-hidden px-4 pb-4 gap-0">
         {/* Columna 1: Categorías */}
         <div className="w-64 flex-shrink-0">
           <CategoriasList
@@ -269,6 +267,7 @@ export default function MenuPage() {
         <div className="flex-1">
           <ProductoEditor
             producto={productoActual}
+            categorias={categorias}
             onSave={handleSaveProducto}
             onCancel={() => setProductoSeleccionado(null)}
           />
