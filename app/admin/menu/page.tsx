@@ -34,7 +34,8 @@ type Producto = {
 export default function MenuPage() {
   const [tipoMenu, setTipoMenu] = useState<"delivery" | "takeaway">("delivery");
   const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productosCompletos, setProductosCompletos] = useState<Producto[]>([]);
+  const [productosLista, setProductosLista] = useState<ProductoListType[]>([]);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string | null>(null);
   const [productoSeleccionado, setProductoSeleccionado] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +52,8 @@ export default function MenuPage() {
     if (categoriaSeleccionada) {
       loadProductos(categoriaSeleccionada);
     } else {
-      setProductos([]);
+      setProductosCompletos([]);
+      setProductosLista([]);
       setProductoSeleccionado(null);
     }
   }, [categoriaSeleccionada]);
@@ -87,13 +89,14 @@ export default function MenuPage() {
         .order("orden");
 
       if (data) {
+        setProductosCompletos(data);
         const productosFormateados: ProductoListType[] = data.map(p => ({
           id: p.id,
           nombre: p.nombre,
           activo: p.activo,
           orden: p.orden,
         }));
-        setProductos(productosFormateados as any);
+        setProductosLista(productosFormateados);
         if (data.length > 0 && !productoSeleccionado) {
           setProductoSeleccionado(data[0].id);
         }
@@ -181,7 +184,7 @@ export default function MenuPage() {
     setIsEditModalOpen(true);
   }
 
-  const productoActual = productos.find((p) => p.id === productoSeleccionado) || null;
+  const productoActual = productosCompletos.find((p) => p.id === productoSeleccionado) || null;
 
   if (loading) {
     return (
@@ -255,7 +258,7 @@ export default function MenuPage() {
         {/* Columna 2: Productos */}
         <div className="w-64 flex-shrink-0">
           <ProductosList
-            productos={productos}
+            productos={productosLista}
             productoSeleccionado={productoSeleccionado}
             onSelectProducto={setProductoSeleccionado}
             onCreateProducto={() => alert("Crear producto - Próximamente")}
