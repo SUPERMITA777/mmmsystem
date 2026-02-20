@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
+import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -68,27 +68,35 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
     const propinaOpciones = [0, 100, 200, 500];
 
-    // ============ Geocoding + Zone validation ============
-    async function verificarDireccion(dir: string) {
-        if (!dir.trim() || tipoEntrega !== "delivery") return;
+    async function verificarDireccion(dir: string, optionalCoords?: LatLng) {
+        if (!dir.trim() && !optionalCoords) return;
+        if (tipoEntrega !== "delivery") return;
         setGeocodingState("loading");
         setZonaDetectada(null);
         setZonaError(null);
         setCostoEnvioCalc(0);
 
         try {
-            // 1. Geocodificar dirección via Nominatim
-            const geoRes = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}&limit=1`,
-                { headers: { "Accept-Language": "es" } }
-            );
-            const geoData = await geoRes.json();
-            if (!geoData[0]) {
-                setZonaError("No se encontró la dirección. Verificá que sea correcta.");
-                setGeocodingState("error");
-                return;
+            let clientePt: LatLng;
+
+            if (optionalCoords) {
+                // Ya tenemos las coordenadas directas (e.g., GPS)
+                clientePt = optionalCoords;
+            } else {
+                // 1. Geocodificar dirección escrita via Nominatim
+                const geoRes = await fetch(
+                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}&limit=1`,
+                    { headers: { "Accept-Language": "es" } }
+                );
+                const geoData = await geoRes.json();
+                if (!geoData[0]) {
+                    setZonaError("No se encontró la dirección. Verificá que sea correcta.");
+                    setGeocodingState("error");
+                    return;
+                }
+                clientePt = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
             }
-            const clientePt: LatLng = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+
             setClienteCoords(clientePt);
 
             // 2. Cargar zonas activas con polígonos
@@ -138,7 +146,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                     setGeocodingState("ok");
                     setCostoEnvioCalc(0);
                 } else {
-                    setZonaError("Tu dirección está fuera de nuestra zona de entrega. 😕");
+                    setZonaError("Tu ubicación está fuera de nuestra zona de entrega. 😕");
                     setGeocodingState("error");
                 }
                 return;
@@ -162,6 +170,60 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             setZonaError("Error al verificar la dirección.");
             setGeocodingState("error");
         }
+    }
+
+    async function handleUseCurrentLocation() {
+        if (!navigator.geolocation) {
+            alert("Tu navegador no soporta geolocalización.");
+            return;
+        }
+
+        setGeocodingState("loading");
+        setZonaDetectada(null);
+        setZonaError(null);
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const coords: LatLng = { lat, lng };
+
+                try {
+                    // Reverse geocoding para obtener la dirección en texto (ej. "Av. Corrientes 123")
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
+                        headers: { "Accept-Language": "es" }
+                    });
+                    const data = await res.json();
+
+                    if (data && data.address) {
+                        const calle = data.address.road || data.address.pedestrian || "";
+                        const numero = data.address.house_number || "";
+                        const ciudad = data.address.city || data.address.town || "";
+
+                        let dirEscrita = `${calle} ${numero}`.trim();
+                        if (!dirEscrita) dirEscrita = data.display_name.split(",")[0]; // Fallback genérico
+                        if (ciudad) dirEscrita += `, ${ciudad}`;
+
+                        setDireccion(dirEscrita);
+                    } else {
+                        setDireccion("Ubicación GPS (Calle desconocida)");
+                    }
+
+                    // Validar usando las coordenadas exactas del GPS, ignorando fallos del texto
+                    await verificarDireccion(direccion, coords);
+                } catch (err) {
+                    console.error("Error reverse geocoding:", err);
+                    setDireccion("Ubicación GPS");
+                    await verificarDireccion("Ubicación GPS", coords);
+                }
+            },
+            (error) => {
+                console.error("Geolocation error:", error);
+                setGeocodingState("error");
+                setZonaError("No pudimos obtener tu ubicación. Por favor verificá los permisos o ingresá tu dirección manualmente.");
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
     }
 
     async function handleRealizarPedido() {
@@ -445,13 +507,21 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                     <button
                                         onClick={() => verificarDireccion(direccion)}
                                         disabled={geocodingState === "loading" || !direccion.trim()}
-                                        className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors flex items-center gap-1.5"
+                                        className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
                                     >
                                         {geocodingState === "loading" ? (
                                             <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
                                         ) : "Verificar"}
                                     </button>
                                 </div>
+                                <button
+                                    onClick={handleUseCurrentLocation}
+                                    disabled={geocodingState === "loading"}
+                                    className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition-colors mt-1"
+                                >
+                                    <LocateFixed size={14} className={geocodingState === "loading" ? "animate-pulse" : ""} />
+                                    Usar mi ubicación actual
+                                </button>
 
                                 {/* Feedback zona OK */}
                                 {geocodingState === "ok" && (
