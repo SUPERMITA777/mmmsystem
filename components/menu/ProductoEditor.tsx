@@ -94,23 +94,7 @@ export function ProductoEditor({
           <h3 className="text-base font-semibold text-gray-900">Editar producto</h3>
         </div>
 
-        {/* Imagen preview */}
-        {formData.imagen_url && (
-          <div className="px-6 pb-4">
-            <img
-              src={formData.imagen_url}
-              alt={formData.nombre}
-              className="w-full h-40 object-cover rounded-lg border border-gray-200"
-            />
-            <div className="mt-1.5 flex gap-3 text-xs text-gray-500">
-              <button className="hover:text-purple-600 transition-colors">Cambiar imagen</button>
-              <span>·</span>
-              <span>Tamaño máximo: 10 MB.</span>
-              <span>·</span>
-              <button className="hover:text-red-500 transition-colors">Eliminar imagen</button>
-            </div>
-          </div>
-        )}
+
 
         <div className="px-6 pb-4 space-y-4">
           {/* Categoría */}
@@ -315,30 +299,107 @@ export function ProductoEditor({
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Sticky action buttons */}
-      <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-br-xl">
-        <button
-          onClick={onCancel}
-          className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
-        >
-          Cancelar
-        </button>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
-            <ExternalLink size={14} />
-            Ver producto
-          </button>
+          {/* Imagen de producto - Movido al final */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-semibold text-gray-900 mb-4">Imagen del producto</h4>
+            <div className="space-y-4">
+              {formData.imagen_url ? (
+                <div className="relative group">
+                  <img
+                    src={formData.imagen_url}
+                    alt={formData.nombre}
+                    className="w-full h-48 object-cover rounded-xl border border-gray-200 bg-gray-50"
+                  />
+                  <div className="mt-3 flex items-center gap-4 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('product-image-upload')?.click()}
+                      className="text-purple-600 font-medium hover:text-purple-700 transition-colors"
+                    >
+                      Cambiar imagen
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => handleChange("imagen_url", "")}
+                      className="text-red-500 font-medium hover:text-red-600 transition-colors"
+                    >
+                      Eliminar imagen
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('product-image-upload')?.click()}
+                  className="w-full h-32 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-purple-300 hover:bg-purple-50 transition-all text-gray-500 group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-white transition-colors">
+                    <ExternalLink size={20} className="text-gray-400 group-hover:text-purple-500" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700">Subir imagen</p>
+                    <p className="text-[11px] text-gray-400">PNG, JPG hasta 10MB</p>
+                  </div>
+                </button>
+              )}
+
+              <input
+                id="product-image-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+
+                  try {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+                    const filePath = `products/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                      .from('images')
+                      .upload(filePath, file);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabase.storage
+                      .from('images')
+                      .getPublicUrl(filePath);
+
+                    handleChange("imagen_url", publicUrl);
+                  } catch (error: any) {
+                    alert("Error subiendo la imagen: " + error.message);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky action buttons */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-br-xl">
           <button
-            onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
-            className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+            onClick={onCancel}
+            className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
           >
-            Actualizar
+            Cancelar
           </button>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
+              <ExternalLink size={14} />
+              Ver producto
+            </button>
+            <button
+              onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
+              className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+            >
+              Actualizar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
+      );
 }

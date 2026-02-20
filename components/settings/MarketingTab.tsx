@@ -74,25 +74,128 @@ export function MarketingTab() {
             </div>
 
             {/* Logo */}
-            <fieldset className="border border-gray-300 rounded-lg px-3 py-2">
-                <legend className="text-xs text-gray-500 px-1 flex items-center gap-1"><Image size={12} /> URL del logo</legend>
-                <input type="text" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} className="w-full bg-transparent outline-none text-sm text-gray-900" placeholder="https://..." />
-            </fieldset>
-            {logoUrl && (
-                <div className="flex items-center gap-3">
-                    <img src={logoUrl} alt="Logo preview" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-white" />
-                    <span className="text-xs text-gray-400">Vista previa del logo</span>
+            <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700 flex items-center gap-2"><Image size={14} /> Logo de la tienda</p>
+                <div className="flex items-center gap-4">
+                    {logoUrl ? (
+                        <div className="relative group">
+                            <img src={logoUrl} alt="Logo preview" className="w-20 h-20 object-contain rounded-lg border border-gray-200 bg-white" />
+                            <div className="mt-2 flex gap-3 text-[11px]">
+                                <button
+                                    type="button"
+                                    onClick={() => document.getElementById('logo-upload')?.click()}
+                                    className="text-purple-600 hover:text-purple-700 font-medium"
+                                >
+                                    Cambiar
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setLogoUrl("")}
+                                    className="text-red-500 hover:text-red-600 font-medium"
+                                >
+                                    Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('logo-upload')?.click()}
+                            className="w-20 h-20 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center gap-1 hover:border-purple-300 hover:bg-purple-50 transition-all text-gray-400"
+                        >
+                            <Image size={16} />
+                            <span className="text-[10px] font-medium">Subir</span>
+                        </button>
+                    )}
+                    <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-2">Se recomienda un logo en formato PNG o SVG con fondo transparente.</p>
+                        <input
+                            id="logo-upload"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                    const fileExt = file.name.split('.').pop();
+                                    const fileName = `logo-${Math.random().toString(36).substring(2)}.${fileExt}`;
+                                    const filePath = `marketing/${fileName}`;
+                                    const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
+                                    if (uploadError) throw uploadError;
+                                    const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+                                    setLogoUrl(publicUrl);
+                                } catch (error: any) {
+                                    alert("Error subiendo el logo: " + error.message);
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
-            )}
+            </div>
 
             {/* Banner */}
-            <fieldset className="border border-gray-300 rounded-lg px-3 py-2">
-                <legend className="text-xs text-gray-500 px-1 flex items-center gap-1"><Image size={12} /> URL del banner</legend>
-                <input type="text" value={config.banner_url} onChange={e => setConfig({ ...config, banner_url: e.target.value })} className="w-full bg-transparent outline-none text-sm text-gray-900" placeholder="https://..." />
-            </fieldset>
-            {config.banner_url && (
-                <img src={config.banner_url} alt="Banner preview" className="w-full h-32 object-cover rounded-xl border border-gray-200" />
-            )}
+            <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700 flex items-center gap-2"><Image size={14} /> Banner de la tienda</p>
+                <div className="space-y-3">
+                    {config.banner_url ? (
+                        <div className="relative group">
+                            <img src={config.banner_url} alt="Banner preview" className="w-full h-32 object-cover rounded-xl border border-gray-200" />
+                            <div className="mt-2 flex gap-3 text-[11px]">
+                                <button
+                                    type="button"
+                                    onClick={() => document.getElementById('banner-upload')?.click()}
+                                    className="text-purple-600 hover:text-purple-700 font-medium"
+                                >
+                                    Cambiar banner
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setConfig({ ...config, banner_url: "" })}
+                                    className="text-red-500 hover:text-red-600 font-medium"
+                                >
+                                    Eliminar banner
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('banner-upload')?.click()}
+                            className="w-full h-32 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-purple-300 hover:bg-purple-50 transition-all text-gray-400 group"
+                        >
+                            <Image size={24} className="group-hover:text-purple-500 transition-colors" />
+                            <div className="text-center">
+                                <p className="text-xs font-medium text-gray-600">Haz clic para subir un banner</p>
+                                <p className="text-[10px] text-gray-400">Dimensión recomendada: 1200x400px</p>
+                            </div>
+                        </button>
+                    )}
+                    <input
+                        id="banner-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                                const fileExt = file.name.split('.').pop();
+                                const fileName = `banner-${Math.random().toString(36).substring(2)}.${fileExt}`;
+                                const filePath = `marketing/${fileName}`;
+                                const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
+                                if (uploadError) throw uploadError;
+                                const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+                                setConfig({ ...config, banner_url: publicUrl });
+                            } catch (error: any) {
+                                alert("Error subiendo el banner: " + error.message);
+                            }
+                        }}
+                    />
+                </div>
+            </div>
 
             <button
                 onClick={handleSave}
