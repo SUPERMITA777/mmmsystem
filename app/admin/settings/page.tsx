@@ -6,24 +6,18 @@ import { ModalidadesTab } from "@/components/settings/ModalidadesTab";
 import { PedidosTab } from "@/components/settings/PedidosTab";
 import { HorariosTab } from "@/components/settings/HorariosTab";
 import { MetodosPagoTab } from "@/components/settings/MetodosPagoTab";
-import {
-  ShoppingBag,
-  Package,
-  Clock,
-  CreditCard,
-  MapPin,
-  MessageSquare,
-  DollarSign,
-} from "lucide-react";
+import { ZonasEntregaTab } from "@/components/settings/ZonasEntregaTab";
+import { RedesSocialesTab } from "@/components/settings/RedesSocialesTab";
+import { MarketingTab } from "@/components/settings/MarketingTab";
 
 const TABS = [
-  { id: "modalidades", label: "Modalidades", icon: ShoppingBag },
-  { id: "pedidos", label: "Pedidos", icon: Package },
-  { id: "horarios", label: "Horarios", icon: Clock },
-  { id: "metodos_pago", label: "Métodos de pago", icon: CreditCard },
-  { id: "zonas", label: "Zonas de entrega", icon: MapPin },
-  { id: "whatsapp", label: "WhatsApp", icon: MessageSquare },
-  { id: "facturacion", label: "Facturación", icon: DollarSign },
+  { id: "modalidades", label: "Modalidades" },
+  { id: "pedidos", label: "Pedidos" },
+  { id: "horarios", label: "Horarios" },
+  { id: "metodos_pago", label: "Métodos de pago" },
+  { id: "zonas", label: "Zonas de entrega" },
+  { id: "redes", label: "Redes sociales" },
+  { id: "marketing", label: "Marketing" },
 ];
 
 export default function SettingsPage() {
@@ -31,16 +25,16 @@ export default function SettingsPage() {
 
   return (
     <section className="p-8">
-      <header className="mb-6">
-        <h2 className="text-2xl font-semibold text-slate-900">
-          Configuraciones
-        </h2>
-        <p className="text-sm text-slate-500 mt-1">
-          Ajusta cómo opera tu sucursal
-        </p>
-      </header>
+      {/* Sucursal header */}
+      <div className="text-center mb-6">
+        <h2 className="text-xl font-bold text-gray-900">MMM Pizza</h2>
+        <div className="flex items-center justify-center gap-4 mt-1">
+          <button className="text-sm text-purple-600 hover:underline font-medium">Editar</button>
+          <button className="text-sm text-purple-600 hover:underline font-medium">Obtener QR</button>
+        </div>
+      </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <Tabs tabs={TABS} initialId={activeTab} onChange={setActiveTab} />
 
         <TabPanel id="modalidades" activeId={activeTab}>
@@ -60,27 +54,17 @@ export default function SettingsPage() {
         </TabPanel>
 
         <TabPanel id="zonas" activeId={activeTab}>
-          <div className="text-center py-12 text-slate-500">
-            <MapPin size={48} className="mx-auto mb-4 text-slate-300" />
-            <p>Zonas de entrega - Próximamente</p>
-          </div>
+          <ZonasEntregaTab />
         </TabPanel>
 
-        <TabPanel id="whatsapp" activeId={activeTab}>
-          <div className="text-center py-12 text-slate-500">
-            <MessageSquare size={48} className="mx-auto mb-4 text-slate-300" />
-            <p>Configuración de WhatsApp - Próximamente</p>
-          </div>
+        <TabPanel id="redes" activeId={activeTab}>
+          <RedesSocialesTab />
         </TabPanel>
 
-        <TabPanel id="facturacion" activeId={activeTab}>
-          <div className="text-center py-12 text-slate-500">
-            <DollarSign size={48} className="mx-auto mb-4 text-slate-300" />
-            <p>Configuración de Facturación - Próximamente</p>
-          </div>
+        <TabPanel id="marketing" activeId={activeTab}>
+          <MarketingTab />
         </TabPanel>
       </div>
     </section>
   );
 }
-
