@@ -1,13 +1,49 @@
 "use client";
 
-import { useState } from "react";
-import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
 
+// ========== Utilidades geoespaciales ==========
+type LatLng = { lat: number; lng: number };
+type ZonaEntrega = {
+    id: string;
+    nombre: string;
+    costo_envio: number;
+    minimo_compra: number;
+    envio_gratis_desde: number | null;
+    tiempo_estimado_minutos: number | null;
+    activo: boolean;
+    polygon_coords: LatLng[] | null;
+    tipo_precio: "fijo" | "por_km";
+    precio_por_km: number;
+};
+
+function pointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
+    if (!polygon || polygon.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].lng, yi = polygon[i].lat;
+        const xj = polygon[j].lng, yj = polygon[j].lat;
+        const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+            (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+function haversineKm(a: LatLng, b: LatLng): number {
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLng = (b.lng - a.lng) * Math.PI / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 export default function CartModal({ onClose }: { onClose: () => void }) {
     const { items, updateQty, removeItem, total, clearCart } = useCart();
-    const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "retirar">("delivery");
+    const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "takeaway">("delivery");
     const [nombre, setNombre] = useState("");
     const [telefono, setTelefono] = useState("");
     const [email, setEmail] = useState("");
@@ -19,11 +55,114 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
     const [codigoPromo, setCodigoPromo] = useState("");
     const [sending, setSending] = useState(false);
 
+    // Zona / geocoding states
+    const [zonaDetectada, setZonaDetectada] = useState<ZonaEntrega | null>(null);
+    const [zonaError, setZonaError] = useState<string | null>(null);
+    const [geocodingState, setGeocodingState] = useState<"idle" | "loading" | "ok" | "error">("idle");
+    const [clienteCoords, setClienteCoords] = useState<LatLng | null>(null);
+    const [costoEnvioCalc, setCostoEnvioCalc] = useState(0);
+
     const ALIAS_TRANSFERENCIA = "MMM.PIZZA";
-    const COSTO_ENVIO = tipoEntrega === "delivery" ? 0 : 0; // puede configurarse
+    const COSTO_ENVIO = tipoEntrega === "delivery" ? costoEnvioCalc : 0;
     const totalConPropina = total + propina + COSTO_ENVIO;
 
     const propinaOpciones = [0, 100, 200, 500];
+
+    // ============ Geocoding + Zone validation ============
+    async function verificarDireccion(dir: string) {
+        if (!dir.trim() || tipoEntrega !== "delivery") return;
+        setGeocodingState("loading");
+        setZonaDetectada(null);
+        setZonaError(null);
+        setCostoEnvioCalc(0);
+
+        try {
+            // 1. Geocodificar dirección via Nominatim
+            const geoRes = await fetch(
+                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}&limit=1`,
+                { headers: { "Accept-Language": "es" } }
+            );
+            const geoData = await geoRes.json();
+            if (!geoData[0]) {
+                setZonaError("No se encontró la dirección. Verificá que sea correcta.");
+                setGeocodingState("error");
+                return;
+            }
+            const clientePt: LatLng = { lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) };
+            setClienteCoords(clientePt);
+
+            // 2. Cargar zonas activas con polígonos
+            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
+            if (!suc) { setZonaError("Error interno."); setGeocodingState("error"); return; }
+
+            const { data: zonas } = await supabase
+                .from("zonas_entrega")
+                .select("*")
+                .eq("sucursal_id", suc.id)
+                .eq("activo", true);
+
+            // 3. Cargar config del local
+            const { data: cfg } = await supabase
+                .from("config_sucursal")
+                .select("local_lat, local_lng")
+                .eq("sucursal_id", suc.id)
+                .limit(1)
+                .maybeSingle();
+
+            const localPt: LatLng | null = cfg?.local_lat && cfg?.local_lng
+                ? { lat: cfg.local_lat, lng: cfg.local_lng }
+                : null;
+
+            // 4. Verificar en qué zona está
+            const zonasConPoligono = (zonas || []).filter(
+                (z: ZonaEntrega) => z.polygon_coords && z.polygon_coords.length >= 3
+            );
+
+            let zonaEncontrada: ZonaEntrega | null = null;
+            for (const zona of zonasConPoligono) {
+                if (pointInPolygon(clientePt, zona.polygon_coords!)) {
+                    zonaEncontrada = zona as ZonaEntrega;
+                    break;
+                }
+            }
+
+            if (!zonaEncontrada) {
+                // Si hay zonas pero sin polígono, aceptar igual
+                if ((zonas || []).length > 0 && zonasConPoligono.length === 0) {
+                    const primeraZona = (zonas || [])[0] as ZonaEntrega;
+                    setZonaDetectada(primeraZona);
+                    setCostoEnvioCalc(primeraZona.costo_envio);
+                    setGeocodingState("ok");
+                } else if ((zonas || []).length === 0) {
+                    // Sin zonas configuradas → envío gratis
+                    setGeocodingState("ok");
+                    setCostoEnvioCalc(0);
+                } else {
+                    setZonaError("Tu dirección está fuera de nuestra zona de entrega. 😕");
+                    setGeocodingState("error");
+                }
+                return;
+            }
+
+            // 5. Calcular costo de envío
+            let costoFinal = zonaEncontrada.costo_envio;
+            if (zonaEncontrada.tipo_precio === "por_km" && localPt) {
+                const distKm = haversineKm(localPt, clientePt);
+                costoFinal = Math.round(distKm * zonaEncontrada.precio_por_km);
+            }
+            // Envío gratis desde
+            if (zonaEncontrada.envio_gratis_desde && total >= zonaEncontrada.envio_gratis_desde) {
+                costoFinal = 0;
+            }
+
+            setZonaDetectada(zonaEncontrada);
+            setCostoEnvioCalc(costoFinal);
+            setGeocodingState("ok");
+        } catch {
+            setZonaError("Error al verificar la dirección.");
+            setGeocodingState("error");
+        }
+    }
 
     async function handleRealizarPedido() {
         if (!nombre.trim()) { alert("Por favor ingresá tu nombre."); return; }
@@ -45,11 +184,29 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 .eq("sucursal_id", sucursal.id)
                 .single();
 
+            // 2b. Generar número de pedido correcto desde el cliente (bypass del trigger bugueado)
+            const yearPart = new Date().getFullYear().toString().slice(-2);
+            const { data: lastPedido } = await supabase
+                .from("pedidos")
+                .select("numero_pedido")
+                .like("numero_pedido", `PED-${yearPart}%`)
+                .order("numero_pedido", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            let nextSeq = 1;
+            if (lastPedido?.numero_pedido) {
+                const lastNum = parseInt(lastPedido.numero_pedido.slice(-6), 10);
+                if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+            }
+            const numeroPedido = `PED-${yearPart}${String(nextSeq).padStart(6, "0")}`;
+
             // 3. Crear el Pedido en la base de datos
             const { data: pedido, error: pedidoError } = await supabase
                 .from("pedidos")
                 .insert([{
                     sucursal_id: sucursal.id,
+                    numero_pedido: numeroPedido,
                     cliente_nombre: nombre,
                     cliente_telefono: telefono,
                     cliente_direccion: tipoEntrega === "delivery" ? direccion : null,
@@ -76,10 +233,21 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 nombre_producto: i.nombre,
                 cantidad: i.cantidad,
                 precio_unitario: i.precio,
-                adicionales: i.adicionales // JSONB
+                adicionales: i.adicionales ?? []
             }));
 
-            const { error: itemsError } = await supabase.from("pedido_items").insert(itemsToInsert);
+            let itemsError: any = null;
+            const { error: err1 } = await supabase.from("pedido_items").insert(itemsToInsert);
+            if (err1) {
+                if (err1.code === "PGRST204") {
+                    // Schema cache aún no actualizó la columna; insertar sin adicionales
+                    const itemsWithout = itemsToInsert.map(({ adicionales: _, ...rest }) => rest);
+                    const { error: err2 } = await supabase.from("pedido_items").insert(itemsWithout);
+                    itemsError = err2;
+                } else {
+                    itemsError = err1;
+                }
+            }
             if (itemsError) throw itemsError;
 
             // 5. Armamos el mensaje de WhatsApp
@@ -90,7 +258,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
             const msg = `🍕 *NUEVO PEDIDO*\n\n` +
                 `*ID:* ${pedido.numero_pedido || pedido.id.slice(0, 8)}\n` +
-                `*Tipo:* ${tipoEntrega === "delivery" ? "Delivery" : "Retirar en local"}\n` +
+                `*Tipo:* ${tipoEntrega === "delivery" ? "Delivery" : "Take Away"}\n` +
                 `*Cliente:* ${nombre}\n` +
                 `*Teléfono:* +54 ${telefono}\n` +
                 (email ? `*Email:* ${email}\n` : "") +
@@ -129,7 +297,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
                     <h2 className="text-sm font-black text-white uppercase tracking-widest">
-                        {tipoEntrega === "delivery" ? "Pedido de Delivery" : "Pedido para Retirar"}
+                        {tipoEntrega === "delivery" ? "Pedido de Delivery" : "Pedido Take Away"}
                     </h2>
                     <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
                         <X size={20} />
@@ -149,10 +317,10 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                 Delivery
                             </button>
                             <button
-                                onClick={() => setTipoEntrega("retirar")}
-                                className={`flex-1 py-3 text-sm font-black uppercase tracking-widest transition-colors ${tipoEntrega === "retirar" ? "bg-orange-600 text-white" : "text-slate-400 hover:text-white"}`}
+                                onClick={() => setTipoEntrega("takeaway")}
+                                className={`flex-1 py-3 text-sm font-black uppercase tracking-widest transition-colors ${tipoEntrega === "takeaway" ? "bg-orange-600 text-white" : "text-slate-400 hover:text-white"}`}
                             >
-                                Retirar
+                                Take Away
                             </button>
                         </div>
 
@@ -257,15 +425,75 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                 <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">
                                     <MapPin size={14} /><span>Dirección de entrega</span>
                                 </div>
-                                <input
-                                    type="text"
-                                    placeholder="Dirección*"
-                                    value={direccion}
-                                    onChange={e => setDireccion(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
-                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Ingresá tu dirección completa*"
+                                        value={direccion}
+                                        onChange={e => {
+                                            setDireccion(e.target.value);
+                                            setGeocodingState("idle");
+                                            setZonaDetectada(null);
+                                            setZonaError(null);
+                                        }}
+                                        onKeyDown={e => e.key === "Enter" && verificarDireccion(direccion)}
+                                        className={`flex-1 bg-white/5 border rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none transition-colors ${geocodingState === "ok" ? "border-green-500/50" :
+                                            geocodingState === "error" ? "border-red-500/50" :
+                                                "border-white/10 focus:border-orange-500/50"
+                                            }`}
+                                    />
+                                    <button
+                                        onClick={() => verificarDireccion(direccion)}
+                                        disabled={geocodingState === "loading" || !direccion.trim()}
+                                        className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors flex items-center gap-1.5"
+                                    >
+                                        {geocodingState === "loading" ? (
+                                            <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                                        ) : "Verificar"}
+                                    </button>
+                                </div>
+
+                                {/* Feedback zona OK */}
+                                {geocodingState === "ok" && (
+                                    <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">
+                                        <CheckCircle size={14} className="text-green-400 mt-0.5 shrink-0" />
+                                        <div>
+                                            {zonaDetectada ? (
+                                                <>
+                                                    <span className="text-green-300 font-semibold">¡Llegamos a tu zona!</span>
+                                                    <span className="text-slate-400 ml-2">Zona: {zonaDetectada.nombre}</span>
+                                                    <div className="text-slate-400 mt-0.5">
+                                                        Costo de envío:{" "}
+                                                        <span className="text-white font-bold">
+                                                            {costoEnvioCalc === 0 ? "GRATIS 🎉" : `$${new Intl.NumberFormat("es-AR").format(costoEnvioCalc)}`}
+                                                        </span>
+                                                        {zonaDetectada.tiempo_estimado_minutos && (
+                                                            <span className="ml-2 text-slate-500">· {zonaDetectada.tiempo_estimado_minutos} min estimados</span>
+                                                        )}
+                                                    </div>
+                                                    {zonaDetectada.minimo_compra > 0 && total < zonaDetectada.minimo_compra && (
+                                                        <div className="text-amber-400 mt-1">
+                                                            ⚠ Mínimo de compra: ${new Intl.NumberFormat("es-AR").format(zonaDetectada.minimo_compra)}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="text-green-300 font-semibold">Dirección verificada ✓</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Feedback error */}
+                                {geocodingState === "error" && zonaError && (
+                                    <div className="flex items-center gap-2 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                        <AlertCircle size={14} className="text-red-400 shrink-0" />
+                                        <span className="text-red-300">{zonaError}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
+
 
                         {/* Método de pago */}
                         <div className="bg-[#1a1a1a] rounded-xl p-4 space-y-3">

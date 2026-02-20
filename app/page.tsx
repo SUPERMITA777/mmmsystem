@@ -40,6 +40,52 @@ function PublicMenuContent() {
     fetchMenuData();
   }, []);
 
+  // ========== Manejo del historial para botón Atrás de Android ==========
+  useEffect(() => {
+    function handlePopState() {
+      const hash = window.location.hash;
+      // Si el hash ya no tiene #producto ni #carrito → cerrar modales
+      if (!hash.startsWith("#producto") && !hash.startsWith("#carrito")) {
+        setSelectedProduct(null);
+        setCartOpen(false);
+      } else if (hash === "#carrito") {
+        setSelectedProduct(null);
+      } else if (hash.startsWith("#producto")) {
+        setCartOpen(false);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  function openProduct(producto: Producto) {
+    // Empujar estado al historial → Atrás cerrará el modal en vez de salir
+    window.history.pushState({ modal: "producto", id: producto.id }, "", `#producto-${producto.id}`);
+    setSelectedProduct(producto);
+  }
+
+  function closeProduct() {
+    setSelectedProduct(null);
+    // Si el hash actual es el del producto, volver atrás en el historial
+    if (window.location.hash.startsWith("#producto")) {
+      window.history.back();
+    }
+  }
+
+  function openCart() {
+    window.history.pushState({ modal: "carrito" }, "", "#carrito");
+    setCartOpen(true);
+  }
+
+  function closeCart() {
+    setCartOpen(false);
+    if (window.location.hash === "#carrito") {
+      window.history.back();
+    }
+  }
+
+
   async function fetchMenuData() {
     try {
       setLoading(true);
@@ -134,23 +180,23 @@ function PublicMenuContent() {
       {/* Product List */}
       <PublicProductList
         categorias={categorias}
-        onProductClick={setSelectedProduct}
+        onProductClick={openProduct}
       />
 
       {/* Floating Cart Button */}
-      <FloatingCartButton onClick={() => setCartOpen(true)} />
+      <FloatingCartButton onClick={openCart} />
 
       {/* Product Detail Modal */}
       {selectedProduct && (
         <ProductDetailModal
           producto={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
+          onClose={closeProduct}
         />
       )}
 
       {/* Cart Modal */}
       {cartOpen && (
-        <CartModal onClose={() => setCartOpen(false)} />
+        <CartModal onClose={closeCart} />
       )}
     </main>
   );

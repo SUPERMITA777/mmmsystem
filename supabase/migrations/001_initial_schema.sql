@@ -411,8 +411,8 @@ DECLARE
 BEGIN
   year_part := TO_CHAR(NOW(), 'YY');
   
-  -- Obtener el siguiente número de secuencia para el año
-  SELECT COALESCE(MAX(CAST(SUBSTRING(numero_pedido FROM '[0-9]+$') AS INTEGER)), 0) + 1
+  -- Obtener el siguiente número de secuencia para el año (solo los últimos 6 dígitos)
+  SELECT COALESCE(MAX(CAST(RIGHT(numero_pedido, 6) AS INTEGER)), 0) + 1
   INTO sequence_num
   FROM pedidos
   WHERE numero_pedido LIKE 'PED-' || year_part || '%';
