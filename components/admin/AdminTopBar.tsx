@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Headphones } from "lucide-react";
+import Link from "next/link";
 
 export function AdminTopBar() {
   return (
@@ -12,9 +13,13 @@ export function AdminTopBar() {
 
       {/* Right: buttons */}
       <div className="flex items-center gap-3">
-        <button className="rounded-full bg-gray-900 px-5 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 transition-colors">
+        <Link
+          href="/"
+          target="_blank"
+          className="rounded-full bg-gray-900 px-5 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 transition-colors"
+        >
           Ver tienda
-        </button>
+        </Link>
         <button className="rounded-full border border-gray-300 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
           <Headphones size={13} />
           Soporte

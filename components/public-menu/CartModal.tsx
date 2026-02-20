@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function CartModal({ onClose }: { onClose: () => void }) {
     const { items, updateQty, removeItem, total, clearCart } = useCart();
@@ -32,9 +33,63 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
         setSending(true);
         try {
-            // Armamos un mensaje de WhatsApp básico por ahora
-            const itemsTexto = items.map(i => `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}`).join("\n");
+            // 1. Obtener Sucursal ID
+            const { data: sucursal } = await supabase.from("sucursales").select("id").limit(1).single();
+            if (!sucursal) throw new Error("No se encontró sucursal activa.");
+
+            // 2. Obtener Método de Pago ID
+            const { data: mPago } = await supabase
+                .from("metodos_pago")
+                .select("id, nombre")
+                .eq("codigo", metodoPago)
+                .eq("sucursal_id", sucursal.id)
+                .single();
+
+            // 3. Crear el Pedido en la base de datos
+            const { data: pedido, error: pedidoError } = await supabase
+                .from("pedidos")
+                .insert([{
+                    sucursal_id: sucursal.id,
+                    cliente_nombre: nombre,
+                    cliente_telefono: telefono,
+                    cliente_direccion: tipoEntrega === "delivery" ? direccion : null,
+                    tipo: tipoEntrega,
+                    estado: 'pendiente',
+                    origen: 'web',
+                    subtotal: total,
+                    costo_envio: COSTO_ENVIO,
+                    propina: propina,
+                    total: totalConPropina,
+                    metodo_pago_id: mPago?.id,
+                    metodo_pago_nombre: mPago?.nombre || (metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'),
+                    notas: conCuanto ? `Abona con: $${conCuanto}` : ""
+                }])
+                .select()
+                .single();
+
+            if (pedidoError) throw pedidoError;
+
+            // 4. Crear los ítems del pedido
+            const itemsToInsert = items.map(i => ({
+                pedido_id: pedido.id,
+                producto_id: i.productoId,
+                nombre_producto: i.nombre,
+                cantidad: i.cantidad,
+                precio_unitario: i.precio,
+                adicionales: i.adicionales // JSONB
+            }));
+
+            const { error: itemsError } = await supabase.from("pedido_items").insert(itemsToInsert);
+            if (itemsError) throw itemsError;
+
+            // 5. Armamos el mensaje de WhatsApp
+            const itemsTexto = items.map(i => {
+                const ads = i.adicionales?.map(a => `  + ${a.nombre} (+$${a.precio})`).join("\n") || "";
+                return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}`;
+            }).join("\n");
+
             const msg = `🍕 *NUEVO PEDIDO*\n\n` +
+                `*ID:* ${pedido.numero_pedido || pedido.id.slice(0, 8)}\n` +
                 `*Tipo:* ${tipoEntrega === "delivery" ? "Delivery" : "Retirar en local"}\n` +
                 `*Cliente:* ${nombre}\n` +
                 `*Teléfono:* +54 ${telefono}\n` +
@@ -47,9 +102,15 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 `*Pago:* ${metodoPago === "efectivo" ? `Efectivo${conCuanto ? ` (con $${conCuanto})` : ""}` : "Transferencia"}`;
 
             const waUrl = `https://wa.me/549XXXXXXXXXX?text=${encodeURIComponent(msg)}`;
-            alert("¡Pedido recibido! En breve nos comunicamos con vos.");
+
+            alert("¡Pedido recibido y guardado! Redirigiendo a WhatsApp...");
+            window.open(waUrl, '_blank');
+
             clearCart();
             onClose();
+        } catch (error: any) {
+            console.error("Error al realizar el pedido:", error);
+            alert("Hubo un error al procesar tu pedido. Por favor intentá de nuevo.");
         } finally {
             setSending(false);
         }
@@ -115,7 +176,18 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                     {item.imagen_url && (
                                         <img src={item.imagen_url} alt={item.nombre} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                                     )}
-                                    <span className="flex-1 text-sm text-white font-medium truncate">{item.nombre}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <span className="block text-sm text-white font-medium truncate">{item.nombre}</span>
+                                        {item.adicionales && item.adicionales.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-0.5">
+                                                {item.adicionales.map((a, idx) => (
+                                                    <span key={idx} className="text-[9px] text-slate-400 leading-none bg-white/5 px-1 py-0.5 rounded border border-white/5">
+                                                        + {a.nombre}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Qty controls */}
                                     <div className="flex items-center gap-1 bg-white/5 rounded-lg px-1">

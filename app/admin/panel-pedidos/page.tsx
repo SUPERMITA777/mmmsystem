@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, ExternalLink, Clock, MapPin, Phone, User, ChevronRight, X, Truck, ShoppingBag, Check } from "lucide-react";
+import { Search, Plus, ExternalLink, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check } from "lucide-react";
 
 type Pedido = {
   id: string;
@@ -33,8 +33,8 @@ type PedidoItem = {
 
 const ESTADOS = [
   { key: "pendiente", label: "Nuevos", color: "bg-blue-500", icon: Clock },
-  { key: "preparando", label: "En preparación", color: "bg-orange-500", icon: ShoppingBag },
-  { key: "listo", label: "Listos", color: "bg-green-500", icon: Check },
+  { key: "preparando", label: "En preparación", color: "bg-orange-500", icon: ChefHat },
+  { key: "listo", label: "Listos", color: "bg-green-500", icon: Bike },
 ];
 
 const TIPO_BADGE: Record<string, { label: string; class: string }> = {
@@ -88,8 +88,8 @@ export default function PanelPedidosPage() {
     return true;
   });
 
-  function pedidosPorEstado(estado: string) {
-    return filtrados.filter(p => p.estado === estado || (estado === "pendiente" && p.estado === "confirmado"));
+  function pedidosPorEstado(estadoKey: string) {
+    return filtrados.filter(p => p.estado === estadoKey || (estadoKey === "pendiente" && p.estado === "confirmado"));
   }
 
   function formatTime(dateStr: string) {
@@ -139,52 +139,76 @@ export default function PanelPedidosPage() {
           </div>
         </div>
 
-        {/* 3 columns */}
-        <div className="flex-1 flex gap-4 px-6 pb-6 overflow-hidden">
-          {ESTADOS.map(estado => {
-            const pedidosCol = pedidosPorEstado(estado.key);
-            return (
-              <div key={estado.key} className="flex-1 flex flex-col min-w-0">
-                {/* Column header */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className={`w-2 h-2 rounded-full ${estado.color}`} />
-                  <span className="text-sm font-bold text-gray-900">
-                    {pedidosCol.length} {estado.label}
-                  </span>
-                </div>
-
-                {/* Cards */}
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                  {pedidosCol.length === 0 ? (
-                    <div className="text-center py-10 text-gray-400 text-sm">
-                      No hay pedidos {estado.label.toLowerCase()} 🍕
+        {/* Contenido Principal */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Columnas de Pedidos (60%) */}
+          <div className="flex-1 overflow-x-auto">
+            <div className="flex gap-4 p-6 min-w-[900px] h-full">
+              {ESTADOS.map(estado => {
+                const pedidosCol = pedidosPorEstado(estado.key);
+                return (
+                  <div key={estado.key} className="flex-1 flex flex-col min-w-[280px]">
+                    {/* Column header */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className={`w-2 h-2 rounded-full ${estado.color}`} />
+                      <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider">
+                        {pedidosCol.length} {estado.label}
+                      </h3>
                     </div>
-                  ) : (
-                    pedidosCol.map(pedido => (
-                      <button
-                        key={pedido.id}
-                        onClick={() => setSelectedPedido(pedido)}
-                        className={`w-full text-left bg-white rounded-xl p-4 border transition-all hover:shadow-md ${selectedPedido?.id === pedido.id ? "border-purple-400 shadow-md" : "border-gray-200"
-                          }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-gray-900">{pedido.numero_pedido}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
-                            {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
-                          </span>
+
+                    {/* Cards */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+                      {pedidosCol.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400 text-sm">
+                          No hay pedidos {estado.label.toLowerCase()} {estado.key === "pendiente" ? "🍕" : estado.key === "preparando" ? "🍳" : "🛵"}
                         </div>
-                        <p className="text-sm font-medium text-gray-800 truncate">{pedido.cliente_nombre || "Sin nombre"}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-sm font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(pedido.total)}</span>
-                          <span className="text-xs text-gray-400">{formatTime(pedido.created_at)}</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
+                      ) : (
+                        pedidosCol.map(pedido => (
+                          <button
+                            key={pedido.id}
+                            onClick={() => setSelectedPedido(pedido)}
+                            className={`w-full text-left bg-white rounded-xl p-4 border transition-all hover:shadow-md ${selectedPedido?.id === pedido.id ? "border-purple-400 shadow-md" : "border-gray-200"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-gray-900">{pedido.numero_pedido}</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
+                                {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium text-gray-800 truncate">{pedido.cliente_nombre || "Sin nombre"}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-sm font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(pedido.total)}</span>
+                              <span className="text-xs text-gray-400">{formatTime(pedido.created_at)}</span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Mapa (40%) - Oculto en pantallas pequeñas */}
+          <div className="hidden lg:block w-[400px] xl:w-[500px] border-l border-gray-100 bg-white relative">
+            <div className="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center p-8 text-center">
+              <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center mb-4 text-purple-600">
+                <MapPin size={32} />
               </div>
-            );
-          })}
+              <h4 className="font-bold text-gray-900 mb-1">Mapa de Pedidos</h4>
+              <p className="text-sm text-gray-500">
+                Visualizá la ubicación de tus pedidos de delivery en tiempo real.
+              </p>
+              <div className="mt-6 w-full max-w-[280px] aspect-video bg-gray-200 rounded-xl overflow-hidden border-4 border-white shadow-sm flex items-center justify-center grayscale opacity-50">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Google Maps Static View</span>
+              </div>
+              <button className="mt-8 text-xs font-bold text-purple-600 hover:text-purple-700 underline uppercase tracking-widest">
+                Configurar API Key
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

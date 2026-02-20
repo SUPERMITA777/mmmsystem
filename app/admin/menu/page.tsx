@@ -7,6 +7,7 @@ import { ProductosList, type Producto as ProductoListType } from "@/components/m
 import { ProductoEditor } from "@/components/menu/ProductoEditor";
 import CategoriasSortModal from "@/components/menu/CategoriasSortModal";
 import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
+import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import { Download, Upload, DollarSign, Plus } from "lucide-react";
 
 type Categoria = {
@@ -41,6 +42,7 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [isSortModalOpen, setIsSortModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [sucursalId, setSucursalId] = useState<string>("");
 
@@ -106,9 +108,42 @@ export default function MenuPage() {
     }
   }
 
-  function handleSaveProducto(producto: Producto) {
-    console.log("Guardar producto:", producto);
-    alert("Producto guardado correctamente");
+  async function handleSaveProducto(producto: Producto & { grupos_adicionales?: string[] }) {
+    try {
+      setLoading(true);
+      const { grupos_adicionales, ...pData } = producto;
+
+      // 1. Actualizar tabla productos
+      const { error: pError } = await supabase
+        .from("productos")
+        .update(pData)
+        .eq("id", pData.id);
+
+      if (pError) throw pError;
+
+      // 2. Actualizar asociaciones de adicionales
+      if (grupos_adicionales) {
+        // Eliminar existentes
+        await supabase.from("producto_grupos_adicionales").delete().eq("producto_id", pData.id);
+
+        // Insertar nuevos
+        if (grupos_adicionales.length > 0) {
+          const newAsignaciones = grupos_adicionales.map(gid => ({
+            producto_id: pData.id,
+            grupo_id: gid
+          }));
+          await supabase.from("producto_grupos_adicionales").insert(newAsignaciones);
+        }
+      }
+
+      alert("Producto actualizado correctamente");
+      if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
+    } catch (error) {
+      console.error("Error al guardar:", error);
+      alert("Error al guardar los cambios");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleDuplicateCategoria(id: string) {
@@ -231,7 +266,10 @@ export default function MenuPage() {
             <DollarSign size={15} />
             Precios
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm transition-colors font-medium">
+          <button
+            onClick={() => setIsAdicionalesModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm transition-colors font-medium"
+          >
             Adicionales
           </button>
         </div>
@@ -290,6 +328,12 @@ export default function MenuPage() {
         }}
         categoria={editingCategoria}
         onSaved={loadCategorias}
+        sucursalId={sucursalId}
+      />
+
+      <AdicionalesManagerModal
+        isOpen={isAdicionalesModalOpen}
+        onClose={() => setIsAdicionalesModalOpen(false)}
         sucursalId={sucursalId}
       />
     </div>

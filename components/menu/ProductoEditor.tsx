@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { ExternalLink } from "lucide-react";
 
 type Categoria = {
@@ -24,6 +25,12 @@ type Producto = {
   visible_en_menu: boolean;
   producto_oculto: boolean;
   producto_sugerido: boolean;
+  grupos_adicionales?: string[]; // IDs de los grupos vinculados
+};
+
+type GrupoAdicional = {
+  id: string;
+  nombre: string;
 };
 
 export function ProductoEditor({
@@ -38,10 +45,33 @@ export function ProductoEditor({
   onCancel: () => void;
 }) {
   const [formData, setFormData] = useState<Producto | null>(producto);
+  const [todosLosGrupos, setTodosLosGrupos] = useState<GrupoAdicional[]>([]);
+  const [gruposAsignados, setGruposAsignados] = useState<string[]>([]);
 
   useEffect(() => {
     setFormData(producto);
+    if (producto) {
+      loadGruposYAsignaciones(producto.id);
+    }
   }, [producto]);
+
+  async function loadGruposYAsignaciones(productoId: string) {
+    const { data: catData } = await supabase.from("categorias").select("sucursal_id").eq("id", producto?.categoria_id).single();
+    if (catData) {
+      const { data: grupos } = await supabase.from("grupos_adicionales").select("id, nombre").eq("sucursal_id", catData.sucursal_id);
+      setTodosLosGrupos(grupos || []);
+    }
+    const { data: asignaciones } = await supabase.from("producto_grupos_adicionales").select("grupo_id").eq("producto_id", productoId);
+    setGruposAsignados(asignaciones?.map((a: any) => a.grupo_id) || []);
+  }
+
+  function toggleGrupo(grupoId: string) {
+    if (gruposAsignados.includes(grupoId)) {
+      setGruposAsignados(gruposAsignados.filter(id => id !== grupoId));
+    } else {
+      setGruposAsignados([...gruposAsignados, grupoId]);
+    }
+  }
 
   if (!producto || !formData) {
     return (
@@ -261,6 +291,30 @@ export function ProductoEditor({
               <span className="text-sm text-gray-700">Producto sugerido.</span>
             </label>
           </div>
+
+          {/* Adicionales */}
+          <div className="border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-semibold text-gray-900 mb-4">Adicionales / Modificadores</h4>
+            {todosLosGrupos.length === 0 ? (
+              <p className="text-xs text-gray-400">No hay grupos de adicionales creados.</p>
+            ) : (
+              <div className="space-y-2">
+                {todosLosGrupos.map(g => (
+                  <label key={g.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-200">
+                    <input
+                      type="checkbox"
+                      checked={gruposAsignados.includes(g.id)}
+                      onChange={() => toggleGrupo(g.id)}
+                      className="w-4 h-4 accent-purple-600 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{g.nombre}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -278,7 +332,7 @@ export function ProductoEditor({
             Ver producto
           </button>
           <button
-            onClick={() => onSave(formData)}
+            onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
             className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
           >
             Actualizar

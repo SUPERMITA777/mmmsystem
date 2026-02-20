@@ -9,6 +9,7 @@ export type CartItem = {
     precio: number;
     cantidad: number;
     imagen_url?: string;
+    adicionales?: { nombre: string; precio: number; grupo: string }[];
     opciones?: string; // texto de opciones seleccionadas
 };
 
@@ -27,10 +28,22 @@ const CartContext = createContext<CartContextType | null>(null);
 export function CartProvider({ children }: { children: ReactNode }) {
     const [items, setItems] = useState<CartItem[]>([]);
 
-    function addItem(item: Omit<CartItem, "id">) {
-        const id = `${item.productoId}-${Date.now()}`;
-        setItems(prev => [...prev, { ...item, id }]);
-    }
+    const addItem = (item: Omit<CartItem, "id">) => {
+        setItems((prevItems) => {
+            // Find if item with same ID AND same adicionales already exists
+            const existingItemIndex = prevItems.findIndex(
+                (i) => i.productoId === item.productoId &&
+                    JSON.stringify(i.adicionales) === JSON.stringify(item.adicionales)
+            );
+
+            if (existingItemIndex > -1) {
+                const newItems = [...prevItems];
+                newItems[existingItemIndex].cantidad += item.cantidad;
+                return newItems;
+            }
+            return [...prevItems, { ...item, id: Math.random().toString(36).substr(2, 9) }];
+        });
+    };
 
     function removeItem(id: string) {
         setItems(prev => prev.filter(i => i.id !== id));
@@ -48,7 +61,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setItems([]);
     }
 
-    const total = items.reduce((sum, i) => sum + i.precio * i.cantidad, 0);
+    const total = items.reduce((acc, item) => {
+        const additionalPrice = item.adicionales?.reduce((sum, a) => sum + a.precio, 0) || 0;
+        return acc + (item.precio + additionalPrice) * item.cantidad;
+    }, 0);
     const totalItems = items.reduce((sum, i) => sum + i.cantidad, 0);
 
     return (
