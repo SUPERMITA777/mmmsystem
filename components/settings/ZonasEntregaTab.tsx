@@ -175,6 +175,7 @@ export function ZonasEntregaTab() {
         envio_gratis_desde: "", tiempo_estimado_minutos: "",
         tipo_precio: "fijo" as "fijo" | "por_km", precio_por_km: 850,
     });
+    const [editingZonaId, setEditingZonaId] = useState<string | null>(null);
     const [drawingZonaId, setDrawingZonaId] = useState<string | null>(null);
     const [tempPoints, setTempPoints] = useState<LatLng[]>([]);
     const [localSearch, setLocalSearch] = useState("");
@@ -273,7 +274,7 @@ export function ZonasEntregaTab() {
 
 
 
-    async function handleCreate() {
+    async function handleSave() {
         if (!form.nombre.trim() || !sucursalId) return;
 
         const fullPayload = {
@@ -281,41 +282,50 @@ export function ZonasEntregaTab() {
             nombre: form.nombre,
             costo_envio: form.costo_envio,
             minimo_compra: form.minimo_compra,
-            envio_gratis_desde: form.envio_gratis_desde ? Number(form.envio_gratis_desde) : null,
-            tiempo_estimado_minutos: form.tiempo_estimado_minutos ? Number(form.tiempo_estimado_minutos) : null,
+            envio_gratis_desde: form.envio_gratis_desde && form.envio_gratis_desde !== "" ? Number(form.envio_gratis_desde) : null,
+            tiempo_estimado_minutos: form.tiempo_estimado_minutos && form.tiempo_estimado_minutos !== "" ? Number(form.tiempo_estimado_minutos) : null,
             tipo_precio: form.tipo_precio,
             precio_por_km: form.precio_por_km,
         };
 
-        // Intentar con todos los campos; si falla por caché de PostgREST, usar solo los básicos
-        let newZonaId: string | null = null;
-        const { data: d1, error: err1 } = await supabase.from("zonas_entrega").insert(fullPayload).select("id").single();
-        if (err1) {
-            if (err1.code === "PGRST204") {
-                // Caché desactualizado — insertar sin columnas nuevas
-                const { sucursal_id, nombre, costo_envio, minimo_compra, envio_gratis_desde, tiempo_estimado_minutos } = fullPayload;
-                const { data: d2, error: err2 } = await supabase.from("zonas_entrega").insert({
-                    sucursal_id, nombre, costo_envio, minimo_compra, envio_gratis_desde, tiempo_estimado_minutos
-                }).select("id").single();
-                if (err2) { alert("Error al guardar la zona: " + err2.message); return; }
-                newZonaId = d2?.id ?? null;
-            } else {
-                alert("Error al guardar la zona: " + err1.message);
+        if (editingZonaId) {
+            // ACTUALIZAR
+            const { error } = await supabase.from("zonas_entrega").update(fullPayload).eq("id", editingZonaId);
+            if (error) {
+                alert("Error al actualizar la zona: " + error.message);
                 return;
             }
         } else {
-            newZonaId = d1?.id ?? null;
+            // CREAR (INSERTAR)
+            let newZonaId: string | null = null;
+            const { data: d1, error: err1 } = await supabase.from("zonas_entrega").insert(fullPayload).select("id").single();
+            if (err1) {
+                if (err1.code === "PGRST204") {
+                    const { sucursal_id, nombre, costo_envio, minimo_compra, envio_gratis_desde, tiempo_estimado_minutos } = fullPayload;
+                    const { data: d2, error: err2 } = await supabase.from("zonas_entrega").insert({
+                        sucursal_id, nombre, costo_envio, minimo_compra, envio_gratis_desde, tiempo_estimado_minutos
+                    }).select("id").single();
+                    if (err2) { alert("Error al guardar la zona: " + err2.message); return; }
+                    newZonaId = d2?.id ?? null;
+                } else {
+                    alert("Error al guardar la zona: " + err1.message);
+                    return;
+                }
+            } else {
+                newZonaId = d1?.id ?? null;
+            }
+
+            // Auto-entrar en modo dibujo si es nueva
+            if (newZonaId) {
+                setDrawingZonaId(newZonaId);
+                setTempPoints([]);
+            }
         }
 
-        setForm({ nombre: "", costo_envio: 0, minimo_compra: 0, envio_gratis_desde: "", tiempo_estimado_minutos: "", tipo_precio: "fijo", precio_por_km: 0 });
+        setForm({ nombre: "", costo_envio: 0, minimo_compra: 0, envio_gratis_desde: "", tiempo_estimado_minutos: "", tipo_precio: "fijo", precio_por_km: 850 });
+        setEditingZonaId(null);
         setShowForm(false);
         await fetchData();
-
-        // Auto-entrar en modo dibujo para la zona recién creada
-        if (newZonaId) {
-            setDrawingZonaId(newZonaId);
-            setTempPoints([]);
-        }
     }
 
     async function toggleActivo(zona: Zona) {
@@ -332,6 +342,28 @@ export function ZonasEntregaTab() {
     function startDrawing(zonaId: string) {
         setDrawingZonaId(zonaId);
         setTempPoints([]);
+    }
+
+    function handleEdit(zona: Zona) {
+        setEditingZonaId(zona.id);
+        setForm({
+            nombre: zona.nombre,
+            costo_envio: zona.costo_envio,
+            minimo_compra: zona.minimo_compra,
+            envio_gratis_desde: zona.envio_gratis_desde?.toString() || "",
+            tiempo_estimado_minutos: zona.tiempo_estimado_minutos?.toString() || "",
+            tipo_precio: zona.tipo_precio,
+            precio_por_km: zona.precio_por_km || 850
+        });
+        setShowForm(true);
+        // Scroll al formulario
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function handleCancelForm() {
+        setForm({ nombre: "", costo_envio: 0, minimo_compra: 0, envio_gratis_desde: "", tiempo_estimado_minutos: "", tipo_precio: "fijo", precio_por_km: 850 });
+        setEditingZonaId(null);
+        setShowForm(false);
     }
 
     function cancelDrawing() {
@@ -464,7 +496,11 @@ export function ZonasEntregaTab() {
             <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900">Zonas de entrega</h3>
                 <button
-                    onClick={() => setShowForm(!showForm)}
+                    onClick={() => {
+                        setEditingZonaId(null);
+                        setForm({ nombre: "", costo_envio: 0, minimo_compra: 0, envio_gratis_desde: "", tiempo_estimado_minutos: "", tipo_precio: "fijo", precio_por_km: 850 });
+                        setShowForm(!showForm);
+                    }}
                     className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
                 >
                     <Plus size={14} /> Nueva zona
@@ -517,8 +553,10 @@ export function ZonasEntregaTab() {
                         </fieldset>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={handleCreate} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-500">Guardar zona</button>
-                        <button onClick={() => setShowForm(false)} className="text-gray-500 px-4 py-2 rounded-lg text-sm hover:text-gray-700">Cancelar</button>
+                        <button onClick={handleSave} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-500">
+                            {editingZonaId ? "Actualizar cambios" : "Guardar zona"}
+                        </button>
+                        <button onClick={handleCancelForm} className="text-gray-500 px-4 py-2 rounded-lg text-sm hover:text-gray-700">Cancelar</button>
                     </div>
                 </div>
             )}
@@ -577,6 +615,15 @@ export function ZonasEntregaTab() {
 
                                     {/* Controles */}
                                     <div className="flex items-center gap-2">
+                                        {!isDrawing && (
+                                            <button
+                                                onClick={() => handleEdit(zona)}
+                                                className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                                                title="Editar datos"
+                                            >
+                                                <Edit3 size={14} />
+                                            </button>
+                                        )}
                                         {isDrawing ? (
                                             <div className="flex items-center gap-1">
                                                 <button onClick={savePolygon} className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-green-500">✓ Ok</button>
@@ -585,9 +632,9 @@ export function ZonasEntregaTab() {
                                         ) : (
                                             <button
                                                 onClick={() => startDrawing(zona.id)}
-                                                className="flex items-center gap-1 text-xs text-purple-600 border border-purple-200 bg-purple-50 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors"
+                                                className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
                                             >
-                                                <Edit3 size={11} />
+                                                <Navigation size={11} />
                                                 {hasPolygon ? "Redibujar" : "Dibujar zona"}
                                             </button>
                                         )}
