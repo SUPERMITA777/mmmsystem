@@ -30,7 +30,7 @@ type Producto = {
 
 type GrupoAdicional = {
   id: string;
-  nombre: string;
+  titulo: string;
 };
 
 export function ProductoEditor({
@@ -58,7 +58,7 @@ export function ProductoEditor({
   async function loadGruposYAsignaciones(productoId: string) {
     const { data: catData } = await supabase.from("categorias").select("sucursal_id").eq("id", producto?.categoria_id).single();
     if (catData) {
-      const { data: grupos } = await supabase.from("grupos_adicionales").select("id, nombre").eq("sucursal_id", catData.sucursal_id);
+      const { data: grupos } = await supabase.from("grupos_adicionales").select("id, titulo").eq("sucursal_id", catData.sucursal_id);
       setTodosLosGrupos(grupos || []);
     }
     const { data: asignaciones } = await supabase.from("producto_grupos_adicionales").select("grupo_id").eq("producto_id", productoId);
@@ -308,7 +308,7 @@ export function ProductoEditor({
                       className="w-4 h-4 accent-purple-600 rounded"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{g.nombre}</p>
+                      <p className="text-sm font-medium text-gray-900">{g.titulo}</p>
                     </div>
                   </label>
                 ))}

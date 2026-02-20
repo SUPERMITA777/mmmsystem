@@ -15,20 +15,20 @@ type Producto = {
     categoria_nombre?: string;
 };
 
-type Opcion = {
+type Adicional = {
     id: string;
     nombre: string;
-    precio_adicional: number;
+    precio_venta: number;
+    seleccion_maxima: number;
 };
 
-type Grupo = {
+type GrupoAdicional = {
     id: string;
-    nombre: string;
-    tipo_seleccion: string;
-    minimo: number;
-    maximo?: number;
-    obligatorio: boolean;
-    opciones: Opcion[];
+    titulo: string;
+    seleccion_obligatoria: boolean;
+    seleccion_minima: number;
+    seleccion_maxima: number;
+    adicionales: Adicional[];
 };
 
 export default function ProductDetailModal({
@@ -39,8 +39,10 @@ export default function ProductDetailModal({
     onClose: () => void;
 }) {
     const [cantidad, setCantidad] = useState(1);
-    const [grupos, setGrupos] = useState<Grupo[]>([]);
-    const [seleccion, setSeleccion] = useState<Record<string, string[]>>({}); // grupoId -> [opcionIds]
+    const [grupos, setGrupos] = useState<GrupoAdicional[]>([]);
+
+    // Estado de selección: Guardamos un array de IDs de adicionales por cada grupo (un ID puede repetirse si se selecciona varias veces)
+    const [seleccion, setSeleccion] = useState<Record<string, string[]>>({});
     const { addItem } = useCart();
 
     useEffect(() => {
@@ -60,51 +62,80 @@ export default function ProductDetailModal({
             .from("grupos_adicionales")
             .select("*")
             .in("id", grupoIds)
-            .eq("activo", true)
-            .order("orden");
+            .order("created_at", { ascending: true });
 
         if (!gruposData) return;
 
         const gruposConOpciones = await Promise.all(gruposData.map(async (g: any) => {
             const { data: options } = await supabase
-                .from("opciones_adicional")
+                .from("adicionales")
                 .select("*")
                 .eq("grupo_id", g.id)
-                .eq("activo", true)
-                .order("orden");
-            return { ...g, opciones: options || [] };
+                .eq("visible", true)
+                .order("created_at", { ascending: true });
+            return { ...g, adicionales: options || [] };
         }));
 
         setGrupos(gruposConOpciones);
+
+        // Inicializar estado de selección vacío
+        const selInit: Record<string, string[]> = {};
+        gruposConOpciones.forEach(g => selInit[g.id] = []);
+        setSeleccion(selInit);
     }
 
-    function toggleOpcion(grupoId: string, opcionId: string, tipo: string, max?: number) {
-        const actual = seleccion[grupoId] || [];
-        if (tipo === "unico") {
-            setSeleccion({ ...seleccion, [grupoId]: [opcionId] });
-        } else {
-            if (actual.includes(opcionId)) {
-                setSeleccion({ ...seleccion, [grupoId]: actual.filter(id => id !== opcionId) });
-            } else {
-                if (max && actual.length >= max) return;
-                setSeleccion({ ...seleccion, [grupoId]: [...actual, opcionId] });
-            }
+    function addAdicional(grupo: GrupoAdicional, adic: Adicional) {
+        const actualGroupSelection = seleccion[grupo.id] || [];
+
+        // Validar máximo del grupo entero
+        if (actualGroupSelection.length >= grupo.seleccion_maxima) return;
+
+        // Validar máximo de este ítem específico
+        const countOfThisItem = actualGroupSelection.filter(id => id === adic.id).length;
+        if (countOfThisItem >= adic.seleccion_maxima) return;
+
+        setSeleccion({ ...seleccion, [grupo.id]: [...actualGroupSelection, adic.id] });
+    }
+
+    function removeAdicional(grupoId: string, adicId: string) {
+        const actualGroupSelection = seleccion[grupoId] || [];
+        const index = actualGroupSelection.lastIndexOf(adicId);
+        if (index > -1) {
+            const newSelection = [...actualGroupSelection];
+            newSelection.splice(index, 1);
+            setSeleccion({ ...seleccion, [grupoId]: newSelection });
         }
     }
 
+    // Validar si todos los grupos obligatorios cumplen su mínimo
+    const isCartValid = grupos.every(g => {
+        if (!g.seleccion_obligatoria) return true;
+        const count = (seleccion[g.id] || []).length;
+        return count >= g.seleccion_minima;
+    });
+
     function handleAgregar() {
+        if (!isCartValid) return;
+
         // Calculate additional info for the cart
         const adicionalesSeleccionados: any[] = [];
         grupos.forEach(g => {
             const ids = seleccion[g.id] || [];
-            ids.forEach(oid => {
-                const opt = g.opciones.find(o => o.id === oid);
+
+            // Agrupar IDs repetidos para pasarlos al cart como "2x Queso"
+            const conteo: Record<string, number> = {};
+            ids.forEach(id => conteo[id] = (conteo[id] || 0) + 1);
+
+            Object.entries(conteo).forEach(([oid, qty]) => {
+                const opt = g.adicionales.find(o => o.id === oid);
                 if (opt) {
-                    adicionalesSeleccionados.push({
-                        nombre: opt.nombre,
-                        precio: opt.precio_adicional,
-                        grupo: g.nombre
-                    });
+                    for (let i = 0; i < qty; i++) {
+                        adicionalesSeleccionados.push({
+                            nombre: opt.nombre,
+                            precio: opt.precio_venta,
+                            grupo: g.titulo
+                        });
+                    }
                 }
             });
         });
@@ -123,8 +154,8 @@ export default function ProductDetailModal({
     const calculoAdicionales = grupos.reduce((acc, g) => {
         const ids = seleccion[g.id] || [];
         const sub = ids.reduce((s, oid) => {
-            const opt = g.opciones.find(o => o.id === oid);
-            return s + (opt?.precio_adicional || 0);
+            const opt = g.adicionales.find(o => o.id === oid);
+            return s + (opt?.precio_venta || 0);
         }, 0);
         return acc + sub;
     }, 0);
@@ -150,11 +181,6 @@ export default function ProductDetailModal({
                 >
                     <ArrowLeft size={20} />
                 </button>
-
-                {/* Cart icon with count */}
-                <div className="absolute top-4 right-4 w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white">
-                    🛒
-                </div>
             </div>
 
             {/* Scrollable content */}
@@ -185,57 +211,90 @@ export default function ProductDetailModal({
                     )}
 
                     {/* Price */}
-                    <p className="text-2xl font-black text-white mb-6">
+                    <p className="text-2xl font-black text-white mb-6 border-b border-slate-800 pb-6">
                         $ {new Intl.NumberFormat("es-AR").format(producto.precio)}
                     </p>
 
                     {/* Groups of Additionals */}
-                    <div className="space-y-8 pb-10">
-                        {grupos.map(g => (
-                            <div key={g.id}>
-                                <div className="flex items-center justify-between mb-3">
-                                    <h3 className="text-base font-black text-white uppercase tracking-wider">{g.nombre}</h3>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${g.obligatorio ? "bg-orange-500/20 text-orange-500" : "bg-slate-800 text-slate-400"}`}>
-                                        {g.obligatorio ? "OBLIGATORIO" : "OPCIONAL"}
-                                    </span>
-                                </div>
-                                <div className="space-y-1">
-                                    {g.opciones.map(o => (
-                                        <button
-                                            key={o.id}
-                                            onClick={() => toggleOpcion(g.id, o.id, g.tipo_seleccion, g.maximo)}
-                                            className={`w-full flex items-center justify-between p-4 rounded-xl transition-all border ${(seleccion[g.id] || []).includes(o.id)
-                                                ? "bg-orange-600/10 border-orange-600/50"
-                                                : "bg-slate-900/50 border-slate-800 hover:border-slate-700"
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${(seleccion[g.id] || []).includes(o.id)
-                                                    ? "border-orange-500 bg-orange-500"
-                                                    : "border-slate-700"
-                                                    }`}>
-                                                    {(seleccion[g.id] || []).includes(o.id) && (
-                                                        <div className="w-2 h-2 bg-white rounded-full" />
-                                                    )}
+                    <div className="space-y-8 pb-10 mt-6">
+                        {grupos.map(g => {
+                            const selectedCount = (seleccion[g.id] || []).length;
+                            const isGroupValid = !g.seleccion_obligatoria || selectedCount >= g.seleccion_minima;
+
+                            return (
+                                <div key={g.id} className={`rounded-2xl border ${!isGroupValid ? 'border-orange-500/50 bg-orange-500/5' : 'border-slate-800/50 bg-slate-900/20'} overflow-hidden`}>
+                                    <div className={`px-4 py-4 border-b ${!isGroupValid ? 'border-orange-500/20' : 'border-slate-800/50'}`}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <h3 className="text-base font-black text-white uppercase tracking-wider">{g.titulo}</h3>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${g.seleccion_obligatoria ? "bg-orange-500 text-white" : "bg-slate-800 text-slate-400"}`}>
+                                                {g.seleccion_obligatoria ? "Requerido" : "Opcional"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs text-slate-400">
+                                            <span>Seleccionados {selectedCount} de {g.seleccion_maxima}</span>
+                                            {g.seleccion_obligatoria && <span>Mínimo {g.seleccion_minima}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="divide-y divide-slate-800/50">
+                                        {g.adicionales.map(o => {
+                                            const countSelected = (seleccion[g.id] || []).filter(id => id === o.id).length;
+
+                                            return (
+                                                <div key={o.id} className="flex items-center justify-between p-4">
+                                                    <div>
+                                                        <div className="text-sm font-bold text-white uppercase">{o.nombre}</div>
+                                                        {o.precio_venta > 0 && (
+                                                            <div className="text-sm font-black text-orange-400 mt-0.5">
+                                                                + $ {new Intl.NumberFormat("es-AR").format(o.precio_venta)}
+                                                            </div>
+                                                        )}
+                                                        {o.seleccion_maxima > 1 && (
+                                                            <div className="text-[10px] text-slate-500 uppercase font-bold mt-0.5">Máx. {o.seleccion_maxima}</div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Quantity Controls for Item */}
+                                                    <div className="flex items-center gap-3">
+                                                        {countSelected > 0 ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => removeAdicional(g.id, o.id)}
+                                                                    className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center hover:bg-slate-700 transition"
+                                                                >
+                                                                    <Minus size={16} />
+                                                                </button>
+                                                                <span className="text-white font-bold w-4 text-center">{countSelected}</span>
+                                                                <button
+                                                                    disabled={countSelected >= o.seleccion_maxima || selectedCount >= g.seleccion_maxima}
+                                                                    onClick={() => addAdicional(g, o)}
+                                                                    className="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center disabled:opacity-30 disabled:bg-slate-800 transition"
+                                                                >
+                                                                    <Plus size={16} />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <button
+                                                                disabled={selectedCount >= g.seleccion_maxima}
+                                                                onClick={() => addAdicional(g, o)}
+                                                                className="w-8 h-8 rounded-full border border-slate-700 text-slate-400 flex items-center justify-center disabled:opacity-30 hover:border-orange-500 hover:text-orange-500 transition"
+                                                            >
+                                                                <Plus size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <span className="text-sm font-bold text-white uppercase">{o.nombre}</span>
-                                            </div>
-                                            {o.precio_adicional > 0 && (
-                                                <span className="text-sm font-black text-orange-500">
-                                                    + $ {new Intl.NumberFormat("es-AR").format(o.precio_adicional)}
-                                                </span>
-                                            )}
-                                        </button>
-                                    ))}
+                                            )
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             </div>
 
             {/* Sticky footer: qty + add button */}
-            <div className="px-5 py-4 border-t border-slate-800/50 bg-[#0d0d0d] flex items-center gap-4">
+            <div className="px-5 py-4 border-t border-slate-800 bg-[#0d0d0d] flex items-center gap-4">
                 {/* Quantity selector */}
                 <div className="flex items-center gap-3 bg-slate-800 rounded-full px-2 py-1">
                     <button
@@ -255,10 +314,11 @@ export default function ProductDetailModal({
 
                 {/* Add to cart button */}
                 <button
+                    disabled={!isCartValid}
                     onClick={handleAgregar}
-                    className="flex-1 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-black py-3.5 rounded-xl transition-all text-base tracking-wide"
+                    className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 text-white font-black py-3.5 rounded-xl transition-all text-sm tracking-wide"
                 >
-                    AGREGAR $ {new Intl.NumberFormat("es-AR").format(totalLinea)}
+                    {isCartValid ? `AGREGAR $ ${new Intl.NumberFormat("es-AR").format(totalLinea)}` : 'SELECCIONÁ LOS ADICIONALES'}
                 </button>
             </div>
         </div>
