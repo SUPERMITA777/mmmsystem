@@ -1,14 +1,15 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Star, Plus } from "lucide-react";
 
 interface Product {
     id: string;
     nombre: string;
-    descripcion: string;
+    descripcion?: string;
     precio: number;
     imagen_url?: string;
     producto_sugerido?: boolean;
+    categoria_nombre?: string;
 }
 
 interface CategoryWithProducts {
@@ -19,53 +20,58 @@ interface CategoryWithProducts {
 
 interface PublicProductListProps {
     categorias: CategoryWithProducts[];
+    onProductClick: (producto: Product & { categoria_nombre: string }) => void;
 }
 
-export default function PublicProductList({ categorias }: PublicProductListProps) {
+export default function PublicProductList({ categorias, onProductClick }: PublicProductListProps) {
     return (
-        <div className="max-w-5xl mx-auto px-4 py-8 space-y-12 pb-32">
+        <div className="max-w-3xl mx-auto px-4 py-6 space-y-10 pb-32">
             {categorias.map((cat) => (
                 <section key={cat.id} id={cat.id} className="scroll-mt-24">
-                    <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider mb-6 pb-2 border-b border-slate-800 inline-block">
+                    <h2 className="text-base font-black text-white uppercase tracking-widest mb-4 pb-2 border-b border-slate-800">
                         {cat.nombre}
                     </h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-0 divide-y divide-slate-800/60">
                         {cat.productos.map((prod) => (
-                            <div
+                            <button
                                 key={prod.id}
-                                className="group relative flex gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 hover:bg-slate-900/80 hover:border-slate-700 transition-all cursor-pointer overflow-hidden"
+                                onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre })}
+                                className="w-full flex items-center gap-4 py-4 text-left hover:bg-white/3 transition-colors group"
                             >
-                                {/* Product Info */}
-                                <div className="flex-1 space-y-2">
+                                {/* Info */}
+                                <div className="flex-1 space-y-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-slate-100 text-base md:text-lg leading-tight uppercase">
+                                        <h3 className="font-black text-slate-100 text-sm uppercase tracking-wide leading-tight truncate">
                                             {prod.nombre}
                                         </h3>
                                         {prod.producto_sugerido && (
-                                            <Star size={14} className="text-orange-500 fill-orange-500 shrink-0" />
+                                            <Star size={12} className="text-orange-400 fill-orange-400 shrink-0" />
                                         )}
                                     </div>
-                                    <p className="text-slate-400 text-sm line-clamp-2 leading-relaxed">
-                                        {prod.descripcion || "Sin descripción disponible."}
+                                    {prod.descripcion && (
+                                        <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed uppercase tracking-wide">
+                                            {prod.descripcion}
+                                        </p>
+                                    )}
+                                    <p className="text-white font-black text-sm pt-0.5">
+                                        $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
                                     </p>
-                                    <div className="pt-1">
-                                        <span className="text-lg font-black text-white">
-                                            ${new Intl.NumberFormat("es-AR").format(prod.precio)}
-                                        </span>
-                                    </div>
                                 </div>
 
-                                {/* Product Image */}
-                                <div className="relative shrink-0 w-24 h-24 md:w-32 md:h-32 rounded-xl overflow-hidden bg-slate-800">
+                                {/* Image + add button */}
+                                <div className="relative shrink-0 w-24 h-24 rounded-xl overflow-hidden bg-slate-800">
                                     <img
-                                        src={prod.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=400&fit=crop"}
+                                        src={prod.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&h=300&fit=crop"}
                                         alt={prod.nombre}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                     />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/20 to-transparent" />
+                                    {/* + button overlaid at bottom right */}
+                                    <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                                        <Plus size={16} className="text-white" strokeWidth={3} />
+                                    </div>
                                 </div>
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </section>
