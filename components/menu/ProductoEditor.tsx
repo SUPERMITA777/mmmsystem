@@ -94,8 +94,6 @@ export function ProductoEditor({
           <h3 className="text-base font-semibold text-gray-900">Editar producto</h3>
         </div>
 
-
-
         <div className="px-6 pb-4 space-y-4">
           {/* Categoría */}
           <fieldset className="border border-gray-300 rounded-lg px-3 pt-0.5 pb-2 focus-within:border-purple-500 transition-colors">
@@ -378,28 +376,29 @@ export function ProductoEditor({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Sticky action buttons */}
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-br-xl">
-          <button
-            onClick={onCancel}
-            className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
-          >
-            Cancelar
+      {/* Sticky action buttons */}
+      <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-br-xl">
+        <button
+          onClick={onCancel}
+          className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
+        >
+          Cancelar
+        </button>
+        <div className="flex gap-3">
+          <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
+            <ExternalLink size={14} />
+            Ver producto
           </button>
-          <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
-              <ExternalLink size={14} />
-              Ver producto
-            </button>
-            <button
-              onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
-              className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
-            >
-              Actualizar
-            </button>
-          </div>
+          <button
+            onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
+            className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+          >
+            Actualizar
+          </button>
         </div>
       </div>
-      );
+    </div>
+  );
 }
