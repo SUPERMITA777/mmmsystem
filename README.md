@@ -149,13 +149,15 @@ La página `/admin/settings` incluye tabs para:
 
 ## 🚧 Próximas Funcionalidades
 
-- [ ] Panel de pedidos en tiempo real
-- [ ] Gestión completa de menú
+- [x] Panel de pedidos en tiempo real
+- [x] Gestión completa de menú
+- [x] Gestión de Adicionales (Modificadores)
 - [ ] Control de inventario
 - [ ] Dashboard con estadísticas
-- [ ] Integración con WhatsApp
+- [x] Integración con WhatsApp (Enviando confirmaciones)
 - [ ] Facturación electrónica (ARCA/AFIP)
-- [ ] Integraciones con PedidosYa, Rappi, etc.
+- [x] Integración con PedidosYa (vía Extensión de Chrome)
+- [ ] Integración con Rappi
 - [ ] Monitor de cocina (KDS)
 - [ ] Sistema de reportes
 
