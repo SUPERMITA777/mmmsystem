@@ -1,6 +1,6 @@
 # MMM SYSTEM DELIVERY
 
-Sistema POS completo en la nube para delivery, take away y salón, inspirado en Pedisy.
+Sistema POS completo en la nube para delivery, take away y salón.
 
 ## 🚀 Características Principales
 

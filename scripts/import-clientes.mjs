@@ -1,5 +1,5 @@
 /**
- * Importa clientes desde clientes_pedisy.xlsx a Supabase
+ * Importa clientes desde clientes_mmm_system.xlsx a Supabase
  * Uso: node scripts/import-clientes.mjs DB_PASSWORD
  */
 
@@ -60,7 +60,7 @@ async function main() {
     console.log(`📍 Sucursal ID: ${sucursalId}`);
 
     // 2. Leer Excel
-    const workbook = XLSX.readFile(join(__dirname, '..', 'clientes_pedisy.xlsx'));
+    const workbook = XLSX.readFile(join(__dirname, '..', 'clientes_mmm_system.xlsx'));
     const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
     console.log(`📄 Registros en Excel: ${data.length}`);
 

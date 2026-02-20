@@ -46,7 +46,7 @@ export function AdminSidebar() {
     <aside className="w-56 bg-white flex flex-col border-r border-gray-200 shrink-0">
       {/* Logo */}
       <div className="px-5 py-4">
-        <h1 className="text-xl font-black text-gray-900 tracking-tight">Pedisy</h1>
+        <h1 className="text-xl font-black text-gray-900 tracking-tight">MMM SYSTEM</h1>
       </div>
 
       {/* Nav items */}
@@ -59,8 +59,8 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-0.5 transition-all ${active
-                  ? "bg-gray-900 text-white font-semibold shadow-sm"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                ? "bg-gray-900 text-white font-semibold shadow-sm"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
             >
               <Icon size={17} strokeWidth={active ? 2.2 : 1.8} />

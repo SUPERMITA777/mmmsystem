@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Search, Plus, ExternalLink, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
 type Pedido = {
   id: string;
@@ -12,6 +15,8 @@ type Pedido = {
   cliente_nombre: string;
   cliente_telefono: string;
   cliente_direccion: string;
+  cliente_lat: number | null;
+  cliente_lng: number | null;
   total: number;
   subtotal: number;
   costo_envio: number;
@@ -192,22 +197,15 @@ export default function PanelPedidosPage() {
           </div>
 
           {/* Mapa (40%) - Oculto en pantallas pequeñas */}
-          <div className="hidden lg:block w-[400px] xl:w-[500px] border-l border-gray-100 bg-white relative">
-            <div className="absolute inset-0 bg-slate-100 flex flex-col items-center justify-center p-8 text-center">
-              <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center mb-4 text-purple-600">
-                <MapPin size={32} />
-              </div>
-              <h4 className="font-bold text-gray-900 mb-1">Mapa de Pedidos</h4>
-              <p className="text-sm text-gray-500">
-                Visualizá la ubicación de tus pedidos de delivery en tiempo real.
-              </p>
-              <div className="mt-6 w-full max-w-[280px] aspect-video bg-gray-200 rounded-xl overflow-hidden border-4 border-white shadow-sm flex items-center justify-center grayscale opacity-50">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Google Maps Static View</span>
-              </div>
-              <button className="mt-8 text-xs font-bold text-purple-600 hover:text-purple-700 underline uppercase tracking-widest">
-                Configurar API Key
-              </button>
-            </div>
+          <div className="hidden lg:block w-[400px] xl:w-[500px] border-l border-gray-100 bg-slate-50 relative">
+            <DynamicMap
+              pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
+              selectedPedidoId={selectedPedido?.id || null}
+              onSelectPedido={(id) => {
+                const found = pedidos.find(p => p.id === id);
+                if (found) setSelectedPedido(found);
+              }}
+            />
           </div>
         </div>
       </div>

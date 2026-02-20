@@ -272,6 +272,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                     cliente_nombre: nombre,
                     cliente_telefono: telefono,
                     cliente_direccion: tipoEntrega === "delivery" ? direccion : null,
+                    cliente_lat: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lat : null,
+                    cliente_lng: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lng : null,
                     tipo: tipoEntrega,
                     estado: 'pendiente',
                     origen: 'web',
