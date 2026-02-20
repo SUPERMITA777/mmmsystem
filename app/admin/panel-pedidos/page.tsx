@@ -146,13 +146,13 @@ export default function PanelPedidosPage() {
 
         {/* Contenido Principal */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Columnas de Pedidos (60%) */}
-          <div className="flex-1 overflow-x-auto">
-            <div className="flex gap-4 p-6 min-w-[900px] h-full">
+          {/* Columnas de Pedidos (50%) */}
+          <div className="w-1/2 overflow-x-auto">
+            <div className="flex gap-3 p-4 min-w-[700px] h-full">
               {ESTADOS.map(estado => {
                 const pedidosCol = pedidosPorEstado(estado.key);
                 return (
-                  <div key={estado.key} className="flex-1 flex flex-col min-w-[280px]">
+                  <div key={estado.key} className="flex-1 flex flex-col min-w-[220px]">
                     {/* Column header */}
                     <div className="flex items-center gap-2 mb-4">
                       <span className={`w-2 h-2 rounded-full ${estado.color}`} />
@@ -172,19 +172,19 @@ export default function PanelPedidosPage() {
                           <button
                             key={pedido.id}
                             onClick={() => setSelectedPedido(pedido)}
-                            className={`w-full text-left bg-white rounded-xl p-4 border transition-all hover:shadow-md ${selectedPedido?.id === pedido.id ? "border-purple-400 shadow-md" : "border-gray-200"
+                            className={`w-full text-left bg-white rounded-xl p-3 border transition-all hover:shadow-md ${selectedPedido?.id === pedido.id ? "border-purple-400 shadow-md" : "border-gray-200"
                               }`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-gray-900">{pedido.numero_pedido}</span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-bold text-gray-900">{pedido.numero_pedido}</span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
                                 {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
                               </span>
                             </div>
-                            <p className="text-sm font-medium text-gray-800 truncate">{pedido.cliente_nombre || "Sin nombre"}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-sm font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(pedido.total)}</span>
-                              <span className="text-xs text-gray-400">{formatTime(pedido.created_at)}</span>
+                            <p className="text-xs font-medium text-gray-800 truncate">{pedido.cliente_nombre || "Sin nombre"}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <span className="text-[11px] font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(pedido.total)}</span>
+                              <span className="text-[10px] text-gray-400">{formatTime(pedido.created_at)}</span>
                             </div>
                           </button>
                         ))
@@ -196,8 +196,8 @@ export default function PanelPedidosPage() {
             </div>
           </div>
 
-          {/* Mapa (40%) - Oculto en pantallas pequeñas */}
-          <div className="hidden lg:block w-[400px] xl:w-[500px] border-l border-gray-100 bg-slate-50 relative">
+          {/* Mapa (50%) - Oculto en pantallas pequeñas */}
+          <div className="hidden lg:block w-1/2 border-l border-gray-100 bg-slate-50 relative">
             <DynamicMap
               pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
               selectedPedidoId={selectedPedido?.id || null}
@@ -210,128 +210,130 @@ export default function PanelPedidosPage() {
         </div>
       </div>
 
-      {/* Detail drawer */}
+      {/* Detail Modal Overlay */}
       {selectedPedido && (
-        <div className="w-96 bg-white border-l border-gray-200 flex flex-col overflow-hidden shrink-0">
-          {/* Drawer header */}
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-gray-900">{selectedPedido.numero_pedido}</h3>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[selectedPedido.tipo]?.class || "bg-gray-100"}`}>
-                {TIPO_BADGE[selectedPedido.tipo]?.label || selectedPedido.tipo}
-              </span>
-            </div>
-            <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-600">
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Drawer body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {/* Client info */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cliente</h4>
-              <div className="flex items-center gap-2 text-sm text-gray-900">
-                <User size={14} className="text-gray-400" />
-                {selectedPedido.cliente_nombre || "—"}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" style={{ backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)" }}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+            {/* Modal header */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">{selectedPedido.numero_pedido}</h3>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[selectedPedido.tipo]?.class || "bg-gray-100"}`}>
+                  {TIPO_BADGE[selectedPedido.tipo]?.label || selectedPedido.tipo}
+                </span>
               </div>
-              {selectedPedido.cliente_telefono && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Phone size={14} className="text-gray-400" />
-                  {selectedPedido.cliente_telefono}
-                </div>
-              )}
-              {selectedPedido.cliente_direccion && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin size={14} className="text-gray-400" />
-                  {selectedPedido.cliente_direccion}
-                </div>
-              )}
+              <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
             </div>
 
-            {/* Items */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Productos</h4>
-              {selectedPedido.pedido_items?.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-gray-800">
-                    <span className="font-bold">{item.cantidad}x</span> {item.nombre_producto}
-                  </span>
-                  <span className="text-gray-600 font-medium">
-                    $ {new Intl.NumberFormat("es-AR").format(item.precio_unitario * item.cantidad)}
-                  </span>
+            {/* Drawer body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* Client info */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Cliente</h4>
+                <div className="flex items-center gap-2 text-sm text-gray-900">
+                  <User size={14} className="text-gray-400" />
+                  {selectedPedido.cliente_nombre || "—"}
                 </div>
-              ))}
-            </div>
-
-            {/* Payment / totals */}
-            <div className="space-y-2 border-t border-gray-100 pt-3">
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Subtotal</span>
-                <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.subtotal)}</span>
+                {selectedPedido.cliente_telefono && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Phone size={14} className="text-gray-400" />
+                    {selectedPedido.cliente_telefono}
+                  </div>
+                )}
+                {selectedPedido.cliente_direccion && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <MapPin size={14} className="text-gray-400" />
+                    {selectedPedido.cliente_direccion}
+                  </div>
+                )}
               </div>
-              {selectedPedido.costo_envio > 0 && (
+
+              {/* Items */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Productos</h4>
+                {selectedPedido.pedido_items?.map(item => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-gray-800">
+                      <span className="font-bold">{item.cantidad}x</span> {item.nombre_producto}
+                    </span>
+                    <span className="text-gray-600 font-medium">
+                      $ {new Intl.NumberFormat("es-AR").format(item.precio_unitario * item.cantidad)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment / totals */}
+              <div className="space-y-2 border-t border-gray-100 pt-3">
                 <div className="flex justify-between text-sm text-gray-600">
-                  <span>Envío</span>
-                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.costo_envio)}</span>
+                  <span>Subtotal</span>
+                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.subtotal)}</span>
                 </div>
-              )}
-              {selectedPedido.propina > 0 && (
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Propina</span>
-                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.propina)}</span>
+                {selectedPedido.costo_envio > 0 && (
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Envío</span>
+                    <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.costo_envio)}</span>
+                  </div>
+                )}
+                {selectedPedido.propina > 0 && (
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Propina</span>
+                    <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.propina)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-2">
+                  <span>Total</span>
+                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.total)}</span>
                 </div>
-              )}
-              <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-100 pt-2">
-                <span>Total</span>
-                <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.total)}</span>
+                {selectedPedido.metodo_pago_nombre && (
+                  <div className="text-xs text-gray-500">Pago: {selectedPedido.metodo_pago_nombre}</div>
+                )}
               </div>
-              {selectedPedido.metodo_pago_nombre && (
-                <div className="text-xs text-gray-500">Pago: {selectedPedido.metodo_pago_nombre}</div>
+
+              {/* Notas */}
+              {selectedPedido.notas && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Notas</h4>
+                  <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{selectedPedido.notas}</p>
+                </div>
               )}
             </div>
 
-            {/* Notas */}
-            {selectedPedido.notas && (
-              <div className="space-y-1">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Notas</h4>
-                <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{selectedPedido.notas}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Drawer footer: state change buttons */}
-          <div className="p-4 border-t border-gray-100 space-y-2">
-            {selectedPedido.estado === "pendiente" && (
+            {/* Drawer footer: state change buttons */}
+            <div className="p-4 border-t border-gray-100 space-y-2">
+              {selectedPedido.estado === "pendiente" && (
+                <button
+                  onClick={() => cambiarEstado(selectedPedido, "preparando")}
+                  className="w-full bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+                >
+                  Pasar a preparación
+                </button>
+              )}
+              {selectedPedido.estado === "preparando" && (
+                <button
+                  onClick={() => cambiarEstado(selectedPedido, "listo")}
+                  className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+                >
+                  Marcar como listo
+                </button>
+              )}
+              {selectedPedido.estado === "listo" && (
+                <button
+                  onClick={() => cambiarEstado(selectedPedido, "entregado")}
+                  className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+                >
+                  Marcar como entregado
+                </button>
+              )}
               <button
-                onClick={() => cambiarEstado(selectedPedido, "preparando")}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+                onClick={() => cambiarEstado(selectedPedido, "cancelado")}
+                className="w-full border border-red-200 text-red-600 font-medium py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors"
               >
-                Pasar a preparación
+                Cancelar pedido
               </button>
-            )}
-            {selectedPedido.estado === "preparando" && (
-              <button
-                onClick={() => cambiarEstado(selectedPedido, "listo")}
-                className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl text-sm transition-colors"
-              >
-                Marcar como listo
-              </button>
-            )}
-            {selectedPedido.estado === "listo" && (
-              <button
-                onClick={() => cambiarEstado(selectedPedido, "entregado")}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 rounded-xl text-sm transition-colors"
-              >
-                Marcar como entregado
-              </button>
-            )}
-            <button
-              onClick={() => cambiarEstado(selectedPedido, "cancelado")}
-              className="w-full border border-red-200 text-red-600 font-medium py-2.5 rounded-xl text-sm hover:bg-red-50 transition-colors"
-            >
-              Cancelar pedido
-            </button>
+            </div>
           </div>
         </div>
       )}
