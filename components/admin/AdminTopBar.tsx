@@ -1,25 +1,29 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Headphones } from "lucide-react";
 
 export function AdminTopBar() {
   return (
-    <header className="h-14 flex items-center justify-between px-6 bg-[#1a1a2e]">
+    <header className="h-14 flex items-center justify-between px-6 bg-white border-b border-gray-200">
+      {/* Left: collapse icon */}
       <div className="flex items-center gap-2">
-        <span className="text-gray-500 text-lg">≡</span>
+        <button className="text-gray-400 hover:text-gray-600 transition-colors text-xl">≡</button>
       </div>
 
+      {/* Right: buttons */}
       <div className="flex items-center gap-3">
-        <button className="rounded-full border border-gray-500 px-4 py-1.5 text-xs font-semibold text-gray-200 hover:bg-white/10 transition-colors">
+        <button className="rounded-full bg-gray-900 px-5 py-1.5 text-xs font-semibold text-white hover:bg-gray-800 transition-colors">
           Ver tienda
         </button>
-        <button className="rounded-full border border-purple-500 bg-purple-500/10 px-4 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors">
+        <button className="rounded-full border border-gray-300 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+          <Headphones size={13} />
           Soporte
         </button>
-        <button className="flex items-center gap-1 text-xs font-medium text-gray-300 hover:text-white transition-colors">
+        <button className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
           MMM Pizza
           <ChevronDown size={14} />
         </button>
+        <button className="text-gray-400 hover:text-gray-600 transition-colors text-lg">⋮</button>
       </div>
     </header>
   );
