@@ -135,19 +135,15 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             }
 
             if (!zonaEncontrada) {
-                // Si hay zonas pero sin polígono, aceptar igual
-                if ((zonas || []).length > 0 && zonasConPoligono.length === 0) {
-                    const primeraZona = (zonas || [])[0] as ZonaEntrega;
-                    setZonaDetectada(primeraZona);
-                    setCostoEnvioCalc(primeraZona.costo_envio);
+                // Si no hay zona pero tenemos ubicación del local, calcular por KM con tarifa base $850
+                if (localPt) {
+                    const distKm = haversineKm(localPt, clientePt);
+                    setCostoEnvioCalc(Math.round(distKm * 850));
                     setGeocodingState("ok");
-                } else if ((zonas || []).length === 0) {
-                    // Sin zonas configuradas → envío gratis
+                } else {
+                    // Si no hay zonas configuradas ni localPt -> envío gratis (fallback)
                     setGeocodingState("ok");
                     setCostoEnvioCalc(0);
-                } else {
-                    setZonaError("Tu ubicación está fuera de nuestra zona de entrega. 😕");
-                    setGeocodingState("error");
                 }
                 return;
             }
@@ -156,7 +152,9 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             let costoFinal = zonaEncontrada.costo_envio;
             if (zonaEncontrada.tipo_precio === "por_km" && localPt) {
                 const distKm = haversineKm(localPt, clientePt);
-                costoFinal = Math.round(distKm * zonaEncontrada.precio_por_km);
+                // Usar precio_por_km de la zona, o $850 de base si es 0
+                const rate = zonaEncontrada.precio_por_km > 0 ? zonaEncontrada.precio_por_km : 850;
+                costoFinal = Math.round(distKm * rate);
             }
             // Envío gratis desde
             if (zonaEncontrada.envio_gratis_desde && total >= zonaEncontrada.envio_gratis_desde) {

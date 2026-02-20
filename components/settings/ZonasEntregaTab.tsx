@@ -173,7 +173,7 @@ export function ZonasEntregaTab() {
     const [form, setForm] = useState({
         nombre: "", costo_envio: 0, minimo_compra: 0,
         envio_gratis_desde: "", tiempo_estimado_minutos: "",
-        tipo_precio: "fijo" as "fijo" | "por_km", precio_por_km: 0,
+        tipo_precio: "fijo" as "fijo" | "por_km", precio_por_km: 850,
     });
     const [drawingZonaId, setDrawingZonaId] = useState<string | null>(null);
     const [tempPoints, setTempPoints] = useState<LatLng[]>([]);
