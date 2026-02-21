@@ -68,75 +68,75 @@ async function enviarASupabase(pedidoPY) {
     const dbPedidoId = pedidoData[0].id;
 
     // 3. Insertar Items e identificar/crear Productos
-    if (pedidoPY.items && pedidoPY.items.length > 0) {
-        const itemsToInsert = [];
+    const itemsParaCargar = (pedidoPY.items && pedidoPY.items.length > 0)
+        ? pedidoPY.items
+        : [{ nombre: "Pedido PedidosYa", cantidad: 1, precio: pedidoPY.total, adicionales: [] }];
 
-        for (const item of pedidoPY.items) {
-            let productoId = null;
+    const itemsToInsert = [];
 
-            // a. Buscar el producto por nombre en Supabase
-            const resSearch = await fetch(`${supabaseUrl}/rest/v1/productos?nombre=eq.${encodeURIComponent(item.nombre)}&select=id`, {
-                method: "GET",
-                headers
-            });
+    for (const item of itemsParaCargar) {
+        let productoId = null;
 
-            if (resSearch.ok) {
-                const searchData = await resSearch.json();
-                if (searchData && searchData.length > 0) {
-                    productoId = searchData[0].id; // Encontró el producto existente
-                }
-            }
-
-            // b. Si no existe, lo creamos como inactivo
-            if (!productoId) {
-                const nuevoProd = {
-                    sucursal_id: sucursalId,
-                    nombre: item.nombre,
-                    descripcion: "Auto-generado desde PedidosYa",
-                    precio: item.precio || 0,
-                    estado: 'inactivo',
-                    disponible: true
-                };
-
-                const resCreate = await fetch(`${supabaseUrl}/rest/v1/productos`, {
-                    method: "POST",
-                    headers,
-                    body: JSON.stringify(nuevoProd)
-                });
-
-                if (resCreate.ok) {
-                    const createdData = await resCreate.json();
-                    if (createdData && createdData.length > 0) {
-                        productoId = createdData[0].id;
-                        console.log(`✨ Nuevo producto auto-creado: ${item.nombre}`);
-                    }
-                } else {
-                    console.warn(`No se pudo auto-crear el producto ${item.nombre}`);
-                }
-            }
-
-            // c. Preparar el item del pedido
-            itemsToInsert.push({
-                pedido_id: dbPedidoId,
-                producto_id: productoId,
-                nombre_producto: item.nombre,
-                cantidad: item.cantidad,
-                precio_unitario: item.precio || 0,
-                notas: Array.isArray(item.adicionales) ? item.adicionales.join(", ") : (item.adicionales || "")
-            });
-        }
-
-        // d. Impactar todos los items generados en la DB
-        const resItems = await fetch(`${supabaseUrl}/rest/v1/pedido_items`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(itemsToInsert)
+        // a. Buscar el producto por nombre en Supabase
+        const resSearch = await fetch(`${supabaseUrl}/rest/v1/productos?nombre=eq.${encodeURIComponent(item.nombre)}&select=id`, {
+            method: "GET",
+            headers
         });
 
-        if (!resItems.ok) {
-            console.warn("El pedido se creó, pero hubo un error insertando los items:", await resItems.text());
+        if (resSearch.ok) {
+            const searchData = await resSearch.json();
+            if (searchData && searchData.length > 0) {
+                productoId = searchData[0].id;
+            }
         }
+
+        // b. Si no existe, lo creamos como inactivo
+        if (!productoId) {
+            const nuevoProd = {
+                sucursal_id: sucursalId,
+                nombre: item.nombre,
+                descripcion: "Auto-generado desde PedidosYa",
+                precio: item.precio || 0,
+                estado: 'inactivo',
+                disponible: true
+            };
+
+            const resCreate = await fetch(`${supabaseUrl}/rest/v1/productos`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(nuevoProd)
+            });
+
+            if (resCreate.ok) {
+                const createdData = await resCreate.json();
+                if (createdData && createdData.length > 0) {
+                    productoId = createdData[0].id;
+                }
+            }
+        }
+
+        // c. Preparar el item del pedido
+        itemsToInsert.push({
+            pedido_id: dbPedidoId,
+            producto_id: productoId,
+            nombre_producto: item.nombre,
+            cantidad: item.cantidad,
+            precio_unitario: item.precio || 0,
+            notas: Array.isArray(item.adicionales) ? item.adicionales.join(", ") : (item.adicionales || "")
+        });
+    }
+
+    // d. Impactar todos los items generados en la DB
+    const resItems = await fetch(`${supabaseUrl}/rest/v1/pedido_items`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(itemsToInsert)
+    });
+
+    if (!resItems.ok) {
+        console.warn("Error insertando los items:", await resItems.text());
     }
 
     return dbPedidoId;
 }
+

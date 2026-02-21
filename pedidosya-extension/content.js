@@ -1,22 +1,63 @@
 // content.js - Inyectado en el Partner Portal de PedidosYa
 
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa Iniciado (v1.1)");
 
 // Guardamos en memoria los IDs de pedidos ya enviados en esta sesión para no duplicar
 let procesados = new Set();
+let ultimaDeteccion = Date.now();
 
-// Buscar contenedores de tarjetas de pedidos nuevos cada 10 segundos
-setInterval(buscarPedidosNuevos, 10000);
+// 1. Iniciamos Observador de Cambios en el DOM (Mucho más rápido que setInterval)
+const observer = new MutationObserver((mutations) => {
+    // Evitamos ejecutarlo demasiadas veces seguidas si hay muchas mutaciones
+    if (Date.now() - ultimaDeteccion > 2000) {
+        ultimaDeteccion = Date.now();
+        buscarPedidosNuevos();
+    }
+});
+
+// Empezamos a observar cambios en todo el cuerpo de la página
+observer.observe(document.body, { childList: true, subtree: true });
+
+// También mantenemos un interval de seguridad por si acaso nada cambia en el DOM pero hay algo ahí
+setInterval(buscarPedidosNuevos, 15000);
 
 function buscarPedidosNuevos() {
-    // NOTA TÉCNICA: Los selectores de clases en PedidosYa en React suelen estar minificados ("sc-1xxx"),
-    // Por eso, es más confiable buscar por ciertos atributos de accesibilidad, botones específicos o 
-    // palabras clave en el DOM.
+    // console.log("🔍 Escaneando pedidos...");
 
-    // 1. Normalmente, PedidosYa agrupa los pedidos nuevos en una columna que dice "Nuevos" o "Pendientes"
-    const tarjetasPedidos = document.querySelectorAll('div[data-testid="order-card"], .order-card, [class*="OrderCard"], [class*="order-card"]');
+    // Selectores variados para tarjetas de pedidos (PedidosYa cambia mucho los nombres de clase)
+    const selectores = [
+        'div[data-testid="order-card"]',
+        '.order-card',
+        '[class*="OrderCard"]',
+        '[class*="order-card"]',
+        'div:has(button):has(span:contains("#"))', // Selectores lógicos (experimental)
+        'div[role="listitem"]', // A veces las tarjetas están en una lista
+    ];
 
-    tarjetasPedidos.forEach(tarjeta => {
+    let tarjetasPedidos = [];
+    selectores.forEach(selector => {
+        try {
+            const encontrados = document.querySelectorAll(selector);
+            tarjetasPedidos = [...tarjetasPedidos, ...Array.from(encontrados)];
+        } catch (e) { /* selector no soportado */ }
+    });
+
+    // Si no encontramos nada con selectores, buscamos manualmente CUALQUIER div que parezca un pedido
+    if (tarjetasPedidos.length === 0) {
+        const divs = document.querySelectorAll('div');
+        divs.forEach(d => {
+            const txt = d.innerText || "";
+            // Si tiene un # algo, un precio y botones de aceptar/rechazar, es un pedido
+            if (txt.includes("#") && (txt.includes("Aceptar") || txt.includes("Confirmar")) && txt.length < 1000) {
+                tarjetasPedidos.push(d);
+            }
+        });
+    }
+
+    // Filtrar duplicados de la lista de elementos encontrados
+    const unicos = [...new Set(tarjetasPedidos)];
+
+    unicos.forEach(tarjeta => {
         procesarTarjetaPedido(tarjeta);
     });
 }
@@ -26,66 +67,69 @@ function procesarTarjetaPedido(tarjeta) {
         const textoTarjeta = tarjeta.innerText || "";
 
         // Evitar procesar lo que claramente no es un pedido nuevo
-        if (textoTarjeta.toLowerCase().includes("finalizado") || textoTarjeta.toLowerCase().includes("cancelado")) {
+        if (textoTarjeta.toLowerCase().includes("finalizado") ||
+            textoTarjeta.toLowerCase().includes("cancelado") ||
+            textoTarjeta.toLowerCase().includes("entregado") ||
+            textoTarjeta.length < 50) {
             return;
         }
 
-        // 3. Extraer el ID del pedido
-        const matchId = textoTarjeta.match(/#([a-zA-Z0-9\-]+)/);
+        // 3. Extraer el ID del pedido (Flexibilizado)
+        // Buscamos algo tipo #1234 o directamente una secuencia larga de números/letras
+        const matchId = textoTarjeta.match(/#([a-zA-Z0-9\-]+)/) || textoTarjeta.match(/([a-zA-Z0-9]{8,12})/);
         if (!matchId) return;
 
-        const idPedidoPy = matchId[1];
+        const idPedidoPy = matchId[1] || matchId[0];
 
         if (procesados.has(idPedidoPy)) {
             return;
         }
 
-        console.log(`🍟 Nuevo pedido detectado! ID: ${idPedidoPy}`);
+        console.log(`🍟 DEBUG: Analizando posible pedido ID: ${idPedidoPy}`);
 
         // 4. Extraer Datos
         let nombreCliente = "Cliente PedidosYa";
-
-        // El nombre suele estar arriba, intentamos sacarlo de la primera línea o de un span/h3 específico
         const lineas = textoTarjeta.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
         if (lineas.length > 0) {
-            // A veces la primera línea es el ID, la segunda el nombre
-            if (lineas[0].includes(idPedidoPy) && lineas.length > 1) {
-                nombreCliente = lineas[1];
+            // Lógica para encontrar el nombre: suele ser la línea antes o después del ID
+            const idxId = lineas.findIndex(l => l.includes(idPedidoPy));
+            if (idxId !== -1) {
+                if (idxId > 0 && lineas[idxId - 1].length > 3) nombreCliente = lineas[idxId - 1];
+                else if (idxId < lineas.length - 1) nombreCliente = lineas[idxId + 1];
             } else {
                 nombreCliente = lineas[0];
             }
         }
 
-        let metodoPago = "Efectivo";
         let total = 0;
-
         const matchTotal = textoTarjeta.match(/\$\s?([0-9.,]+)/);
         if (matchTotal) {
             total = parseFloat(matchTotal[1].replace(/\./g, '').replace(',', '.'));
         }
 
+        let metodoPago = "Efectivo";
         if (textoTarjeta.toLowerCase().includes("online") ||
             textoTarjeta.toLowerCase().includes("pagado") ||
             textoTarjeta.toLowerCase().includes("pre-pagado") ||
-            textoTarjeta.toLowerCase().includes("voucher")) {
+            textoTarjeta.toLowerCase().includes("voucher") ||
+            textoTarjeta.toLowerCase().includes("tarjeta")) {
             metodoPago = "Online / Pagado";
         }
 
-        // 5. Extraer Items mejorado
+        // 5. Extraer Items
         const itemsEncontrados = [];
-
-        // Buscamos patrones: "2x Pizza", "1 x Lomito", "1 Cantidad Producto"
         for (let linea of lineas) {
+            // Patrones comunes: "1x Coca", "2 x Pizza", "1 Cantidad"
             const mQty = linea.match(/^(\d+)\s?[xX×]\s+(.+)/i) || linea.match(/^(\d+)\s+([a-zA-Z].+)/);
             if (mQty) {
                 const cantidad = parseInt(mQty[1]);
                 let nombreProd = mQty[2].trim();
-
-                // Limpiar si el nombre trae el precio al final tipo "Pizza $1200"
                 nombreProd = nombreProd.split('$')[0].trim();
 
-                // Evitar capturar cosas que no son productos (ej: "1 minuto", "2 km")
-                if (nombreProd.toLowerCase().includes("minuto") || nombreProd.toLowerCase().includes("km")) {
+                if (nombreProd.toLowerCase().includes("minuto") ||
+                    nombreProd.toLowerCase().includes("km") ||
+                    nombreProd.toLowerCase().includes("distancia")) {
                     continue;
                 }
 
@@ -98,11 +142,6 @@ function procesarTarjetaPedido(tarjeta) {
             }
         }
 
-        // Si no encontramos items por regex de línea, intentamos buscar dentro de la tarjeta
-        if (itemsEncontrados.length === 0) {
-            console.warn(`No se detectaron items para el pedido ${idPedidoPy}, revisando estructura interna...`);
-        }
-
         const pedidoData = {
             id_py: idPedidoPy,
             cliente: nombreCliente,
@@ -111,14 +150,14 @@ function procesarTarjetaPedido(tarjeta) {
             items: itemsEncontrados
         };
 
-        console.log("Preparando envío a Supabase:", pedidoData);
+        console.log(`🚀 DEBUG: Intentando enviar pedido ${idPedidoPy} a Supabase...`, pedidoData);
 
         chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload: pedidoData }, (response) => {
             if (response && response.success) {
-                console.log(`✅ Pedido ${idPedidoPy} enviado exitosamente a Supabase!`);
+                console.log(`✅ Pedido ${idPedidoPy} enviado exitosamente!`);
                 procesados.add(idPedidoPy);
             } else {
-                console.error(`❌ Error mandando pedido ${idPedidoPy} a Supabase:`, response?.error);
+                console.error(`❌ Error al enviar pedido ${idPedidoPy}:`, response?.error);
             }
         });
 
@@ -126,3 +165,4 @@ function procesarTarjetaPedido(tarjeta) {
         console.error("Error scrapeando tarjeta de pedido:", error);
     }
 }
+
