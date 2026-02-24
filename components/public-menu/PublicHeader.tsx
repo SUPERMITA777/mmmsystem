@@ -37,16 +37,16 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
                     </div>
 
                     {/* Business Info */}
-                    <div className="flex-1 space-y-2">
-                        <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
+                    <div className="flex-1 space-y-1">
+                        <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">
                             {sucursal?.nombre || "MMM PIZZA"}
                         </h1>
 
-                        <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-slate-300 text-sm md:text-base">
-                            <div className="flex items-center gap-1.5 bg-slate-900/80 px-2 py-1 rounded-md backdrop-blur-sm">
-                                <Star size={16} className="text-orange-500 fill-orange-500" />
-                                <span className="font-bold text-white">5.0</span>
-                                <span className="text-slate-400 font-medium">De 5 reseñas</span>
+                        <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-slate-400 text-[10px] uppercase font-bold tracking-[0.1em]">
+                            <div className="flex items-center gap-1.5 px-0 py-1 rounded-md">
+                                <Star size={12} className="text-orange-500 fill-orange-500" />
+                                <span className="text-white">5.0</span>
+                                <span className="text-slate-500">(5 reseñas)</span>
                             </div>
                             <span className="hidden md:inline text-slate-600">•</span>
                             <div className="flex items-center gap-1.5">
@@ -58,20 +58,20 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
                 </div>
 
                 {/* Status Bar */}
-                <div className="mt-8 flex flex-col gap-4">
-                    <div className={`w-full py-2.5 rounded-xl text-center font-bold text-sm tracking-widest uppercase transition-all shadow-lg ${isOpen
-                            ? "bg-green-500/10 text-green-500 border border-green-500/20"
-                            : "bg-red-500 text-white border border-red-400/20 shadow-red-500/20"
+                <div className="mt-6 flex flex-col gap-3">
+                    <div className={`w-full py-2.5 rounded-xl text-center font-black text-[10px] tracking-[0.2em] uppercase transition-all ${isOpen
+                        ? "bg-white/5 text-green-400 border border-green-500/20"
+                        : "bg-red-500/10 text-red-500 border border-red-500/20"
                         }`}>
                         {isOpen ? "Abierto ahora" : "Cerrado • Abre a las 18:45"}
                     </div>
 
                     {/* Delivery/Retiro Switch */}
-                    <div className="flex bg-slate-900/80 p-1 rounded-xl border border-slate-800 backdrop-blur-md">
-                        <button className="flex-1 py-2.5 px-4 rounded-lg text-sm font-bold bg-orange-600 text-white shadow-lg shadow-orange-600/20 transition-all">
+                    <div className="flex bg-white/5 p-1 rounded-[15px] border border-white/5 backdrop-blur-md">
+                        <button className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] bg-orange-600 text-white shadow-xl shadow-orange-600/20 transition-all uppercase">
                             DELIVERY
                         </button>
-                        <button className="flex-1 py-2.5 px-4 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all">
+                        <button className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] text-slate-500 hover:text-white transition-all uppercase">
                             RETIRAR
                         </button>
                     </div>

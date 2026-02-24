@@ -166,7 +166,7 @@ function PublicMenuContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0d0d0d] text-slate-50 selection:bg-orange-500/30">
+    <main className="min-h-screen bg-[#050505] bg-[radial-gradient(circle_at_top,_#1a1a3a_0%,_#050505_100%)] text-slate-50 selection:bg-orange-500/30">
       {/* Header */}
       <PublicHeader sucursal={sucursal} isOpen={true} />
 

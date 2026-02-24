@@ -70,10 +70,29 @@ export function MetodosPagoTab() {
   async function handleSave() {
     setSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Obtener el ID de la sucursal (en un futuro esto vendrá de un contexto global o auth)
+      const { data: sucursal } = await supabase.from("sucursales").select("id").single();
+      if (!sucursal) throw new Error("No se encontró la sucursal");
+
+      const dataToSave = metodos.map((m, index) => ({
+        sucursal_id: sucursal.id,
+        nombre: m.nombre,
+        codigo: m.codigo,
+        activo: m.activo,
+        orden: index + 1
+      }));
+
+      const { error } = await supabase
+        .from("metodos_pago")
+        .upsert(dataToSave, { onConflict: "sucursal_id,codigo" });
+
+      if (error) throw error;
+
       alert("Métodos de pago guardados correctamente");
-    } catch (error) {
-      alert("Error al guardar los métodos de pago");
+      loadMetodos(); // Recargar para obtener IDs si eran nuevos
+    } catch (error: any) {
+      console.error("Error al guardar:", error);
+      alert(`Error al guardar: ${error.message || "Error desconocido"}`);
     } finally {
       setSaving(false);
     }
@@ -117,11 +136,10 @@ export function MetodosPagoTab() {
                     onChange={() => toggleActivo(index)}
                     className="sr-only peer"
                   />
-                  <div className={`w-5 h-5 border-2 rounded ${
-                    metodo.activo 
-                      ? "bg-purple-600 border-purple-600" 
+                  <div className={`w-5 h-5 border-2 rounded ${metodo.activo
+                      ? "bg-purple-600 border-purple-600"
                       : "border-slate-300"
-                  } flex items-center justify-center`}>
+                    } flex items-center justify-center`}>
                     {metodo.activo && (
                       <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -129,9 +147,8 @@ export function MetodosPagoTab() {
                     )}
                   </div>
                 </label>
-                <span className={`font-medium ${
-                  metodo.activo ? "text-slate-900" : "text-slate-500"
-                }`}>
+                <span className={`font-medium ${metodo.activo ? "text-slate-900" : "text-slate-500"
+                  }`}>
                   {metodo.nombre}
                 </span>
               </div>

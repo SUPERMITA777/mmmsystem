@@ -294,32 +294,34 @@ export default function ProductDetailModal({
             </div>
 
             {/* Sticky footer: qty + add button */}
-            <div className="px-5 py-4 border-t border-slate-800 bg-[#0d0d0d] flex items-center gap-4">
-                {/* Quantity selector */}
-                <div className="flex items-center gap-3 bg-slate-800 rounded-full px-2 py-1">
+            <div className="px-5 py-6 border-t border-white/5 bg-[#0d0d0d]/90 backdrop-blur-xl flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                    {/* Quantity selector */}
+                    <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-1 w-32">
+                        <button
+                            onClick={() => setCantidad(c => Math.max(1, c - 1))}
+                            className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                        >
+                            <Minus size={18} />
+                        </button>
+                        <span className="text-white font-black text-lg min-w-[24px] text-center">{cantidad}</span>
+                        <button
+                            onClick={() => setCantidad(c => c + 1)}
+                            className="w-10 h-10 flex items-center justify-center text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                        >
+                            <Plus size={18} />
+                        </button>
+                    </div>
+
+                    {/* Add to cart button */}
                     <button
-                        onClick={() => setCantidad(c => Math.max(1, c - 1))}
-                        className="w-8 h-8 flex items-center justify-center text-white hover:text-orange-400 transition-colors"
+                        disabled={!isCartValid}
+                        onClick={handleAgregar}
+                        className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-white/5 disabled:text-white/20 active:scale-95 text-white font-black py-4 rounded-2xl transition-all text-[13px] tracking-widest uppercase shadow-xl shadow-orange-600/10"
                     >
-                        <Minus size={16} />
-                    </button>
-                    <span className="text-white font-bold text-base min-w-[24px] text-center">{cantidad}</span>
-                    <button
-                        onClick={() => setCantidad(c => c + 1)}
-                        className="w-8 h-8 flex items-center justify-center text-white hover:text-orange-400 transition-colors"
-                    >
-                        <Plus size={16} />
+                        {isCartValid ? `AGREGAR $ ${new Intl.NumberFormat("es-AR").format(totalLinea)}` : 'SELECCIONÁ LOS ADICIONALES'}
                     </button>
                 </div>
-
-                {/* Add to cart button */}
-                <button
-                    disabled={!isCartValid}
-                    onClick={handleAgregar}
-                    className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 text-white font-black py-3.5 rounded-xl transition-all text-sm tracking-wide"
-                >
-                    {isCartValid ? `AGREGAR $ ${new Intl.NumberFormat("es-AR").format(totalLinea)}` : 'SELECCIONÁ LOS ADICIONALES'}
-                </button>
             </div>
         </div>
     );

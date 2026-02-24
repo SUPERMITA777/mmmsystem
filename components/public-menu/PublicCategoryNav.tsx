@@ -36,15 +36,14 @@ export default function PublicCategoryNav({
     }, [activeCategoryId]);
 
     return (
-        <nav className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800 shadow-2xl">
+        <nav className="sticky top-0 z-40 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5">
             <div
                 ref={containerRef}
-                className="max-w-5xl mx-auto px-4 flex gap-4 overflow-x-auto no-scrollbar scroll-smooth"
+                className="max-w-5xl mx-auto px-4 flex gap-6 overflow-x-auto no-scrollbar scroll-smooth"
             >
-                <button className="py-4 px-2 shrink-0 border-b-2 border-transparent text-slate-400 hover:text-white transition-colors">
-                    <div className="bg-slate-800 p-2 rounded-lg">
-                        {/* Menu Icon could go here */}
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                <button className="py-4 shrink-0 text-slate-500 hover:text-white transition-colors">
+                    <div className="bg-white/5 p-2 rounded-xl">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </div>
                 </button>
 
@@ -53,9 +52,9 @@ export default function PublicCategoryNav({
                         key={cat.id}
                         data-id={cat.id}
                         onClick={() => onCategoryClick(cat.id)}
-                        className={`py-5 px-3 shrink-0 text-sm font-black tracking-widest uppercase transition-all border-b-2 whitespace-nowrap ${activeCategoryId === cat.id
-                                ? "border-orange-600 text-white"
-                                : "border-transparent text-slate-500 hover:text-slate-300"
+                        className={`py-5 shrink-0 text-[11px] font-black tracking-[0.2em] uppercase transition-all border-b-2 whitespace-nowrap ${activeCategoryId === cat.id
+                            ? "border-orange-600 text-white"
+                            : "border-transparent text-slate-500 hover:text-slate-300"
                             }`}
                     >
                         {cat.nombre}

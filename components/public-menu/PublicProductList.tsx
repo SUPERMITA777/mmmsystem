@@ -25,24 +25,27 @@ interface PublicProductListProps {
 
 export default function PublicProductList({ categorias, onProductClick }: PublicProductListProps) {
     return (
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-10 pb-32">
+        <div className="max-w-5xl mx-auto px-4 py-8 space-y-12 pb-32">
             {categorias.map((cat) => (
-                <section key={cat.id} id={cat.id} className="scroll-mt-24">
-                    <h2 className="text-base font-black text-white uppercase tracking-widest mb-4 pb-2 border-b border-slate-800">
-                        {cat.nombre}
-                    </h2>
+                <section key={cat.id} id={cat.id} className="scroll-mt-32">
+                    <div className="flex items-center gap-3 mb-6">
+                        <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">
+                            {cat.nombre}
+                        </h2>
+                        <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
+                    </div>
 
-                    <div className="space-y-0 divide-y divide-slate-800/60">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {cat.productos.map((prod) => (
                             <button
                                 key={prod.id}
                                 onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre })}
-                                className="w-full flex items-center gap-4 py-4 text-left hover:bg-white/3 transition-colors group"
+                                className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 hover:bg-slate-800/40 hover:border-slate-700/50 transition-all duration-300 text-left group active:scale-[0.98] shadow-lg shadow-black/20"
                             >
                                 {/* Info */}
-                                <div className="flex-1 space-y-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-black text-slate-100 text-sm uppercase tracking-wide leading-tight truncate">
+                                <div className="flex-1 space-y-1.5 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <h3 className="font-black text-slate-100 text-[13px] uppercase tracking-wide leading-tight line-clamp-2">
                                             {prod.nombre}
                                         </h3>
                                         {prod.producto_sugerido && (
@@ -50,25 +53,30 @@ export default function PublicProductList({ categorias, onProductClick }: Public
                                         )}
                                     </div>
                                     {prod.descripcion && (
-                                        <p className="text-slate-500 text-xs line-clamp-2 leading-relaxed uppercase tracking-wide">
+                                        <p className="text-slate-500 text-[10px] line-clamp-2 leading-relaxed uppercase tracking-wider font-medium">
                                             {prod.descripcion}
                                         </p>
                                     )}
-                                    <p className="text-white font-black text-sm pt-0.5">
-                                        $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
-                                    </p>
+                                    <div className="pt-1">
+                                        <span className="text-white font-black text-base tracking-tight">
+                                            $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
+                                        </span>
+                                    </div>
                                 </div>
 
-                                {/* Image + add button */}
-                                <div className="relative shrink-0 w-24 h-24 rounded-xl overflow-hidden bg-slate-800">
+                                {/* Image */}
+                                <div className="relative shrink-0 w-[92px] h-[92px] rounded-[1.25rem] overflow-hidden bg-slate-800 shadow-inner">
                                     <img
                                         src={prod.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&h=300&fit=crop"}
                                         alt={prod.nombre}
-                                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                     />
+                                    {/* Subtle Overlay on hover */}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+
                                     {/* + button overlaid at bottom right */}
-                                    <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
-                                        <Plus size={16} className="text-white" strokeWidth={3} />
+                                    <div className="absolute bottom-1 right-1 w-6 h-6 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                                        <Plus size={14} className="text-white" strokeWidth={3} />
                                     </div>
                                 </div>
                             </button>
