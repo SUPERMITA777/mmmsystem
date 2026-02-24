@@ -36,7 +36,6 @@ const items = [
   { href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
   { href: "/admin/permisos", icon: Shield, label: "Permisos" },
   { href: "/admin/monitor-cocina", icon: MonitorPlay, label: "Monitor cocina" },
-  { href: "/admin/facturacion-arca", icon: Store, label: "Facturacion ARCA" },
 ];
 
 export function AdminSidebar() {
@@ -59,7 +58,7 @@ export function AdminSidebar() {
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 mb-0.5 transition-all ${active
-                ? "bg-gray-900 text-white font-semibold shadow-sm"
+                ? "bg-[#7B1FA2] text-white font-semibold shadow-sm"
                 : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                 }`}
             >
