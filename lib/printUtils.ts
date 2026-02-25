@@ -34,14 +34,14 @@ export function printComanda(pedido: any) {
     const subtotal = item.precio_unitario * item.cantidad;
     const ads = (item.adicionales ?? []).map((a: any) =>
       `<tr>
-              <td style="padding-left:10px;font-size:10px;color:#555">+ ${a.nombre}</td>
-              <td style="text-align:right;font-size:10px;color:#555">+${fmtARS(a.precio ?? 0)}</td>
+              <td style="padding-left:10px;font-size:12px;color:#555">+ ${a.nombre}</td>
+              <td style="text-align:right;font-size:12px;color:#555">+${fmtARS(a.precio ?? 0)}</td>
             </tr>`
     ).join("");
     return `
             <tr>
-              <td style="padding:3px 0;font-size:13px">${item.cantidad} ${item.nombre_producto}</td>
-              <td style="text-align:right;padding:3px 0;font-size:13px;white-space:nowrap">${fmtARS(subtotal)}</td>
+              <td style="padding:3px 0;font-size:15px">${item.cantidad} ${item.nombre_producto}</td>
+              <td style="text-align:right;padding:3px 0;font-size:15px;white-space:nowrap">${fmtARS(subtotal)}</td>
             </tr>${ads}`;
   }).join("");
 
@@ -70,25 +70,25 @@ export function printComanda(pedido: any) {
 <body>
 
   <!-- TÍTULO -->
-  <div class="center" style="font-size:20px;font-weight:bold;margin-bottom:2px">
+  <div class="center" style="font-size:22px;font-weight:bold;margin-bottom:2px">
     ${tipoLabel} N°${numCorto}
   </div>
-  <div class="center" style="font-size:13px;font-weight:bold;margin-bottom:6px">MMM Pizza</div>
+  <div class="center" style="font-size:15px;font-weight:bold;margin-bottom:6px">MMM Pizza</div>
 
   <!-- FECHA Y HORA -->
-  <div class="center" style="font-size:10px;color:#333">${fechaLarga}</div>
-  <div class="center" style="font-size:10px;color:#333">Creado a las ${horaCreado} hs.</div>
+  <div class="center" style="font-size:12px;color:#333">${fechaLarga}</div>
+  <div class="center" style="font-size:12px;color:#333">Creado a las ${horaCreado} hs.</div>
 
   <div style="margin: 8px 0"></div>
 
   <!-- CLIENTE -->
-  <div class="center" style="font-size:15px;font-weight:bold">${pedido.cliente_nombre || "Particular"}</div>
+  <div class="center" style="font-size:19px;font-weight:bold">${pedido.cliente_nombre || "Particular"}</div>
   ${pedido.cliente_telefono
-      ? `<div class="center" style="font-size:11px;color:#333">${pedido.cliente_telefono}</div>`
+      ? `<div class="center" style="font-size:13px;color:#333">${pedido.cliente_telefono}</div>`
       : ""}
 
   ${pedido.cliente_direccion ? `
-  <div style="margin-top:8px;font-size:12px;line-height:1.5">
+  <div style="margin-top:8px;font-size:14px;line-height:1.5">
     ${pedido.cliente_direccion.split(",").map((part: string) =>
         `<span>${part.trim()}.</span><br>`
       ).join("")}
@@ -97,13 +97,13 @@ export function printComanda(pedido: any) {
   <hr class="sep">
 
   <!-- PRODUCTOS -->
-  <div style="font-size:12px;font-weight:bold;margin-bottom:4px">PROMOS</div>
+  <div style="font-size:14px;font-weight:bold;margin-bottom:4px">PROMOS</div>
   <table>${itemsRows}</table>
 
   <hr class="sep">
 
   <!-- TOTALES -->
-  <table style="font-size:12px">
+  <table style="font-size:14px">
     <tr>
       <td style="color:#333">Subtotal</td>
       <td style="text-align:right;color:#333">${fmtARS(pedido.subtotal ?? 0)}</td>
@@ -119,19 +119,19 @@ export function printComanda(pedido: any) {
       <td style="text-align:right;color:#333">${fmtARS(pedido.propina)}</td>
     </tr>` : ""}
     <tr>
-      <td style="font-weight:bold;font-size:14px;padding-top:4px">${metodoPago}</td>
-      <td style="text-align:right;font-weight:bold;font-size:14px;padding-top:4px">${fmtARS(pedido.total ?? 0)}</td>
+      <td style="font-weight:bold;font-size:18px;padding-top:4px">${metodoPago}</td>
+      <td style="text-align:right;font-weight:bold;font-size:18px;padding-top:4px">${fmtARS(pedido.total ?? 0)}</td>
     </tr>
     <tr>
-      <td style="color:#333;font-size:11px">Abono</td>
-      <td style="text-align:right;color:#333;font-size:11px">${fmtARS(pedido.total ?? 0)}</td>
+      <td style="color:#333;font-size:13px">Abono</td>
+      <td style="text-align:right;color:#333;font-size:13px">${fmtARS(pedido.total ?? 0)}</td>
     </tr>
   </table>
 
   <hr class="sep">
 
   <!-- FOOTER -->
-  <div class="center" style="font-size:10px;color:#2563eb;font-style:italic;margin-top:2px">
+  <div class="center" style="font-size:12px;color:#2563eb;font-style:italic;margin-top:2px">
     Comprobante no válido como factura.
   </div>
 
@@ -158,14 +158,14 @@ export function printCocina(pedido: any) {
   const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
 
   const itemsHtml = (pedido.pedido_items ?? []).map((item: any) => `
-        <div style="font-weight:bold;font-size:17px;margin:5px 0;line-height:1.3">
+        <div style="font-weight:bold;font-size:19px;margin:5px 0;line-height:1.3">
             ${item.cantidad} ${item.nombre_producto.toUpperCase()}
         </div>
         ${(item.adicionales ?? []).length
-      ? `<div style="font-size:11px;margin-left:10px;color:#333">${(item.adicionales ?? []).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+      ? `<div style="font-size:13px;margin-left:10px;color:#333">${(item.adicionales ?? []).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
       : ""}
         ${item.notas
-      ? `<div style="font-size:11px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`
+      ? `<div style="font-size:13px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`
       : ""}`
   ).join("");
 
@@ -183,21 +183,21 @@ export function printCocina(pedido: any) {
 <body>
 
   <!-- ENCABEZADO -->
-  <div style="font-weight:bold;font-size:16px">${tipoLabel} N°${numCorto}
-    <span style="font-weight:normal;font-size:12px;margin-left:4px">#${pedido.numero_pedido}</span>
+  <div style="font-weight:bold;font-size:18px">${tipoLabel} N°${numCorto}
+    <span style="font-weight:normal;font-size:14px;margin-left:4px">#${pedido.numero_pedido}</span>
   </div>
 
   ${pedido.cliente_direccion
-      ? `<div style="font-size:12px;font-weight:bold;margin-top:2px">${pedido.cliente_direccion}</div>`
+      ? `<div style="font-size:14px;font-weight:bold;margin-top:2px">${pedido.cliente_direccion}</div>`
       : ""}
   ${pedido.cliente_nombre
-      ? `<div style="font-size:11px;color:#333">${pedido.cliente_nombre}</div>`
+      ? `<div style="font-size:13px;color:#333">${pedido.cliente_nombre}</div>`
       : ""}
 
   <hr class="sep">
 
   <!-- PRODUCTOS -->
-  <div style="font-weight:bold;font-size:13px;margin-bottom:6px">PROMOS</div>
+  <div style="font-weight:bold;font-size:15px;margin-bottom:6px">PROMOS</div>
   ${itemsHtml}
 
 <script>
