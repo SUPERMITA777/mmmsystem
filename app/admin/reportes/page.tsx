@@ -254,7 +254,7 @@ export default function ReportesPage() {
                                     <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Métodos de Pago</h4>
                                     <div className="flex items-center gap-10">
                                         <DonutChart
-                                            data={metodosArray.map(m => ({ label: m.label, value: m.value }))}
+                                            data={metodosArray.map((m: any) => ({ label: m.label, value: m.value }))}
                                             colors={COLORS}
                                         />
                                         <div className="flex-1 space-y-3">
