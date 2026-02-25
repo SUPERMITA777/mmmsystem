@@ -146,7 +146,10 @@ export default function CategoriaEditorModal({
                             <p className="text-xs text-slate-500">Resolución recomendada: 768 x 210 píxeles.</p>
                         </div>
 
-                        <div className="relative group aspect-[768/210] w-full rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden hover:border-purple-300 transition-colors cursor-pointer">
+                        <div
+                            onClick={() => document.getElementById('category-image-upload')?.click()}
+                            className="relative group aspect-[768/210] w-full rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center overflow-hidden hover:border-purple-300 transition-colors cursor-pointer"
+                        >
                             {formData.imagen_url ? (
                                 <img src={formData.imagen_url} alt="Portada" className="w-full h-full object-cover" />
                             ) : (
@@ -159,6 +162,35 @@ export default function CategoriaEditorModal({
                                 </div>
                             )}
                         </div>
+                        <input
+                            id="category-image-upload"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                    const fileExt = file.name.split('.').pop();
+                                    const fileName = `cat-${Math.random().toString(36).substring(2)}.${fileExt}`;
+                                    const filePath = `categories/${fileName}`;
+
+                                    const { error: uploadError } = await supabase.storage
+                                        .from('images')
+                                        .upload(filePath, file);
+
+                                    if (uploadError) throw uploadError;
+
+                                    const { data: { publicUrl } } = supabase.storage
+                                        .from('images')
+                                        .getPublicUrl(filePath);
+
+                                    setFormData({ ...formData, imagen_url: publicUrl });
+                                } catch (error: any) {
+                                    alert("Error subiendo la imagen: " + error.message);
+                                }
+                            }}
+                        />
                     </div>
 
                     <div className="space-y-4">
