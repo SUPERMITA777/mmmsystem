@@ -14,11 +14,15 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
             {/* Background Hero Image */}
             <div className="relative h-64 md:h-80 w-full overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent z-10" />
-                <img
-                    src="/hero-pizza.jpg" // We'll generate this
-                    alt="Banner"
-                    className="w-full h-full object-cover object-center opacity-80"
-                />
+                {sucursal?.banner_url ? (
+                    <img
+                        src={sucursal.banner_url}
+                        alt="Banner"
+                        className="w-full h-full object-cover object-center opacity-80"
+                    />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-orange-600 via-purple-700 to-slate-950" />
+                )}
                 <button className="absolute top-4 left-4 z-20 p-2 bg-slate-950/50 backdrop-blur-md rounded-full text-white hover:bg-slate-950 transition-colors">
                     <ChevronLeft size={24} />
                 </button>
@@ -29,11 +33,17 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
                 <div className="flex flex-col md:flex-row md:items-end gap-6">
                     {/* Logo */}
                     <div className="relative shrink-0 border-4 border-slate-950 rounded-2xl overflow-hidden bg-slate-900 shadow-2xl h-32 w-32 md:h-40 md:w-40">
-                        <img
-                            src="/logo-mmm.png" // We'll generate this
-                            alt={sucursal?.nombre}
-                            className="w-full h-full object-cover"
-                        />
+                        {sucursal?.logo_url ? (
+                            <img
+                                src={sucursal.logo_url}
+                                alt={sucursal?.nombre}
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                                <span className="text-4xl md:text-5xl font-black text-white">{sucursal?.nombre?.charAt(0) || 'M'}</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Business Info */}
