@@ -312,7 +312,7 @@ export default function ReportesPage() {
                                                 <tr key={i} className="hover:bg-gray-50/50 transition-colors">
                                                     <td className="px-6 py-4 text-xs font-bold text-gray-900 uppercase">{m.label}</td>
                                                     <td className="px-6 py-4 text-center text-xs font-black text-gray-900">{m.count}</td>
-                                                    <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {(m.value / m.count).toFixed(0)}</td>
+                                                    <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.count > 0 ? (m.value / m.count).toFixed(0) : 0}</td>
                                                     <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.envio}</td>
                                                     <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.propina}</td>
                                                     <td className="px-6 py-4 text-right text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(m.value)}</td>
