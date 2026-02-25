@@ -9,6 +9,7 @@ import { MetodosPagoTab } from "@/components/settings/MetodosPagoTab";
 import { ZonasEntregaTab } from "@/components/settings/ZonasEntregaTab";
 import { RedesSocialesTab } from "@/components/settings/RedesSocialesTab";
 import { MarketingTab } from "@/components/settings/MarketingTab";
+import { ComandasTab } from "@/components/settings/ComandasTab";
 
 const TABS = [
   { id: "modalidades", label: "Modalidades" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "zonas", label: "Zonas de entrega" },
   { id: "redes", label: "Redes sociales" },
   { id: "marketing", label: "Marketing" },
+  { id: "comandas", label: "Comandas" },
 ];
 
 export default function SettingsPage() {
@@ -63,6 +65,10 @@ export default function SettingsPage() {
 
         <TabPanel id="marketing" activeId={activeTab}>
           <MarketingTab />
+        </TabPanel>
+
+        <TabPanel id="comandas" activeId={activeTab}>
+          <ComandasTab />
         </TabPanel>
       </div>
     </section>

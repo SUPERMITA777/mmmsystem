@@ -100,6 +100,7 @@ export default function PanelPedidosPage() {
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
+  const [printConfig, setPrintConfig] = useState<any>(null);
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -107,6 +108,7 @@ export default function PanelPedidosPage() {
   useEffect(() => {
     fetchPedidos();
     fetchRepartidores();
+    fetchPrintConfig();
 
     const timer = setInterval(() => setNow(new Date()), 60000);
 
@@ -164,6 +166,11 @@ export default function PanelPedidosPage() {
   async function fetchRepartidores() {
     const { data } = await supabase.from("repartidores").select("*").eq("activo", true);
     setRepartidores(data || []);
+  }
+
+  async function fetchPrintConfig() {
+    const { data } = await supabase.from("config_impresion").select("*").limit(1).maybeSingle();
+    if (data) setPrintConfig(data);
   }
 
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
@@ -534,13 +541,13 @@ export default function PanelPedidosPage() {
                 <div className="flex flex-col gap-2 mt-auto">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => printComanda(selectedPedido)}
+                      onClick={() => printComanda(selectedPedido, printConfig)}
                       className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
                     >
                       COMANDAR
                     </button>
                     <button
-                      onClick={() => printCocina(selectedPedido)}
+                      onClick={() => printCocina(selectedPedido, printConfig)}
                       className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
                     >
                       COCINA
