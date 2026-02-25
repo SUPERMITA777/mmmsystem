@@ -188,10 +188,22 @@ export default function PanelPedidosPage() {
 
   async function handleConfirmOrder(minutes: number) {
     if (!confirmTimePedido) return;
+    const pedido = confirmTimePedido;
+
     await supabase.from("pedidos").update({
       estado: "confirmado",
       tiempo_preparacion_minutos: minutes
-    }).eq("id", confirmTimePedido.id);
+    }).eq("id", pedido.id);
+
+    // Enviar WhatsApp de confirmación
+    if (pedido.cliente_telefono) {
+      const rawPhone = pedido.cliente_telefono.replace(/\D/g, "");
+      const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
+      const msg = `Tu pedido realizado a MMM ha sido confirmado y será entregado en ${minutes} minutos.`;
+      const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+      window.open(waUrl, '_blank');
+    }
+
     setConfirmTimePedido(null);
     fetchPedidos();
   }
