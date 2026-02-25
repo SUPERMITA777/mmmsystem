@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, ExternalLink, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, CreditCard } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown } from "lucide-react";
 import dynamic from "next/dynamic";
+import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
+import { printComanda, printCocina } from "@/lib/printUtils";
+import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
-import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
-import { printOrderTicket } from "@/lib/printUtils";
-import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
+
+type PedidoItem = {
+  id: string;
+  nombre_producto: string;
+  cantidad: number;
+  precio_unitario: number;
+  notas?: string;
+  adicionales?: { nombre: string; precio: number }[];
+};
 
 type Pedido = {
   id: string;
@@ -32,14 +41,6 @@ type Pedido = {
   repartidor_id?: string | null;
 };
 
-type PedidoItem = {
-  id: string;
-  nombre_producto: string;
-  cantidad: number;
-  precio_unitario: number;
-  notas: string;
-};
-
 const ESTADOS = [
   { key: "pendiente", label: "Nuevos", color: "bg-blue-500", icon: Clock },
   { key: "confirmado", label: "Confirmados", color: "bg-purple-500", icon: Check },
@@ -54,31 +55,65 @@ const TIPO_BADGE: Record<string, { label: string; class: string }> = {
   salon: { label: "Salón", class: "bg-amber-100 text-amber-700" },
 };
 
+const ESTADO_OPTIONS = [
+  { key: "pendiente", label: "Pendiente" },
+  { key: "confirmado", label: "Confirmado" },
+  { key: "preparando", label: "Preparando" },
+  { key: "listo", label: "Listo" },
+  { key: "en_camino", label: "En camino" },
+  { key: "entregado", label: "Entregado" },
+  { key: "cancelado", label: "Cancelado" },
+];
+
+function fmt(n: number) {
+  return new Intl.NumberFormat("es-AR").format(n);
+}
+
+/* ── Bell sound (Web Audio API) ── */
+function playBell() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 1.3);
+  } catch (e) {
+    // ignore if autoplay blocked
+  }
+}
+
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [repartidores, setRepartidores] = useState<any[]>([]);
   const [filtro, setFiltro] = useState<"todos" | "delivery" | "takeaway">("todos");
   const [busqueda, setBusqueda] = useState("");
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
+  const [modalTab, setModalTab] = useState<"detalle" | "repartidores">("detalle");
   const [confirmTimePedido, setConfirmTimePedido] = useState<Pedido | null>(null);
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
 
+  const knownIdsRef = useRef<Set<string>>(new Set());
+  const firstLoadRef = useRef(true);
+
   useEffect(() => {
     fetchPedidos();
     fetchRepartidores();
 
-    // Actualizar cada minuto para el contador de tiempo transcurrido
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 60000);
+    const timer = setInterval(() => setNow(new Date()), 60000);
 
-    // Supabase Realtime
     const channel = supabase
       .channel("pedidos-rt")
-      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, () => {
-        fetchPedidos();
+      .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, (payload) => {
+        fetchPedidos(true);
       })
       .subscribe();
 
@@ -88,14 +123,42 @@ export default function PanelPedidosPage() {
     };
   }, []);
 
-  async function fetchPedidos() {
+  // When selectedPedido changes, reset to detalle tab
+  useEffect(() => {
+    if (selectedPedido) setModalTab("detalle");
+  }, [selectedPedido?.id]);
+
+  async function fetchPedidos(fromRealtime = false) {
     const { data } = await supabase
       .from("pedidos")
       .select("*, pedido_items(*)")
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .order("created_at", { ascending: false });
-    setPedidos(data || []);
+
+    const rows = (data || []) as Pedido[];
+
+    // Bell on new pedido
+    if (fromRealtime && !firstLoadRef.current) {
+      rows.forEach(p => {
+        if (!knownIdsRef.current.has(p.id)) {
+          playBell();
+        }
+      });
+    }
+
+    // Update known IDs
+    knownIdsRef.current = new Set(rows.map(p => p.id));
+    firstLoadRef.current = false;
+
+    setPedidos(rows);
     setLoading(false);
+
+    // Keep selectedPedido in sync
+    setSelectedPedido(prev => {
+      if (!prev) return null;
+      const updated = rows.find(p => p.id === prev.id);
+      return updated || prev;
+    });
   }
 
   async function fetchRepartidores() {
@@ -104,11 +167,7 @@ export default function PanelPedidosPage() {
   }
 
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
-    const updateData: any = { estado: nuevoEstado };
-
-    // Si pasa a en_camino, podríamos querer registrar algo más aquí
-
-    await supabase.from("pedidos").update(updateData).eq("id", pedido.id);
+    await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
     fetchPedidos();
     if (selectedPedido?.id === pedido.id) {
       setSelectedPedido({ ...pedido, estado: nuevoEstado });
@@ -118,43 +177,45 @@ export default function PanelPedidosPage() {
   async function asignarRepartidor(pedidoId: string, repartidorId: string) {
     await supabase.from("pedidos").update({ repartidor_id: repartidorId }).eq("id", pedidoId);
     fetchPedidos();
-    if (selectedPedido?.id === pedidoId) {
-      setSelectedPedido({ ...selectedPedido, repartidor_id: repartidorId } as Pedido);
-    }
   }
 
   async function handleConfirmOrder(minutes: number) {
     if (!confirmTimePedido) return;
-
     await supabase.from("pedidos").update({
       estado: "confirmado",
       tiempo_preparacion_minutos: minutes
     }).eq("id", confirmTimePedido.id);
-
     setConfirmTimePedido(null);
     fetchPedidos();
   }
 
   const filtrados = pedidos.filter(p => {
     if (filtro !== "todos" && p.tipo !== filtro) return false;
-    if (busqueda && !p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase()) && !p.numero_pedido?.toLowerCase().includes(busqueda.toLowerCase())) return false;
+    if (busqueda && !p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase()) &&
+      !p.numero_pedido?.toLowerCase().includes(busqueda.toLowerCase())) return false;
     return true;
   });
 
-  function pedidosPorEstado(estadoKey: string) {
-    return filtrados.filter(p => p.estado === estadoKey);
-  }
-
-  function formatTime(dateStr: string) {
-    return new Date(dateStr).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  function pedidosPorEstado(key: string) {
+    return filtrados.filter(p => p.estado === key);
   }
 
   function getElapsedMinutes(dateStr: string) {
-    const start = new Date(dateStr);
-    const diffMs = now.getTime() - start.getTime();
-    return Math.floor(diffMs / 60000);
+    return Math.floor((now.getTime() - new Date(dateStr).getTime()) / 60000);
   }
 
+  function formatHora(dateStr: string) {
+    return new Date(dateStr).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function formatFechaCorta(dateStr: string) {
+    return new Date(dateStr).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  const tipoLabel = (t: string) =>
+    t === "delivery" ? "Delivery" : t === "takeaway" ? "Take Away" : "Salón";
+
+  /* ─── RENDER ─── */
   return (
     <div className="flex h-full">
       {/* Main area */}
@@ -188,7 +249,7 @@ export default function PanelPedidosPage() {
             />
           </div>
 
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto">
             <button
               onClick={() => setIsNuevoPedidoOpen(true)}
               className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95"
@@ -198,13 +259,13 @@ export default function PanelPedidosPage() {
           </div>
         </div>
 
-        {/* Contenido Principal */}
+        {/* Kanban + Map */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Columnas de Pedidos */}
+          {/* Columnas */}
           <div className="w-1/2 overflow-x-auto border-r border-gray-100 bg-slate-50/50">
             <div className="flex gap-4 p-4 min-w-[1000px] h-full">
               {ESTADOS.map(estado => {
-                const pedidosCol = pedidosPorEstado(estado.key);
+                const col = pedidosPorEstado(estado.key);
                 return (
                   <div key={estado.key} className="flex-1 flex flex-col min-w-[200px]">
                     <div className="flex items-center justify-between mb-4 px-1">
@@ -212,48 +273,42 @@ export default function PanelPedidosPage() {
                         <span className={`w-2.5 h-2.5 rounded-full ${estado.color}`} />
                         <h3 className="font-bold text-gray-700 text-[11px] uppercase tracking-wider">{estado.label}</h3>
                       </div>
-                      <span className="text-[10px] font-black bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-full shadow-sm">{pedidosCol.length}</span>
+                      <span className="text-[10px] font-black bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-full shadow-sm">{col.length}</span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-3 pb-6 custom-scrollbar">
-                      {pedidosCol.length === 0 ? (
+                    <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+                      {col.length === 0 ? (
                         <div className="text-center py-10 opacity-40">
                           <estado.icon size={24} className="mx-auto mb-2 text-gray-400" />
                           <p className="text-[11px] font-medium text-gray-500">Vacío</p>
                         </div>
-                      ) : (
-                        pedidosCol.map(pedido => {
-                          const elapsed = getElapsedMinutes(pedido.created_at);
-                          const isLate = elapsed > 60;
-                          const isWarning = elapsed > 40 && elapsed <= 60;
-
-                          return (
-                            <button
-                              key={pedido.id}
-                              onClick={() => setSelectedPedido(pedido)}
-                              className={`w-full text-left rounded-2xl p-4 border transition-all hover:shadow-lg active:scale-[0.98] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"
-                                }`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${isLate ? "bg-red-100 text-red-600" :
-                                  isWarning ? "bg-orange-100 text-orange-600" :
-                                    "bg-purple-50 text-[#7B1FA2]"
-                                  }`}>
-                                  ⏱ {elapsed} min
-                                </span>
-                                <span className="text-[11px] font-black text-gray-900">#{pedido.numero_pedido.split('-')[1]}</span>
-                              </div>
-                              <p className="text-xs font-bold text-gray-900 mb-1 line-clamp-1">{pedido.cliente_nombre || "Sin nombre"}</p>
-                              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                                <span className="text-[13px] font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(pedido.total)}</span>
-                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
-                                  {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })
-                      )}
+                      ) : col.map(pedido => {
+                        const elapsed = getElapsedMinutes(pedido.created_at);
+                        const isLate = elapsed > 60;
+                        const isWarning = elapsed > 40 && elapsed <= 60;
+                        const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
+                        return (
+                          <button
+                            key={pedido.id}
+                            onClick={() => setSelectedPedido(pedido)}
+                            className={`w-full text-left rounded-2xl p-4 border transition-all hover:shadow-lg active:scale-[0.98] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${isLate ? "bg-red-100 text-red-600" : isWarning ? "bg-orange-100 text-orange-600" : "bg-purple-50 text-[#7B1FA2]"}`}>
+                                ⏱ {elapsed} min
+                              </span>
+                              <span className="text-[11px] font-black text-gray-900">#{numCorto}</span>
+                            </div>
+                            <p className="text-xs font-bold text-gray-900 mb-1 line-clamp-1">{pedido.cliente_nombre || "Sin nombre"}</p>
+                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                              <span className="text-[13px] font-black text-gray-900">$ {fmt(pedido.total)}</span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
+                                {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -261,7 +316,7 @@ export default function PanelPedidosPage() {
             </div>
           </div>
 
-          {/* Mapa Area */}
+          {/* Mapa */}
           <div className="hidden lg:block w-1/2 bg-white relative">
             <DynamicMap
               pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
@@ -275,153 +330,246 @@ export default function PanelPedidosPage() {
         </div>
       </div>
 
-      {/* Detail Modal */}
+      {/* ── MODAL DETALLE PEDIDO (estilo Pedisy) ── */}
       {selectedPedido && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)" }}>
-          <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden max-h-[92vh] border border-gray-100">
-            <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between bg-white">
-              <div>
-                <h3 className="text-lg font-black text-gray-900">{selectedPedido.numero_pedido}</h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{new Date(selectedPedido.created_at).toLocaleDateString()}</span>
-                  <span className="w-1 h-1 rounded-full bg-gray-300" />
-                  <span className="text-[10px] font-bold text-[#7B1FA2] uppercase tracking-widest">{selectedPedido.estado}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelectedPedido(null)} className="bg-gray-50 text-gray-400 hover:text-gray-600 p-2 rounded-full transition-colors">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
+          onClick={() => setSelectedPedido(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* ── Header ── */}
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
+              <h3 className="text-base font-bold text-gray-800">
+                {tipoLabel(selectedPedido.tipo)} Programado N°
+                {selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
+              </h3>
+              <button
+                onClick={() => setSelectedPedido(null)}
+                className="text-gray-400 hover:text-gray-700 p-1 rounded-full"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              {/* Acciones Rápidas */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => printOrderTicket(selectedPedido)}
-                  className="flex-1 bg-[#7B1FA2] text-white py-2.5 rounded-xl text-xs font-bold shadow-lg shadow-[#7B1FA2]/20 hover:opacity-90 transition-all font-inter"
-                >
-                  COMANDAR
-                </button>
-                <button className="flex-1 bg-white border border-gray-200 text-gray-700 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all">
-                  FACTURAR
-                </button>
-              </div>
+            {/* ── Body ── */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left panel */}
+              <div className="flex-1 flex flex-col border-r border-gray-100 overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200">
+                  {(["detalle", "repartidores"] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setModalTab(tab)}
+                      className={`flex-1 py-3 text-xs font-semibold transition-colors ${modalTab === tab ? "border-b-2 border-[#7B1FA2] text-[#7B1FA2]" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      {tab === "detalle" ? "Detalle del pedido" : "Repartidores"}
+                    </button>
+                  ))}
+                </div>
 
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Detalles del Cliente</h4>
-                <div className="bg-gray-50/50 rounded-3xl p-5 space-y-4 border border-gray-100">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#7B1FA2]">
-                      <User size={18} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900">{selectedPedido.cliente_nombre || "Particular"}</p>
-                      <p className="text-[11px] font-bold text-gray-400">{selectedPedido.cliente_telefono || "Sin teléfono"}</p>
-                    </div>
-                  </div>
-                  {selectedPedido.cliente_direccion && (
-                    <div className="flex items-start gap-4 pt-4 border-t border-gray-100">
-                      <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center text-orange-500">
-                        <MapPin size={18} />
+                <div className="flex-1 overflow-y-auto p-5">
+                  {modalTab === "detalle" && (
+                    <div className="space-y-4">
+                      {/* Tabla de productos */}
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] text-gray-400 uppercase font-semibold border-b border-gray-100">
+                            <td className="pb-2">Producto</td>
+                            <td className="pb-2 text-right">P. original</td>
+                            <td className="pb-2 text-right">P. final</td>
+                            <td className="pb-2 text-right">Total</td>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(selectedPedido.pedido_items ?? []).map(item => (
+                            <tr key={item.id} className="border-b border-gray-50">
+                              <td className="py-2 font-medium text-gray-800">
+                                {item.cantidad} {item.nombre_producto}
+                                {item.adicionales && item.adicionales.length > 0 && (
+                                  <div className="text-[10px] text-gray-400 mt-0.5">
+                                    {item.adicionales.map((a, i) => <span key={i} className="mr-2">+ {a.nombre}</span>)}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
+                              <td className="py-2 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
+                              <td className="py-2 text-right font-semibold">$ {fmt(item.precio_unitario * item.cantidad)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {/* Subtotales */}
+                      <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                        <div className="flex justify-between text-gray-700 font-semibold">
+                          <span>Productos</span>
+                          <span>$ {fmt(selectedPedido.subtotal)}</span>
+                        </div>
+                        {selectedPedido.costo_envio > 0 && (
+                          <div className="flex justify-between text-gray-500">
+                            <span>Envío</span>
+                            <span>$ {fmt(selectedPedido.costo_envio)}</span>
+                          </div>
+                        )}
+                        {selectedPedido.propina > 0 && (
+                          <div className="flex justify-between text-gray-500">
+                            <span>Propina</span>
+                            <span>$ {fmt(selectedPedido.propina)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-gray-900 font-black text-base border-t border-gray-200 pt-2 mt-1">
+                          <span>Total ({selectedPedido.metodo_pago_nombre || "Efectivo"})</span>
+                          <span>$ {fmt(selectedPedido.total)}</span>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">Dirección</p>
-                        <p className="text-xs font-black text-gray-700 leading-relaxed">{selectedPedido.cliente_direccion}</p>
-                      </div>
+
+                      {/* Cancelar */}
+                      <button
+                        onClick={() => { cambiarEstado(selectedPedido, "cancelado"); setSelectedPedido(null); }}
+                        className="text-red-500 text-xs font-semibold hover:underline"
+                      >
+                        Cancelar pedido
+                      </button>
+                    </div>
+                  )}
+
+                  {modalTab === "repartidores" && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500 mb-3">Asigná un repartidor a este pedido delivery.</p>
+                      {repartidores.length === 0 ? (
+                        <p className="text-gray-400 text-xs">No hay repartidores activos.</p>
+                      ) : repartidores.map(r => (
+                        <button
+                          key={r.id}
+                          onClick={() => asignarRepartidor(selectedPedido.id, r.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors ${selectedPedido.repartidor_id === r.id ? "border-[#7B1FA2] bg-purple-50 text-[#7B1FA2]" : "border-gray-200 hover:border-[#7B1FA2]/50"}`}
+                        >
+                          <Bike size={16} />
+                          {r.nombre}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Productos</h4>
-                  <span className="text-[10px] font-bold bg-purple-50 text-[#7B1FA2] px-2 py-0.5 rounded-full">{selectedPedido.pedido_items?.length} Ítems</span>
-                </div>
-                <div className="space-y-3">
-                  {selectedPedido.pedido_items?.map(item => (
-                    <div key={item.id} className="flex justify-between items-center group">
-                      <div className="flex gap-3 items-center">
-                        <span className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-500">{item.cantidad}</span>
-                        <span className="text-xs font-bold text-gray-700 group-hover:text-[#7B1FA2] transition-colors">{item.nombre_producto}</span>
-                      </div>
-                      <span className="text-xs font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(item.precio_unitario * item.cantidad)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Repartidores (Solo si es delivery y está listo o en camino) */}
-              {(selectedPedido.tipo === "delivery") && (
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Asignación de Reparto</h4>
+              {/* Right panel (info + acciones) */}
+              <div className="w-64 flex flex-col p-5 gap-4 overflow-y-auto">
+                {/* Estado selector */}
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Estado</label>
                   <div className="relative">
                     <select
-                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3.5 text-xs font-bold text-gray-700 appearance-none outline-none focus:ring-2 focus:ring-[#7B1FA2]/50"
-                      value={selectedPedido.repartidor_id || ""}
-                      onChange={(e) => asignarRepartidor(selectedPedido.id, e.target.value)}
+                      value={selectedPedido.estado}
+                      onChange={e => cambiarEstado(selectedPedido, e.target.value)}
+                      className="w-full appearance-none border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-[#7B1FA2]/30"
                     >
-                      <option value="">Seleccionar Repartidor...</option>
-                      {repartidores.map(r => (
-                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      {ESTADO_OPTIONS.map(opt => (
+                        <option key={opt.key} value={opt.key}>{opt.label}</option>
                       ))}
                     </select>
-                    <Bike size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
-              )}
 
-              <div className="bg-gray-900 rounded-[2rem] p-6 space-y-3 shadow-xl">
-                <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                  <span>Productos</span>
-                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.subtotal)}</span>
+                {/* Pedido # */}
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Pedido</p>
+                  <p className="text-purple-600 font-semibold text-sm">#{selectedPedido.numero_pedido}</p>
                 </div>
-                {selectedPedido.costo_envio > 0 && (
-                  <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                    <span>Envío</span>
-                    <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.costo_envio)}</span>
+
+                {/* Cliente */}
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Cliente</p>
+                  <div className="flex items-center gap-2">
+                    <User size={13} className="text-gray-400 shrink-0" />
+                    <span className="text-sm font-semibold text-gray-800">{selectedPedido.cliente_nombre || "Particular"}</span>
                   </div>
-                )}
-                <div className="flex justify-between text-lg font-black text-white border-t border-white/10 pt-4 mt-2">
-                  <span>TOTAL</span>
-                  <span>$ {new Intl.NumberFormat("es-AR").format(selectedPedido.total)}</span>
+                  {selectedPedido.cliente_telefono && (
+                    <div className="flex items-center gap-2">
+                      <Phone size={13} className="text-gray-400 shrink-0" />
+                      <a
+                        href={`https://wa.me/${selectedPedido.cliente_telefono.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-purple-600 hover:underline"
+                      >
+                        {selectedPedido.cliente_telefono}
+                      </a>
+                    </div>
+                  )}
+                  {selectedPedido.cliente_direccion && (
+                    <div className="flex items-start gap-2">
+                      <MapPin size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                      <a
+                        href={`https://maps.google.com/?q=${encodeURIComponent(selectedPedido.cliente_direccion)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-purple-600 hover:underline leading-tight"
+                      >
+                        {selectedPedido.cliente_direccion}
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {selectedPedido.metodo_pago_nombre && (
-                  <div className="flex items-center gap-2 text-[10px] font-black text-[#7B1FA2] uppercase tracking-[0.2em] mt-2">
-                    <CreditCard size={12} />
-                    {selectedPedido.metodo_pago_nombre}
+
+                {/* Pago */}
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Pago</p>
+                  <p className="text-sm text-gray-700">{selectedPedido.metodo_pago_nombre || "Efectivo"}</p>
+                </div>
+
+                {/* Creado */}
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Creado</p>
+                  <p className="text-xs text-gray-600">{formatFechaCorta(selectedPedido.created_at)} {formatHora(selectedPedido.created_at)} hs.</p>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex flex-col gap-2 mt-auto">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => printComanda(selectedPedido)}
+                      className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
+                    >
+                      COMANDAR
+                    </button>
+                    <button
+                      onClick={() => printCocina(selectedPedido)}
+                      className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
+                    >
+                      COCINA
+                    </button>
                   </div>
-                )}
+
+                  {/* Estado rápido (acción primaria) */}
+                  {selectedPedido.estado === "pendiente" && (
+                    <button
+                      onClick={() => { setConfirmTimePedido(selectedPedido); setSelectedPedido(null); }}
+                      className="w-full bg-gray-900 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90 transition-all"
+                    >
+                      Confirmar
+                    </button>
+                  )}
+                  {selectedPedido.estado === "confirmado" && (
+                    <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="w-full bg-orange-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">En Cocina</button>
+                  )}
+                  {selectedPedido.estado === "preparando" && (
+                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Marcar listo</button>
+                  )}
+                  {selectedPedido.estado === "listo" && (
+                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="w-full bg-[#7B1FA2] text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Despachar</button>
+                  )}
+                  {selectedPedido.estado === "en_camino" && (
+                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="w-full bg-gray-900 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Finalizar entrega</button>
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="p-6 bg-gray-50/50 border-t border-gray-50 flex gap-3">
-              {selectedPedido.estado === "pendiente" && (
-                <button
-                  onClick={() => {
-                    setConfirmTimePedido(selectedPedido);
-                    setSelectedPedido(null);
-                  }}
-                  className="flex-1 bg-black text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg hover:opacity-90 transition-all"
-                >
-                  Confirmar Pedido
-                </button>
-              )}
-              {selectedPedido.estado === "confirmado" && (
-                <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="flex-1 bg-orange-500 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg hover:opacity-90 transition-all">En Cocina</button>
-              )}
-              {selectedPedido.estado === "preparando" && (
-                <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="flex-1 bg-green-600 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg hover:opacity-90 transition-all">Marcar como Listo</button>
-              )}
-              {selectedPedido.estado === "listo" && (
-                <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="flex-1 bg-[#7B1FA2] text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg hover:opacity-90 transition-all">Despachar Pedido</button>
-              )}
-              {selectedPedido.estado === "en_camino" && (
-                <button onClick={() => cambiarEstado(selectedPedido, "entregado")} className="flex-1 bg-gray-900 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg hover:opacity-90 transition-all">Finalizar Entrega</button>
-              )}
-              <button onClick={() => cambiarEstado(selectedPedido, "cancelado")} className="bg-white border border-gray-200 text-red-500 p-4 rounded-2xl hover:bg-red-50 transition-all">
-                <X size={18} />
-              </button>
             </div>
           </div>
         </div>
@@ -437,12 +585,8 @@ export default function PanelPedidosPage() {
       <NuevoPedidoModal
         isOpen={isNuevoPedidoOpen}
         onClose={() => setIsNuevoPedidoOpen(false)}
-        onCreated={() => {
-          fetchPedidos();
-          setIsNuevoPedidoOpen(false);
-        }}
+        onCreated={() => { fetchPedidos(); setIsNuevoPedidoOpen(false); }}
       />
     </div>
   );
 }
-
