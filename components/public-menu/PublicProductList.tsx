@@ -15,6 +15,8 @@ interface Product {
 interface CategoryWithProducts {
     id: string;
     nombre: string;
+    imagen_url?: string;
+    descripcion?: string;
     productos: Product[];
 }
 
@@ -28,11 +30,36 @@ export default function PublicProductList({ categorias, onProductClick }: Public
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-12 pb-32">
             {categorias.map((cat) => (
                 <section key={cat.id} id={cat.id} className="scroll-mt-32">
-                    <div className="flex items-center gap-3 mb-6">
-                        <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">
-                            {cat.nombre}
-                        </h2>
-                        <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
+                    <div className="space-y-4 mb-8">
+                        {cat.imagen_url && (
+                            <div className="relative aspect-[768/210] w-full rounded-3xl overflow-hidden shadow-2xl shadow-black/50 border border-white/5">
+                                <img
+                                    src={cat.imagen_url}
+                                    alt={cat.nombre}
+                                    className="w-full h-full object-cover"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                <div className="absolute bottom-6 left-8">
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter drop-shadow-lg">
+                                        {cat.nombre}
+                                    </h2>
+                                    {cat.descripcion && (
+                                        <p className="text-slate-300 text-xs font-medium uppercase tracking-[0.2em] mt-1 drop-shadow-md">
+                                            {cat.descripcion}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {!cat.imagen_url && (
+                            <div className="flex items-center gap-3">
+                                <h2 className="text-sm font-black text-white uppercase tracking-[0.2em]">
+                                    {cat.nombre}
+                                </h2>
+                                <div className="h-px flex-1 bg-gradient-to-r from-slate-800 to-transparent" />
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

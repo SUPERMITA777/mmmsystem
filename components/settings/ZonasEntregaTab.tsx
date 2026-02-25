@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Plus, Trash2, Edit3, Check, X, Navigation } from "lucide-react";
 import dynamic from "next/dynamic";
+import { LatLng, pointInPolygon } from "@/lib/geoutils";
 
 // Tipos
-type LatLng = { lat: number; lng: number };
 type Zona = {
     id: string;
     nombre: string;
@@ -31,19 +31,6 @@ const ZONA_COLORS = [
     "#3b82f6", "#ec4899", "#14b8a6", "#f97316"
 ];
 
-// Algoritmo ray-casting para punto en polígono (solo para refs)
-export function pointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
-    if (!polygon || polygon.length < 3) return false;
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i].lng, yi = polygon[i].lat;
-        const xj = polygon[j].lng, yj = polygon[j].lat;
-        const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
-            (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
-}
 
 // =====================
 // Componente del mapa (solo client-side)

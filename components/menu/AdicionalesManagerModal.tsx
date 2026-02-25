@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Plus, Trash2, GripVertical, Save, Eye, EyeOff } from "lucide-react";
+import { X, Plus, Trash2, GripVertical, Save, Eye, EyeOff, Copy } from "lucide-react";
 
 type GrupoAdicional = {
     id: string;
@@ -188,6 +188,15 @@ export default function AdicionalesManagerModal({
             await supabase.from("adicionales").delete().eq("id", id);
         }
         setAdicionales(adicionales.filter(a => a.id !== id));
+    }
+
+    function handleDuplicateAdicional(adicional: Adicional) {
+        const duplicated: Adicional = {
+            ...adicional,
+            id: `new-${Date.now()}`,
+            nombre: `${adicional.nombre} (copia)`
+        };
+        setAdicionales([...adicionales, duplicated]);
     }
 
     if (!isOpen) return null;
@@ -417,6 +426,13 @@ export default function AdicionalesManagerModal({
                                                             title={opt.visible ? "Ocultar" : "Mostrar"}
                                                         >
                                                             {opt.visible ? <Eye size={16} /> : <EyeOff size={16} />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDuplicateAdicional(opt)}
+                                                            className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                                            title="Duplicar"
+                                                        >
+                                                            <Copy size={16} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleDeleteAdicional(opt.id)}

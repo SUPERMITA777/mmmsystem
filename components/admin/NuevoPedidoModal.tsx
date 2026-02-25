@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Search, Plus, Minus, User, Phone, MapPin, CreditCard, ShoppingBag, Bike } from "lucide-react";
+import { X, Search, Plus, Minus, User, Phone, MapPin, CreditCard, ShoppingBag, Bike, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -24,13 +25,106 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
         notas: ""
     });
     const [loading, setLoading] = useState(false);
+    const [zonas, setZonas] = useState<any[]>([]);
+    const [configSucursal, setConfigSucursal] = useState<any>(null);
+    const [validacionDelivery, setValidacionDelivery] = useState<{
+        valid: boolean;
+        zona?: string;
+        costo: number;
+        loading: boolean;
+        error?: string;
+    }>({ valid: false, costo: 0, loading: false });
+    const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
 
     useEffect(() => {
         if (isOpen) {
             fetchProductos();
             fetchMetodosPago();
+            fetchZonasYConfig();
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (tipo === "delivery" && cliente.direccion.length > 5) {
+                validarDireccion(cliente.direccion);
+            }
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [cliente.direccion, tipo]);
+
+    async function fetchZonasYConfig() {
+        const { data: szonas } = await supabase.from("zonas_entrega").select("*").eq("activo", true);
+        setZonas(szonas || []);
+
+        const { data: cfg } = await supabase.from("config_sucursal").select("*").limit(1).maybeSingle();
+        setConfigSucursal(cfg);
+    }
+
+    async function validarDireccion(address: string) {
+        setValidacionDelivery(prev => ({ ...prev, loading: true, error: undefined }));
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+            const data = await res.json();
+
+            if (data && data[0]) {
+                const point = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+                setDireccionGeocoded(point);
+
+                // Buscar zona
+                let zonaEncontrada = null;
+                for (const z of zonas) {
+                    if (z.polygon_coords && pointInPolygon(point, z.polygon_coords)) {
+                        zonaEncontrada = z;
+                        break;
+                    }
+                }
+
+                if (zonaEncontrada) {
+                    let costo = 0;
+                    if (zonaEncontrada.tipo_precio === "por_km" && configSucursal?.local_lat) {
+                        const dist = getDistance(point, { lat: configSucursal.local_lat, lng: configSucursal.local_lng });
+                        costo = Math.ceil(dist * (zonaEncontrada.precio_por_km || 0));
+                    } else {
+                        costo = zonaEncontrada.costo_envio || 0;
+                    }
+
+                    // Check if free shipping applies
+                    if (zonaEncontrada.envio_gratis_desde && subtotal >= zonaEncontrada.envio_gratis_desde) {
+                        costo = 0;
+                    }
+
+                    setValidacionDelivery({
+                        valid: true,
+                        zona: zonaEncontrada.nombre,
+                        costo,
+                        loading: false
+                    });
+                } else {
+                    setValidacionDelivery({
+                        valid: false,
+                        costo: 0,
+                        loading: false,
+                        error: "Dirección fuera de la zona de entrega"
+                    });
+                }
+            } else {
+                setValidacionDelivery({
+                    valid: false,
+                    costo: 0,
+                    loading: false,
+                    error: "No se pudo encontrar la dirección exacta"
+                });
+            }
+        } catch (e) {
+            setValidacionDelivery({
+                valid: false,
+                costo: 0,
+                loading: false,
+                error: "Error al validar la dirección"
+            });
+        }
+    }
 
     async function fetchProductos() {
         const { data } = await supabase.from("productos").select("*").eq("activo", true);
@@ -66,7 +160,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
     }
 
     const subtotal = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-    const total = subtotal; // Simplificado
+    const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
+    const total = subtotal + costoEnvio;
 
     async function crearPedido() {
         if (carrito.length === 0 || !cliente.nombre) return;
@@ -85,10 +180,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
                     tipo,
                     subtotal,
+                    costo_envio: costoEnvio,
                     total,
                     metodo_pago_id: metodoPagoId,
                     estado: "pendiente",
-                    notas: cliente.notas
+                    notas: cliente.notas,
+                    cliente_lat: direccionGeocoded?.lat,
+                    cliente_lng: direccionGeocoded?.lng
                 })
                 .select()
                 .single();
@@ -245,15 +343,39 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                                         />
                                     </div>
                                     {tipo === "delivery" && (
-                                        <div className="relative group">
-                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#7B1FA2] transition-colors" size={16} />
-                                            <input
-                                                type="text"
-                                                placeholder="Dirección de entrega"
-                                                className="w-full bg-gray-50 border border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-xs font-black outline-none focus:bg-white focus:ring-2 focus:ring-[#7B1FA2]/10 transition-all"
-                                                value={cliente.direccion}
-                                                onChange={e => setCliente({ ...cliente, direccion: e.target.value })}
-                                            />
+                                        <div className="space-y-2">
+                                            <div className="relative group">
+                                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#7B1FA2] transition-colors" size={16} />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Dirección de entrega"
+                                                    className={`w-full bg-gray-50 border rounded-2xl py-4 pl-12 pr-4 text-xs font-black outline-none focus:bg-white focus:ring-2 focus:ring-[#7B1FA2]/10 transition-all ${validacionDelivery.error ? 'border-red-200 focus:ring-red-100' : validacionDelivery.valid ? 'border-green-200 focus:ring-green-100' : 'border-gray-100'}`}
+                                                    value={cliente.direccion}
+                                                    onChange={e => setCliente({ ...cliente, direccion: e.target.value })}
+                                                />
+                                            </div>
+                                            {tipo === "delivery" && (
+                                                <div className="px-2 transition-all">
+                                                    {validacionDelivery.loading ? (
+                                                        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
+                                                            <Loader2 size={12} className="animate-spin" /> VALIDANDO DIRECCIÓN...
+                                                        </div>
+                                                    ) : validacionDelivery.error ? (
+                                                        <div className="flex items-center gap-2 text-[10px] font-bold text-red-500">
+                                                            <AlertCircle size={12} /> {validacionDelivery.error.toUpperCase()}
+                                                        </div>
+                                                    ) : validacionDelivery.valid ? (
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2 text-[10px] font-bold text-green-600">
+                                                                <CheckCircle2 size={12} /> ZONA: {validacionDelivery.zona?.toUpperCase()}
+                                                            </div>
+                                                            <div className="text-[10px] font-black text-[#7B1FA2]">
+                                                                ENVÍO: ${fmt(validacionDelivery.costo)}
+                                                            </div>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -276,22 +398,38 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                             </div>
                         </div>
 
-                        <div className="p-8 bg-gray-900">
-                            <div className="flex justify-between items-center mb-6">
-                                <span className="text-gray-400 text-[11px] font-black uppercase tracking-widest">Total a Pagar</span>
-                                <span className="text-2xl font-black text-white">$ {new Intl.NumberFormat("es-AR").format(total)}</span>
+                        <div className="space-y-3 pt-6 border-t border-gray-800/50 mb-6">
+                            <div className="flex justify-between items-center text-gray-400 text-[10px] font-black uppercase tracking-widest">
+                                <span>Subtotal</span>
+                                <span>$ {fmt(subtotal)}</span>
                             </div>
-                            <button
-                                onClick={crearPedido}
-                                disabled={loading || carrito.length === 0 || !cliente.nombre}
-                                className="w-full bg-[#7B1FA2] text-white py-5 rounded-[1.5rem] text-sm font-black uppercase tracking-[0.2em] shadow-2xl shadow-[#7B1FA2]/20 hover:opacity-90 active:scale-95 transition-all disabled:opacity-20 disabled:pointer-events-none"
-                            >
-                                {loading ? "CREANDO..." : "CREAR PEDIDO"}
-                            </button>
+                            {tipo === "delivery" && (
+                                <div className="flex justify-between items-center text-gray-400 text-[10px] font-black uppercase tracking-widest">
+                                    <span>Envío</span>
+                                    <span className={validacionDelivery.costo === 0 ? "text-green-500" : ""}>
+                                        {validacionDelivery.costo === 0 ? "GRATIS" : `$ ${fmt(validacionDelivery.costo)}`}
+                                    </span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center pt-3 border-t border-gray-800">
+                                <span className="text-gray-400 text-[11px] font-black uppercase tracking-widest">Total a Pagar</span>
+                                <span className="text-2xl font-black text-white">$ {fmt(total)}</span>
+                            </div>
                         </div>
+                        <button
+                            onClick={crearPedido}
+                            disabled={loading || carrito.length === 0 || !cliente.nombre || (tipo === "delivery" && !validacionDelivery.valid)}
+                            className="w-full bg-[#7B1FA2] text-white py-5 rounded-[1.5rem] text-sm font-black uppercase tracking-[0.2em] shadow-2xl shadow-[#7B1FA2]/20 hover:opacity-90 active:scale-95 transition-all disabled:opacity-20 disabled:pointer-events-none"
+                        >
+                            {loading ? "CREANDO..." : "CREAR PEDIDO"}
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
     );
+
+    function fmt(n: number) {
+        return new Intl.NumberFormat("es-AR").format(n);
+    }
 }
