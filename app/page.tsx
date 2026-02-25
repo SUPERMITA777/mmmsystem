@@ -35,9 +35,11 @@ function PublicMenuContent() {
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     fetchMenuData();
+    fetchIsOpen();
   }, []);
 
   // ========== Manejo del historial para botón Atrás de Android ==========
@@ -85,6 +87,53 @@ function PublicMenuContent() {
     }
   }
 
+
+  async function fetchIsOpen() {
+    try {
+      // Check cerrado_temporalmente first
+      const { data: config } = await supabase
+        .from("config_sucursal")
+        .select("cerrado_temporalmente")
+        .limit(1)
+        .maybeSingle();
+
+      if (config?.cerrado_temporalmente) {
+        setIsOpen(false);
+        return;
+      }
+
+      // Get today's schedule (JS getDay: 0=Sun → system dia: 0=Lun)
+      const now = new Date();
+      const jsDow = now.getDay(); // 0=Sun,1=Mon...
+      const sysDow = (jsDow + 6) % 7; // 0=Lun,1=Mar,...,6=Dom
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const { data: horario } = await supabase
+        .from("horarios_sucursal")
+        .select("cerrado, apertura1, cierre1, apertura2, cierre2")
+        .eq("dia", sysDow)
+        .maybeSingle();
+
+      if (!horario || horario.cerrado) {
+        setIsOpen(false);
+        return;
+      }
+
+      function inRange(start: string, end: string, current: string) {
+        if (!start || !end) return false;
+        return current >= start && current <= end;
+      }
+
+      const openNow =
+        inRange(horario.apertura1, horario.cierre1, currentTime) ||
+        inRange(horario.apertura2, horario.cierre2, currentTime);
+
+      setIsOpen(openNow);
+    } catch (err) {
+      console.error("Error fetching horarios:", err);
+      setIsOpen(false);
+    }
+  }
 
   async function fetchMenuData() {
     try {
@@ -168,7 +217,7 @@ function PublicMenuContent() {
   return (
     <main className="min-h-screen bg-[#050505] bg-[radial-gradient(circle_at_top,_#1a1a3a_0%,_#050505_100%)] text-slate-50 selection:bg-orange-500/30">
       {/* Header */}
-      <PublicHeader sucursal={sucursal} isOpen={true} />
+      <PublicHeader sucursal={sucursal} isOpen={isOpen} />
 
       {/* Category Nav */}
       <PublicCategoryNav

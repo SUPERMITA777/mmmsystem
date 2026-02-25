@@ -83,10 +83,9 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 // Ya tenemos las coordenadas directas (e.g., GPS)
                 clientePt = optionalCoords;
             } else {
-                // 1. Geocodificar dirección escrita via Nominatim
+                // 1. Geocodificar dirección escrita via nuestro Proxy (evita CORS)
                 const geoRes = await fetch(
-                    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(dir)}&limit=1`,
-                    { headers: { "Accept-Language": "es" } }
+                    `/api/geocode?q=${encodeURIComponent(dir)}`
                 );
                 const geoData = await geoRes.json();
                 if (!geoData[0]) {
@@ -187,10 +186,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 const coords: LatLng = { lat, lng };
 
                 try {
-                    // Reverse geocoding para obtener la dirección en texto (ej. "Av. Corrientes 123")
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
-                        headers: { "Accept-Language": "es" }
-                    });
+                    // Reverse geocoding via nuestro Proxy (evita CORS)
+                    const res = await fetch(`/api/geocode?lat=${lat}&lon=${lng}`);
                     const data = await res.json();
 
                     if (data && data.address) {
@@ -232,8 +229,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
         setSending(true);
         try {
-            // 1. Obtener Sucursal ID
-            const { data: sucursal } = await supabase.from("sucursales").select("id").limit(1).single();
+            // 1. Obtener Sucursal ID y número de WhatsApp
+            const { data: sucursal } = await supabase.from("sucursales").select("id, whatsapp_numero").limit(1).single();
             if (!sucursal) throw new Error("No se encontró sucursal activa.");
 
             // 2. Obtener Método de Pago ID
@@ -331,7 +328,11 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 `*Total:* $${new Intl.NumberFormat("es-AR").format(totalConPropina)}\n` +
                 `*Pago:* ${metodoPago === "efectivo" ? `Efectivo${conCuanto ? ` (con $${conCuanto})` : ""}` : "Transferencia"}`;
 
-            const waUrl = `https://wa.me/549XXXXXXXXXX?text=${encodeURIComponent(msg)}`;
+            // Formatear número: quitar todo salvo dígitos
+            const rawPhone = (sucursal.whatsapp_numero || "").replace(/\D/g, "");
+            // Si ya empieza con 54 usarlo tal cual, si no, agregar prefijo
+            const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
+            const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
 
             alert("¡Pedido recibido y guardado! Redirigiendo a WhatsApp...");
             window.open(waUrl, '_blank');
