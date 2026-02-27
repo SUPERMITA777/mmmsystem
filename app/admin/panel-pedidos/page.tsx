@@ -191,7 +191,7 @@ export default function PanelPedidosPage() {
     const pedido = confirmTimePedido;
 
     await supabase.from("pedidos").update({
-      estado: "confirmado",
+      estado: "preparando",
       tiempo_preparacion_minutos: minutes
     }).eq("id", pedido.id);
 
