@@ -36,6 +36,7 @@ function PublicMenuContent() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
 
   useEffect(() => {
     fetchMenuData();
@@ -148,6 +149,21 @@ function PublicMenuContent() {
 
       setSucursal(sucData);
 
+      // Fetch store colors from config_sucursal
+      if (sucData?.id) {
+        const { data: cfg } = await supabase
+          .from("config_sucursal")
+          .select("color_primario, color_secundario")
+          .eq("sucursal_id", sucData.id)
+          .maybeSingle();
+        if (cfg) {
+          setStoreColors({
+            primario: cfg.color_primario || "#f97316",
+            secundario: cfg.color_secundario || "#1a1a2e",
+          });
+        }
+      }
+
       const { data: catsData } = await supabase
         .from("categorias")
         .select(`
@@ -217,7 +233,15 @@ function PublicMenuContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] bg-[radial-gradient(circle_at_top,_#1a1a3a_0%,_#050505_100%)] text-slate-50 selection:bg-orange-500/30">
+    <main
+      className="min-h-screen text-slate-50"
+      style={{
+        "--color-primario": storeColors.primario,
+        "--color-secundario": storeColors.secundario,
+        backgroundColor: "#050505",
+        backgroundImage: `radial-gradient(circle at top, ${storeColors.secundario} 0%, #050505 100%)`,
+      } as React.CSSProperties}
+    >
       {/* Header */}
       <PublicHeader sucursal={sucursal} isOpen={isOpen} />
 

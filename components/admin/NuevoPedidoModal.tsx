@@ -35,6 +35,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
         error?: string;
     }>({ valid: false, costo: 0, loading: false });
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
+    const [alternativas, setAlternativas] = useState<any[]>([]);
 
     useEffect(() => {
         if (isOpen) {
@@ -63,12 +64,24 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
 
     async function validarDireccion(address: string) {
         setValidacionDelivery(prev => ({ ...prev, loading: true, error: undefined }));
+        setAlternativas([]);
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
-            const data = await res.json();
+            // Build locality-scoped query
+            const localidades = configSucursal?.localidades || [];
+            const locNames = localidades.map((l: any) => l.nombre).join(',');
+            const params = new URLSearchParams({
+                q: address,
+                format: 'jsonv2',
+                limit: '5',
+                ...(locNames ? { localidades: locNames } : {})
+            });
 
-            if (data && data[0]) {
-                const point = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            const res = await fetch(`/api/geocode?${params.toString()}`);
+            const data = await res.json();
+            const results = Array.isArray(data) ? data : [data];
+
+            if (results.length > 0 && results[0]?.lat) {
+                const point = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
                 setDireccionGeocoded(point);
 
                 // Buscar zona
@@ -89,7 +102,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                         costo = zonaEncontrada.costo_envio || 0;
                     }
 
-                    // Check if free shipping applies
                     if (zonaEncontrada.envio_gratis_desde && subtotal >= zonaEncontrada.envio_gratis_desde) {
                         costo = 0;
                     }
@@ -101,6 +113,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                         loading: false
                     });
                 } else {
+                    // Show alternatives if we have more results
+                    if (results.length > 1) {
+                        setAlternativas(results.slice(0, 5));
+                    }
                     setValidacionDelivery({
                         valid: false,
                         costo: 0,
@@ -109,6 +125,21 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                     });
                 }
             } else {
+                // No results found — try fuzzy search with more results
+                const fuzzyParams = new URLSearchParams({
+                    q: address,
+                    format: 'jsonv2',
+                    limit: '5',
+                    ...(locNames ? { localidades: locNames } : {})
+                });
+                const fuzzyRes = await fetch(`/api/geocode?${fuzzyParams.toString()}`);
+                const fuzzyData = await fuzzyRes.json();
+                const fuzzyResults = Array.isArray(fuzzyData) ? fuzzyData : [];
+
+                if (fuzzyResults.length > 0) {
+                    setAlternativas(fuzzyResults);
+                }
+
                 setValidacionDelivery({
                     valid: false,
                     costo: 0,
@@ -374,6 +405,27 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                                                             </div>
                                                         </div>
                                                     ) : null}
+
+                                                    {/* Alternative Suggestions */}
+                                                    {alternativas.length > 0 && !validacionDelivery.valid && !validacionDelivery.loading && (
+                                                        <div className="mt-2 space-y-1">
+                                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">¿Quisiste decir?</p>
+                                                            {alternativas.map((alt: any, i: number) => (
+                                                                <button
+                                                                    key={i}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setCliente({ ...cliente, direccion: alt.display_name });
+                                                                        setAlternativas([]);
+                                                                    }}
+                                                                    className="w-full text-left px-3 py-2 rounded-xl bg-blue-50/50 hover:bg-blue-100 text-[11px] font-medium text-blue-700 transition-colors flex items-center gap-2 border border-blue-100/50"
+                                                                >
+                                                                    <MapPin size={11} className="shrink-0 text-blue-400" />
+                                                                    <span className="truncate">{alt.display_name}</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

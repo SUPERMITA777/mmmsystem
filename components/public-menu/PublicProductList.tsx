@@ -102,7 +102,10 @@ export default function PublicProductList({ categorias, onProductClick }: Public
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
 
                                     {/* + button overlaid at bottom right */}
-                                    <div className="absolute bottom-1 right-1 w-6 h-6 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+                                    <div
+                                        className="absolute bottom-1 right-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
+                                        style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
+                                    >
                                         <Plus size={14} className="text-white" strokeWidth={3} />
                                     </div>
                                 </div>

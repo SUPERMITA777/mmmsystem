@@ -53,9 +53,10 @@ export default function PublicCategoryNav({
                         data-id={cat.id}
                         onClick={() => onCategoryClick(cat.id)}
                         className={`py-5 shrink-0 text-[11px] font-black tracking-[0.2em] uppercase transition-all border-b-2 whitespace-nowrap ${activeCategoryId === cat.id
-                            ? "border-orange-600 text-white"
+                            ? "text-white"
                             : "border-transparent text-slate-500 hover:text-slate-300"
                             }`}
+                        style={activeCategoryId === cat.id ? { borderBottomColor: 'var(--color-primario)' } : undefined}
                     >
                         {cat.nombre}
                     </button>

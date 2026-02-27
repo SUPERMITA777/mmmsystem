@@ -12,7 +12,8 @@ export default function FloatingCartButton({ onClick }: { onClick: () => void })
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4">
             <button
                 onClick={onClick}
-                className="w-full bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-black py-4 rounded-2xl shadow-2xl shadow-orange-600/40 flex items-center justify-between px-5 transition-all group"
+                className="w-full active:scale-95 text-white font-black py-4 rounded-2xl shadow-2xl flex items-center justify-between px-5 transition-all group"
+                style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
             >
                 {/* Items count bubble */}
                 <span className="flex items-center gap-2">

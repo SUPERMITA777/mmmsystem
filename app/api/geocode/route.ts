@@ -6,10 +6,21 @@ export async function GET(request: Request) {
     const lat = searchParams.get('lat');
     const lon = searchParams.get('lon');
     const format = searchParams.get('format') || 'jsonv2';
+    const limit = searchParams.get('limit') || '1';
+    const localidades = searchParams.get('localidades'); // comma-separated locality names
 
     let url = '';
     if (q) {
-        url = `https://nominatim.openstreetmap.org/search?format=${format}&q=${encodeURIComponent(q)}&limit=1`;
+        // If localities are provided, append them to narrow the search
+        let query = q;
+        if (localidades) {
+            // Append the first locality as a general area hint
+            const locs = localidades.split(',').map(l => l.trim()).filter(Boolean);
+            if (locs.length > 0 && !locs.some(l => q.toLowerCase().includes(l.toLowerCase()))) {
+                query = `${q}, ${locs[0]}`;
+            }
+        }
+        url = `https://nominatim.openstreetmap.org/search?format=${format}&q=${encodeURIComponent(query)}&limit=${limit}&addressdetails=1`;
     } else if (lat && lon) {
         url = `https://nominatim.openstreetmap.org/reverse?format=${format}&lat=${lat}&lon=${lon}`;
     } else {

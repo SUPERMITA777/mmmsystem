@@ -78,7 +78,10 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
 
                     {/* Delivery/Retiro Switch */}
                     <div className="flex bg-white/5 p-1 rounded-[15px] border border-white/5 backdrop-blur-md">
-                        <button className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] bg-orange-600 text-white shadow-xl shadow-orange-600/20 transition-all uppercase">
+                        <button
+                            className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] text-white shadow-xl transition-all uppercase"
+                            style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
+                        >
                             DELIVERY
                         </button>
                         <button className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] text-slate-500 hover:text-white transition-all uppercase">
