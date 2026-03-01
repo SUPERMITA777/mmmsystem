@@ -1,5 +1,6 @@
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
+import { AiAssistantBar } from "@/components/admin/AiAssistantBar";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,6 +8,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <AdminSidebar />
       <div className="flex-1 flex flex-col">
         <AdminTopBar />
+        <AiAssistantBar />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
