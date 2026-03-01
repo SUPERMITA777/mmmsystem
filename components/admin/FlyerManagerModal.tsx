@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient"; // still needed for storage upload
 import { X, Upload, Save, Search, Calendar, Clock, Trash2 } from "lucide-react";
 
 interface Producto {
@@ -50,21 +50,22 @@ export default function FlyerManagerModal({
 
     async function loadFlyer() {
         setLoading(true);
-        const { data, error } = await supabase
-            .from("sucursal_flyers")
-            .select("*")
-            .eq("sucursal_id", sucursalId)
-            .maybeSingle();
-
-        if (data) {
-            setFlyer({
-                id: data.id,
-                imagen_url: data.imagen_url,
-                producto_id: data.producto_id,
-                es_eterno: data.es_eterno,
-                vence_at: data.vence_at,
-                activo: data.activo,
-            });
+        try {
+            const res = await fetch(`/api/flyer?sucursal_id=${sucursalId}`);
+            const json = await res.json();
+            if (json.success && json.data) {
+                const d = json.data;
+                setFlyer({
+                    id: d.id,
+                    imagen_url: d.imagen_url,
+                    producto_id: d.producto_id,
+                    es_eterno: d.es_eterno,
+                    vence_at: d.vence_at,
+                    activo: d.activo,
+                });
+            }
+        } catch (err) {
+            console.error("Error loading flyer:", err);
         }
         setLoading(false);
     }
@@ -115,24 +116,17 @@ export default function FlyerManagerModal({
 
         setSaving(true);
         try {
-            const dataToSave = {
-                ...flyer,
-                sucursal_id: sucursalId,
-                vence_at: flyer.es_eterno ? null : (flyer.vence_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
-            };
+            const res = await fetch("/api/flyer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...flyer,
+                    sucursal_id: sucursalId,
+                }),
+            });
 
-            if (flyer.id) {
-                const { error } = await supabase
-                    .from("sucursal_flyers")
-                    .update(dataToSave)
-                    .eq("id", flyer.id);
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from("sucursal_flyers")
-                    .insert([dataToSave]);
-                if (error) throw error;
-            }
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message);
 
             alert("Flyer guardado correctamente.");
             onClose();
@@ -298,8 +292,8 @@ export default function FlyerManagerModal({
                             <button
                                 onClick={() => setFlyer({ ...flyer, activo: !flyer.activo })}
                                 className={`w-full p-2.5 rounded-xl text-sm font-bold transition-colors border ${flyer.activo
-                                        ? "bg-green-50 border-green-200 text-green-700"
-                                        : "bg-gray-50 border-gray-200 text-gray-400"
+                                    ? "bg-green-50 border-green-200 text-green-700"
+                                    : "bg-gray-50 border-gray-200 text-gray-400"
                                     }`}
                             >
                                 {flyer.activo ? "Activo" : "Inactivo"}
