@@ -219,6 +219,42 @@ async function executeCommand(cmd: ParsedCommand, originalInput: string) {
                 results.push({ nombre: prod.nombre, detalle: `$${prod.precio} → $${newPrice}` });
                 break;
             }
+            case "price_increase_fixed": {
+                const amount = cmd.value || 0;
+                const newPrice = Number((prod.precio + amount).toFixed(2));
+                await supabaseAdmin.from("productos").update({ precio: newPrice }).eq("id", prod.id);
+                await logChange({
+                    sucursalId: prod.sucursal_id,
+                    comandoOriginal: originalInput,
+                    comandoInterpretado: description,
+                    tablaAfectada: "productos",
+                    registroId: prod.id,
+                    registroNombre: prod.nombre,
+                    campoModificado: "precio",
+                    valorAnterior: String(prod.precio),
+                    valorNuevo: String(newPrice),
+                });
+                results.push({ nombre: prod.nombre, detalle: `$${prod.precio} → $${newPrice}` });
+                break;
+            }
+            case "price_decrease_fixed": {
+                const amount = cmd.value || 0;
+                const newPrice = Number((prod.precio - amount).toFixed(2));
+                await supabaseAdmin.from("productos").update({ precio: newPrice }).eq("id", prod.id);
+                await logChange({
+                    sucursalId: prod.sucursal_id,
+                    comandoOriginal: originalInput,
+                    comandoInterpretado: description,
+                    tablaAfectada: "productos",
+                    registroId: prod.id,
+                    registroNombre: prod.nombre,
+                    campoModificado: "precio",
+                    valorAnterior: String(prod.precio),
+                    valorNuevo: String(newPrice),
+                });
+                results.push({ nombre: prod.nombre, detalle: `$${prod.precio} → $${newPrice}` });
+                break;
+            }
             case "price_set": {
                 const newPrice = cmd.value || 0;
                 await supabaseAdmin.from("productos").update({ precio: newPrice }).eq("id", prod.id);
