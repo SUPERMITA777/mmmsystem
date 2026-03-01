@@ -9,6 +9,7 @@ import PublicProductList from "@/components/public-menu/PublicProductList";
 import ProductDetailModal from "@/components/public-menu/ProductDetailModal";
 import CartModal from "@/components/public-menu/CartModal";
 import FloatingCartButton from "@/components/public-menu/FloatingCartButton";
+import FlyerOverlay from "@/components/public-menu/FlyerOverlay";
 
 type Producto = {
   id: string;
@@ -35,6 +36,7 @@ function PublicMenuContent() {
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [flyerOpen, setFlyerOpen] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
 
@@ -272,6 +274,15 @@ function PublicMenuContent() {
       {/* Cart Modal */}
       {cartOpen && (
         <CartModal onClose={closeCart} />
+      )}
+
+      {/* Flyer Overlay */}
+      {sucursal?.id && flyerOpen && (
+        <FlyerOverlay
+          sucursalId={sucursal.id}
+          onClose={() => setFlyerOpen(false)}
+          onOpenProduct={openProduct}
+        />
       )}
     </main>
   );

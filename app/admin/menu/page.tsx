@@ -8,7 +8,8 @@ import { ProductoEditor } from "@/components/menu/ProductoEditor";
 import CategoriasSortModal from "@/components/menu/CategoriasSortModal";
 import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
 import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
-import { Download, Upload, DollarSign, Plus } from "lucide-react";
+import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
+import { Download, Upload, DollarSign, Plus, Megaphone } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -43,6 +44,7 @@ export default function MenuPage() {
   const [isSortModalOpen, setIsSortModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
+  const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const [sucursalId, setSucursalId] = useState<string>("");
 
@@ -258,6 +260,13 @@ export default function MenuPage() {
             <Download size={15} />
             Exportar menú
           </button>
+          <button
+            onClick={() => setIsFlyerModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:text-purple-900 text-sm transition-colors font-semibold"
+          >
+            <Megaphone size={15} />
+            FLYER
+          </button>
           <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
             <Upload size={15} />
             Importar menú
@@ -334,6 +343,12 @@ export default function MenuPage() {
       <AdicionalesManagerModal
         isOpen={isAdicionalesModalOpen}
         onClose={() => setIsAdicionalesModalOpen(false)}
+        sucursalId={sucursalId}
+      />
+
+      <FlyerManagerModal
+        isOpen={isFlyerModalOpen}
+        onClose={() => setIsFlyerModalOpen(false)}
         sucursalId={sucursalId}
       />
     </div>

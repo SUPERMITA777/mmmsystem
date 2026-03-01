@@ -321,6 +321,24 @@ async function executeCommand(cmd: ParsedCommand, originalInput: string) {
                 results.push({ nombre: prod.nombre, detalle: "visible en el menú" });
                 break;
             }
+            case "apply_discount": {
+                const pct = cmd.value || 0;
+                const newPrice = Number((prod.precio * (1 - pct / 100)).toFixed(2));
+                await supabaseAdmin.from("productos").update({ precio: newPrice }).eq("id", prod.id);
+                await logChange({
+                    sucursalId: prod.sucursal_id,
+                    comandoOriginal: originalInput,
+                    comandoInterpretado: description,
+                    tablaAfectada: "productos",
+                    registroId: prod.id,
+                    registroNombre: prod.nombre,
+                    campoModificado: "precio",
+                    valorAnterior: String(prod.precio),
+                    valorNuevo: String(newPrice),
+                });
+                results.push({ nombre: prod.nombre, detalle: `Descuento ${pct}%: $${prod.precio} → $${newPrice}` });
+                break;
+            }
         }
     }
 
@@ -346,7 +364,7 @@ export async function POST(request: Request) {
         }
 
         // 1. Parse the command
-        const parseResult = parseCommand(command);
+        const parseResult = await parseCommand(command);
 
         if (!parseResult.success || !parseResult.command) {
             return NextResponse.json({
