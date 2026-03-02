@@ -69,6 +69,8 @@ export default function ImageCropperModal({
     const [showGrid, setShowGrid] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
+    const MIN_ZOOM = 0.3;
+
     const onCropChange = useCallback((crop: Point) => setCrop(crop), []);
     const onZoomChange = useCallback((zoom: number) => setZoom(zoom), []);
 
@@ -118,6 +120,9 @@ export default function ImageCropperModal({
                         onZoomChange={onZoomChange}
                         onCropComplete={onCropAreaComplete}
                         showGrid={showGrid}
+                        minZoom={MIN_ZOOM}
+                        maxZoom={3}
+                        objectFit="contain"
                         style={{
                             containerStyle: { background: "#0f172a" },
                             cropAreaStyle: {
@@ -140,7 +145,7 @@ export default function ImageCropperModal({
                     {/* Zoom slider */}
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => setZoom(Math.max(1, zoom - 0.1))}
+                            onClick={() => setZoom(Math.max(MIN_ZOOM, zoom - 0.1))}
                             className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600 transition-colors"
                             title="Alejar"
                         >
@@ -149,7 +154,7 @@ export default function ImageCropperModal({
                         <div className="flex-1 relative">
                             <input
                                 type="range"
-                                min={1}
+                                min={MIN_ZOOM}
                                 max={3}
                                 step={0.01}
                                 value={zoom}
@@ -157,7 +162,7 @@ export default function ImageCropperModal({
                                 className="w-full h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-purple-600"
                             />
                             <div className="flex justify-between text-[10px] text-slate-400 mt-0.5 px-0.5">
-                                <span>1x</span>
+                                <span>{MIN_ZOOM}x</span>
                                 <span>{zoom.toFixed(1)}x</span>
                                 <span>3x</span>
                             </div>
