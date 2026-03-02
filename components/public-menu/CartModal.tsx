@@ -354,7 +354,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
             {/* Modal panel - centered */}
             <div
-                className="relative z-10 w-full max-w-lg mx-auto my-auto bg-[#111] rounded-2xl overflow-hidden flex flex-col shadow-2xl max-h-[90vh]"
+                className="relative z-10 w-full max-w-lg mx-auto my-auto bg-[#111] rounded-2xl flex flex-col shadow-2xl max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -681,7 +681,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* Sticky footer */}
-            <div className="px-5 py-4 border-t border-white/10 bg-[#111]">
+            <div className="px-5 py-4 border-t border-white/10 bg-[#111] shrink-0 rounded-b-2xl">
                 <button
                     onClick={handleRealizarPedido}
                     disabled={sending || items.length === 0}
