@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient"; // still needed for storage upload
+import { supabase } from "@/lib/supabaseClient";
 import { X, Upload, Save, Search, Calendar, Clock, Trash2 } from "lucide-react";
+import ImageCropperModal from "@/components/ui/ImageCropperModal";
 
 interface Producto {
     id: string;
@@ -40,6 +41,7 @@ export default function FlyerManagerModal({
     const [productos, setProductos] = useState<Producto[]>([]);
     const [search, setSearch] = useState("");
     const [showProductSearch, setShowProductSearch] = useState(false);
+    const [cropperSrc, setCropperSrc] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen && sucursalId) {
@@ -84,15 +86,26 @@ export default function FlyerManagerModal({
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Read file and open cropper
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCropperSrc(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+
+        // Reset input so same file can be re-selected
+        e.target.value = '';
+    }
+
+    async function handleCroppedUpload(croppedBlob: Blob) {
         try {
             setSaving(true);
-            const fileExt = file.name.split(".").pop();
-            const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const fileName = `${Math.random().toString(36).substring(2)}.jpg`;
             const filePath = `flyers/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from("images")
-                .upload(filePath, file);
+                .upload(filePath, croppedBlob, { contentType: "image/jpeg" });
 
             if (uploadError) throw uploadError;
 
@@ -101,6 +114,7 @@ export default function FlyerManagerModal({
             } = supabase.storage.from("images").getPublicUrl(filePath);
 
             setFlyer({ ...flyer, imagen_url: publicUrl });
+            setCropperSrc(null);
         } catch (error: any) {
             alert("Error al subir imagen: " + error.message);
         } finally {
@@ -320,6 +334,16 @@ export default function FlyerManagerModal({
                     </button>
                 </div>
             </div>
+
+            {/* Image Cropper */}
+            <ImageCropperModal
+                isOpen={!!cropperSrc}
+                imageSrc={cropperSrc || ''}
+                aspectRatio={4 / 5}
+                onCropComplete={handleCroppedUpload}
+                onClose={() => setCropperSrc(null)}
+                title="Recortar Flyer"
+            />
         </div>
     );
 }

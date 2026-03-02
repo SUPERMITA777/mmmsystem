@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ExternalLink } from "lucide-react";
+import ImageCropperModal from "@/components/ui/ImageCropperModal";
 
 type Categoria = {
   id: string;
@@ -67,6 +68,7 @@ export function ProductoEditor({
   const [formData, setFormData] = useState<Producto | null>(isCreating ? emptyProduct : producto);
   const [todosLosGrupos, setTodosLosGrupos] = useState<GrupoAdicional[]>([]);
   const [gruposAsignados, setGruposAsignados] = useState<string[]>([]);
+  const [cropperSrc, setCropperSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (isCreating) {
@@ -375,29 +377,13 @@ export function ProductoEditor({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={async (e) => {
+                onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-
-                  try {
-                    const fileExt = file.name.split('.').pop();
-                    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-                    const filePath = `products/${fileName}`;
-
-                    const { error: uploadError } = await supabase.storage
-                      .from('images')
-                      .upload(filePath, file);
-
-                    if (uploadError) throw uploadError;
-
-                    const { data: { publicUrl } } = supabase.storage
-                      .from('images')
-                      .getPublicUrl(filePath);
-
-                    handleChange("imagen_url", publicUrl);
-                  } catch (error: any) {
-                    alert("Error subiendo la imagen: " + error.message);
-                  }
+                  const reader = new FileReader();
+                  reader.onload = () => setCropperSrc(reader.result as string);
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
                 }}
               />
             </div>
@@ -435,6 +421,36 @@ export function ProductoEditor({
           </button>
         </div>
       </div>
+
+      {/* Image Cropper */}
+      <ImageCropperModal
+        isOpen={!!cropperSrc}
+        imageSrc={cropperSrc || ''}
+        aspectRatio={1}
+        onCropComplete={async (croppedBlob) => {
+          try {
+            const fileName = `${Math.random().toString(36).substring(2)}.jpg`;
+            const filePath = `products/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from('images')
+              .upload(filePath, croppedBlob, { contentType: 'image/jpeg' });
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('images')
+              .getPublicUrl(filePath);
+
+            handleChange('imagen_url', publicUrl);
+            setCropperSrc(null);
+          } catch (error: any) {
+            alert('Error subiendo la imagen: ' + error.message);
+          }
+        }}
+        onClose={() => setCropperSrc(null)}
+        title="Recortar imagen del producto"
+      />
     </div>
   );
 }
