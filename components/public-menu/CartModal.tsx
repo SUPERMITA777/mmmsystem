@@ -348,13 +348,13 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
             {/* Modal panel - centered */}
             <div
-                className="relative z-10 w-full max-w-lg mx-auto my-auto bg-[#111] rounded-2xl flex flex-col shadow-2xl max-h-[90vh]"
+                className="relative z-10 w-full max-w-lg bg-[#111] rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: 'calc(100vh - 2rem)' }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
