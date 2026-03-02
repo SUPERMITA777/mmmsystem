@@ -105,48 +105,29 @@ export default function FlyerOverlay({
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            {/* Backdrop */}
+            {/* Backdrop - Lighter and blurred to see menu behind */}
             <div
-                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={onClose}
             />
 
             {/* Flyer Content */}
-            <div className="relative w-full max-w-md animate-in fade-in zoom-in duration-300">
-                {/* Close Button Top Right (Small X) */}
+            <div className="relative w-full max-w-sm animate-in fade-in zoom-in duration-300">
+                {/* Close Button Top Right */}
                 <button
                     onClick={onClose}
-                    className="absolute -top-12 right-0 p-2 text-white/50 hover:text-white transition-colors"
+                    className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white transition-colors z-10"
                 >
-                    <X size={24} />
+                    <X size={28} />
                 </button>
 
-                <div className="bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+                <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl flex flex-col cursor-pointer transform transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                    onClick={handleLoQuiero}>
                     <img
                         src={flyer.imagen_url}
                         alt="Promoción Especial"
                         className="w-full aspect-[4/5] object-cover"
                     />
-
-                    <div className="p-4 grid grid-cols-2 gap-3 bg-gradient-to-t from-black to-[#1a1a1a]">
-                        {/* VER LA CARTA (Left) */}
-                        <button
-                            onClick={onClose}
-                            className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-black text-xs uppercase tracking-widest transition-all active:scale-95 border border-white/5"
-                        >
-                            <View size={16} />
-                            VER LA CARTA
-                        </button>
-
-                        {/* LO QUIERO! (Right) */}
-                        <button
-                            onClick={handleLoQuiero}
-                            className="flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-black text-xs uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-orange-600/20"
-                        >
-                            <ShoppingCart size={16} />
-                            LO QUIERO!
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
