@@ -17,6 +17,7 @@
     "@tailwindcss/postcss": "^4.1.18",
     "@tanstack/react-query": "5.90.20",
     "autoprefixer": "10.4.23",
+    "groq-sdk": "^0.37.0",
     "leaflet": "^1.9.4",
     "lucide-react": "0.563.0",
     "next": "16.1.6",

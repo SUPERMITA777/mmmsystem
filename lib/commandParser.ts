@@ -1,11 +1,11 @@
 /**
  * commandParser.ts
  * 
- * Motor NLP híbrido: usa Google Gemini cuando está disponible,
- * y cae al parser regex local si no hay API key o si Gemini falla.
+ * Motor NLP híbrido: usa Groq (Llama 3.3 70B) cuando está disponible,
+ * y cae al parser regex local si Groq falla.
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
 export type CommandIntent =
     | "disable_product"
@@ -37,68 +37,66 @@ export interface ParseResult {
 }
 
 // ═══════════════════════════════════════════════════
-// GEMINI AI PARSER
+// GROQ AI PARSER (Llama 3.3 70B)
 // ═══════════════════════════════════════════════════
 
-const SYSTEM_PROMPT = `
-Eres un asistente experto en gestión de inventario y menús de restaurantes.
-Tu tarea es convertir comandos en español a un formato JSON estructurado.
+const SYSTEM_PROMPT = `Eres un asistente experto en gestión de menús de restaurantes.
+Convierte comandos en español a JSON estructurado.
 
-Los posibles intents son:
-- "disable_product": Desactivar un producto.
-- "enable_product": Activar un producto.
-- "price_increase_percent": Aumentar precio por porcentaje.
-- "price_decrease_percent": Disminuir precio por porcentaje.
-- "price_increase_fixed": Aumentar precio un monto fijo ($).
-- "price_decrease_fixed": Disminuir precio un monto fijo ($).
-- "price_set": Establecer precio a un valor exacto.
-- "apply_discount": Aplicar un descuento (bajar el precio un X%).
-- "rename": Cambiar el nombre.
-- "hide_menu": Ocultar del menú público.
-- "show_menu": Mostrar en el menú público.
-- "disable_category": Desactivar una categoría entera.
-- "enable_category": Activar una categoría entera.
+Intents posibles:
+- "disable_product": Desactivar producto
+- "enable_product": Activar producto
+- "price_increase_percent": Aumentar precio por porcentaje
+- "price_decrease_percent": Disminuir precio por porcentaje
+- "price_increase_fixed": Aumentar precio monto fijo ($)
+- "price_decrease_fixed": Disminuir precio monto fijo ($)
+- "price_set": Establecer precio exacto
+- "apply_discount": Aplicar descuento (bajar precio X%)
+- "rename": Cambiar nombre
+- "hide_menu": Ocultar del menú
+- "show_menu": Mostrar en menú
+- "disable_category": Desactivar categoría
+- "enable_category": Activar categoría
 
-Formato de salida JSON:
-{
-  "intent": string,
-  "targetName": string (nombre del producto o categoría sin artículos),
-  "targetType": "producto" | "categoria",
-  "value": number (opcional),
-  "newName": string (opcional, para rename)
-}
+Formato JSON:
+{"intent":"...","targetName":"...","targetType":"producto"|"categoria","value":number,"newName":"..."}
 
 Ejemplos:
-"baja el precio de las empanadas un 10%" -> {"intent": "price_decrease_percent", "targetName": "empanadas", "targetType": "producto", "value": 10}
-"deshabilita la categoría pizzas" -> {"intent": "disable_category", "targetName": "pizzas", "targetType": "categoria"}
-"ponele un descuento del 15% a las burgers" -> {"intent": "apply_discount", "targetName": "burgers", "targetType": "producto", "value": 15}
-"la pizza grande cuesta $5000" -> {"intent": "price_set", "targetName": "pizza grande", "targetType": "producto", "value": 5000}
-"cambia el nombre de coca a coca cola zero" -> {"intent": "rename", "targetName": "coca", "targetType": "producto", "newName": "coca cola zero"}
-"aumenta el precio de las empanadas $500" -> {"intent": "price_increase_fixed", "targetName": "empanadas", "targetType": "producto", "value": 500}
+"baja el precio de las empanadas un 10%" -> {"intent":"price_decrease_percent","targetName":"empanadas","targetType":"producto","value":10}
+"deshabilita la categoría pizzas" -> {"intent":"disable_category","targetName":"pizzas","targetType":"categoria"}
+"ponele un descuento del 15% a las burgers" -> {"intent":"apply_discount","targetName":"burgers","targetType":"producto","value":15}
+"aumenta el precio de las empanadas $500" -> {"intent":"price_increase_fixed","targetName":"empanadas","targetType":"producto","value":500}
+"la pizza grande cuesta $5000" -> {"intent":"price_set","targetName":"pizza grande","targetType":"producto","value":5000}
+"cambia el nombre de coca a coca cola zero" -> {"intent":"rename","targetName":"coca","targetType":"producto","newName":"coca cola zero"}
 
-Responde SOLO el JSON.
-`;
+Responde SOLO el JSON, sin texto extra.`;
 
-async function parseWithGemini(input: string): Promise<ParseResult> {
-    if (!process.env.GEMINI_API_KEY) {
+async function parseWithAI(input: string): Promise<ParseResult> {
+    if (!process.env.GROQ_API_KEY) {
         return { success: false, error: "NO_API_KEY" };
     }
 
     try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+        const completion = await groq.chat.completions.create({
+            messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                { role: "user", content: input }
+            ],
+            model: "llama-3.3-70b-versatile",
+            temperature: 0,
+            max_tokens: 200,
+            response_format: { type: "json_object" },
         });
 
-        const result = await model.generateContent([SYSTEM_PROMPT, input]);
-        const response = await result.response;
-        const text = response.text();
-        const parsed = JSON.parse(text);
+        const text = completion.choices[0]?.message?.content;
+        if (!text) throw new Error("Empty response from Groq");
 
+        const parsed = JSON.parse(text);
         return { success: true, command: parsed as ParsedCommand };
     } catch (error: any) {
-        console.warn("Gemini parser failed, falling back to regex:", error.message);
+        console.warn("Groq parser failed, falling back to regex:", error.message);
         return { success: false, error: error.message };
     }
 }
@@ -277,22 +275,22 @@ function parseWithRegex(input: string): ParseResult {
 }
 
 // ═══════════════════════════════════════════════════
-// MAIN: HYBRID PARSER (Gemini + Regex fallback)
+// MAIN: HYBRID PARSER (Groq + Regex fallback)
 // ═══════════════════════════════════════════════════
 
 export async function parseCommand(input: string): Promise<ParseResult> {
     const trimmed = input.trim();
     if (!trimmed) return { success: false, error: "El comando está vacío." };
 
-    // 1. Try Gemini first
-    const geminiResult = await parseWithGemini(trimmed);
-    if (geminiResult.success) {
-        console.log("✨ Parsed with Gemini AI");
-        return geminiResult;
+    // 1. Try Groq AI first
+    const aiResult = await parseWithAI(trimmed);
+    if (aiResult.success) {
+        console.log("⚡ Parsed with Groq AI (Llama 3.3 70B)");
+        return aiResult;
     }
 
     // 2. Fallback to regex
-    console.log("🔄 Gemini unavailable, using regex fallback");
+    console.log("🔄 Groq unavailable, using regex fallback");
     return parseWithRegex(trimmed);
 }
 
