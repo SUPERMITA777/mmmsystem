@@ -114,7 +114,7 @@ export default function ProductoCreatorModal({
                 nombre_interno: nombreInterno.trim() || null,
                 descripcion: descripcion.trim() || null,
                 precio: parseFloat(precio) || 0,
-                precio_costo: precioCosto ? parseFloat(precioCosto) : null,
+                precio_promocional: precioCosto ? parseFloat(precioCosto) : null,
                 categoria_id: categoriaId,
                 activo,
                 visible_en_menu: visibleEnMenu,
