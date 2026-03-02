@@ -11,6 +11,7 @@ export type CartItem = {
     imagen_url?: string;
     adicionales?: { nombre: string; precio: number; grupo: string }[];
     opciones?: string; // texto de opciones seleccionadas
+    notas?: string;
 };
 
 type CartContextType = {
@@ -30,10 +31,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const addItem = (item: Omit<CartItem, "id">) => {
         setItems((prevItems) => {
-            // Find if item with same ID AND same adicionales already exists
+            // Find if item with same ID AND same adicionales AND same notas already exists
             const existingItemIndex = prevItems.findIndex(
                 (i) => i.productoId === item.productoId &&
-                    JSON.stringify(i.adicionales) === JSON.stringify(item.adicionales)
+                    JSON.stringify(i.adicionales) === JSON.stringify(item.adicionales) &&
+                    i.notas === item.notas
             );
 
             if (existingItemIndex > -1) {

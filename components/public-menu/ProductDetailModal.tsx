@@ -43,6 +43,7 @@ export default function ProductDetailModal({
 
     // Estado de selección: Guardamos un array de IDs de adicionales por cada grupo (un ID puede repetirse si se selecciona varias veces)
     const [seleccion, setSeleccion] = useState<Record<string, string[]>>({});
+    const [notas, setNotas] = useState("");
     const { addItem } = useCart();
 
     useEffect(() => {
@@ -147,6 +148,7 @@ export default function ProductDetailModal({
             cantidad,
             imagen_url: producto.imagen_url,
             adicionales: adicionalesSeleccionados,
+            notas: notas.trim() || undefined,
         });
         onClose();
     }
@@ -289,6 +291,21 @@ export default function ProductDetailModal({
                                 </div>
                             )
                         })}
+                    </div>
+
+                    {/* Notas al Producto */}
+                    <div className="mt-2 mb-10">
+                        <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
+                            <label className="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">
+                                NOTA AL PRODUCTO
+                            </label>
+                            <textarea
+                                value={notas}
+                                onChange={(e) => setNotas(e.target.value)}
+                                placeholder="ACLARÁ LO QUE NECESITES (Ej: Sin orégano)"
+                                className="w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-white text-sm placeholder:text-slate-600 focus:border-orange-500/50 outline-none resize-none min-h-[100px] transition-all"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

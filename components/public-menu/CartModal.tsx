@@ -292,7 +292,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 nombre_producto: i.nombre,
                 cantidad: i.cantidad,
                 precio_unitario: i.precio,
-                adicionales: i.adicionales ?? []
+                adicionales: i.adicionales ?? [],
+                notas: i.notas ?? null
             }));
 
             let itemsError: any = null;
@@ -312,7 +313,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             // 5. Armamos el mensaje de WhatsApp
             const itemsTexto = items.map(i => {
                 const ads = i.adicionales?.map(a => `  + ${a.nombre} (+$${a.precio})`).join("\n") || "";
-                return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}`;
+                const notaTexto = i.notas ? `\n  ⚠️ NOTA: ${i.notas}` : "";
+                return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}${notaTexto}`;
             }).join("\n");
 
             const msg = `🍕 *NUEVO PEDIDO*\n\n` +
@@ -409,6 +411,11 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                     )}
                                     <div className="flex-1 min-w-0">
                                         <span className="block text-sm text-white font-medium truncate">{item.nombre}</span>
+                                        {item.notas && (
+                                            <span className="block text-[10px] text-orange-400 font-bold uppercase tracking-wide leading-none my-1">
+                                                Nota: {item.notas}
+                                            </span>
+                                        )}
                                         {item.adicionales && item.adicionales.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-0.5">
                                                 {item.adicionales.map((a, idx) => (
