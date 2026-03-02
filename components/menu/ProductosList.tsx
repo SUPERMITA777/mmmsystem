@@ -12,11 +12,13 @@ export function ProductosList({
   productoSeleccionado,
   onSelectProducto,
   onCreateProducto,
+  onOpenSort,
 }: {
   productos: Producto[];
   productoSeleccionado: string | null;
   onSelectProducto: (id: string) => void;
   onCreateProducto: () => void;
+  onOpenSort: () => void;
 }) {
   return (
     <div className="h-full flex flex-col bg-white border-y border-r border-gray-200">
@@ -24,7 +26,10 @@ export function ProductosList({
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h3 className="font-semibold text-gray-900 text-sm">Productos</h3>
         <div className="flex gap-3 items-center">
-          <button className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors">
+          <button
+            onClick={onOpenSort}
+            className="text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
+          >
             Ordenar
           </button>
           <button
@@ -48,8 +53,8 @@ export function ProductosList({
               key={producto.id}
               onClick={() => onSelectProducto(producto.id)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${productoSeleccionado === producto.id
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-800 hover:bg-gray-50"
+                ? "bg-gray-900 text-white"
+                : "text-gray-800 hover:bg-gray-50"
                 }`}
             >
               <div

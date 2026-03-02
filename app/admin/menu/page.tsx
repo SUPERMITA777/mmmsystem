@@ -6,6 +6,8 @@ import { CategoriasList } from "@/components/menu/CategoriasList";
 import { ProductosList, type Producto as ProductoListType } from "@/components/menu/ProductosList";
 import { ProductoEditor } from "@/components/menu/ProductoEditor";
 import CategoriasSortModal from "@/components/menu/CategoriasSortModal";
+import ProductosSortModal from "@/components/menu/ProductosSortModal";
+import ProductoCreatorModal from "@/components/menu/ProductoCreatorModal";
 import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
 import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
@@ -42,6 +44,8 @@ export default function MenuPage() {
   const [productoSeleccionado, setProductoSeleccionado] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSortModalOpen, setIsSortModalOpen] = useState(false);
+  const [isProductosSortOpen, setIsProductosSortOpen] = useState(false);
+  const [isProductoCreatorOpen, setIsProductoCreatorOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
   const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
@@ -306,7 +310,8 @@ export default function MenuPage() {
             productos={productosLista}
             productoSeleccionado={productoSeleccionado}
             onSelectProducto={setProductoSeleccionado}
-            onCreateProducto={() => alert("Crear producto - Próximamente")}
+            onCreateProducto={() => setIsProductoCreatorOpen(true)}
+            onOpenSort={() => setIsProductosSortOpen(true)}
           />
         </div>
 
@@ -327,6 +332,21 @@ export default function MenuPage() {
         onClose={() => setIsSortModalOpen(false)}
         categorias={categorias}
         onSaved={loadCategorias}
+      />
+
+      <ProductosSortModal
+        isOpen={isProductosSortOpen}
+        onClose={() => setIsProductosSortOpen(false)}
+        productos={productosLista.map(p => ({ id: p.id, nombre: p.nombre, orden: p.orden || 0 }))}
+        onSaved={() => { if (categoriaSeleccionada) loadProductos(categoriaSeleccionada); }}
+      />
+
+      <ProductoCreatorModal
+        isOpen={isProductoCreatorOpen}
+        onClose={() => setIsProductoCreatorOpen(false)}
+        categorias={categorias}
+        categoriaActual={categoriaSeleccionada}
+        onCreated={() => { if (categoriaSeleccionada) loadProductos(categoriaSeleccionada); }}
       />
 
       <CategoriaEditorModal
