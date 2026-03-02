@@ -133,16 +133,8 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
             }
 
             if (!zonaEncontrada) {
-                // Si no hay zona pero tenemos ubicación del local, calcular por KM con tarifa base $850
-                if (localPt) {
-                    const distKm = haversineKm(localPt, clientePt);
-                    setCostoEnvioCalc(Math.round(distKm * 850));
-                    setGeocodingState("ok");
-                } else {
-                    // Si no hay zonas configuradas ni localPt -> envío gratis (fallback)
-                    setGeocodingState("ok");
-                    setCostoEnvioCalc(0);
-                }
+                setZonaError("Lo sentimos, tu dirección está fuera de nuestra zona de cobertura.");
+                setGeocodingState("error");
                 return;
             }
 
@@ -225,6 +217,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
         if (!nombre.trim()) { alert("Por favor ingresá tu nombre."); return; }
         if (!telefono.trim()) { alert("Por favor ingresá tu teléfono."); return; }
         if (tipoEntrega === "delivery" && !direccion.trim()) { alert("Por favor ingresá tu dirección de entrega."); return; }
+        if (tipoEntrega === "delivery" && geocodingState !== "ok") { alert("Por favor verificá tu dirección. Debe estar dentro de nuestra zona de cobertura."); return; }
         if (items.length === 0) { alert("Tu carrito está vacío."); return; }
 
         setSending(true);
@@ -695,7 +688,11 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 <div className="px-5 py-4 border-t border-white/10 bg-[#111] shrink-0 rounded-b-2xl">
                     <button
                         onClick={handleRealizarPedido}
-                        disabled={sending || items.length === 0}
+                        disabled={
+                            sending ||
+                            items.length === 0 ||
+                            (tipoEntrega === "delivery" && geocodingState !== "ok")
+                        }
                         className="w-full bg-orange-600 hover:bg-orange-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm uppercase tracking-widest transition-all shadow-lg"
                     >
                         {sending ? "Enviando..." : "Realizar pedido"}
