@@ -358,7 +358,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
                     <h2 className="text-sm font-black text-white uppercase tracking-widest">
                         {tipoEntrega === "delivery" ? "Pedido de Delivery" : "Pedido Take Away"}
                     </h2>
@@ -368,7 +368,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 {/* Scrollable body */}
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto min-h-0">
                     <div className="px-5 py-4 space-y-4">
 
                         {/* Toggle Delivery / Retirar */}
