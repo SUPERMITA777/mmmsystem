@@ -38,22 +38,47 @@ export function ProductoEditor({
   categorias,
   onSave,
   onCancel,
+  isCreating = false,
+  onCreate,
+  defaultCategoriaId,
 }: {
   producto: Producto | null;
   categorias?: Categoria[];
   onSave: (producto: Producto) => void;
   onCancel: () => void;
+  isCreating?: boolean;
+  onCreate?: (producto: Omit<Producto, 'id'>) => void;
+  defaultCategoriaId?: string;
 }) {
-  const [formData, setFormData] = useState<Producto | null>(producto);
+  const emptyProduct: Producto = {
+    id: '',
+    nombre: '',
+    nombre_interno: '',
+    descripcion: '',
+    precio: 0,
+    imagen_url: '',
+    categoria_id: defaultCategoriaId || '',
+    activo: true,
+    visible_en_menu: true,
+    producto_oculto: false,
+    producto_sugerido: false,
+  };
+
+  const [formData, setFormData] = useState<Producto | null>(isCreating ? emptyProduct : producto);
   const [todosLosGrupos, setTodosLosGrupos] = useState<GrupoAdicional[]>([]);
   const [gruposAsignados, setGruposAsignados] = useState<string[]>([]);
 
   useEffect(() => {
-    setFormData(producto);
-    if (producto) {
-      loadGruposYAsignaciones(producto.id);
+    if (isCreating) {
+      setFormData({ ...emptyProduct, categoria_id: defaultCategoriaId || '' });
+      setGruposAsignados([]);
+    } else {
+      setFormData(producto);
+      if (producto) {
+        loadGruposYAsignaciones(producto.id);
+      }
     }
-  }, [producto]);
+  }, [producto, isCreating, defaultCategoriaId]);
 
   async function loadGruposYAsignaciones(productoId: string) {
     const { data: catData } = await supabase.from("categorias").select("sucursal_id").eq("id", producto?.categoria_id).single();
@@ -73,13 +98,15 @@ export function ProductoEditor({
     }
   }
 
-  if (!producto || !formData) {
+  if (!isCreating && (!producto || !formData)) {
     return (
       <div className="h-full flex items-center justify-center bg-white rounded-r-xl border-y border-r border-gray-200 text-gray-400">
         <p className="text-sm">Selecciona un producto para editarlo</p>
       </div>
     );
   }
+
+  if (!formData) return null;
 
   function handleChange(field: keyof Producto, value: any) {
     setFormData({ ...formData!, [field]: value });
@@ -91,7 +118,7 @@ export function ProductoEditor({
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
         <div className="px-6 pt-5 pb-2">
-          <h3 className="text-base font-semibold text-gray-900">Editar producto</h3>
+          <h3 className="text-base font-semibold text-gray-900">{isCreating ? 'Nuevo producto' : 'Editar producto'}</h3>
         </div>
 
         <div className="px-6 pb-4 space-y-4">
@@ -387,15 +414,24 @@ export function ProductoEditor({
           Cancelar
         </button>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
-            <ExternalLink size={14} />
-            Ver producto
-          </button>
+          {!isCreating && (
+            <button className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-500 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium">
+              <ExternalLink size={14} />
+              Ver producto
+            </button>
+          )}
           <button
-            onClick={() => onSave({ ...formData, grupos_adicionales: gruposAsignados })}
+            onClick={() => {
+              if (isCreating && onCreate) {
+                const { id, ...newProduct } = formData;
+                onCreate({ ...newProduct, grupos_adicionales: gruposAsignados });
+              } else {
+                onSave({ ...formData, grupos_adicionales: gruposAsignados });
+              }
+            }}
             className="px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
           >
-            Actualizar
+            {isCreating ? 'Guardar' : 'Actualizar'}
           </button>
         </div>
       </div>

@@ -7,7 +7,6 @@ import { ProductosList, type Producto as ProductoListType } from "@/components/m
 import { ProductoEditor } from "@/components/menu/ProductoEditor";
 import CategoriasSortModal from "@/components/menu/CategoriasSortModal";
 import ProductosSortModal from "@/components/menu/ProductosSortModal";
-import ProductoCreatorModal from "@/components/menu/ProductoCreatorModal";
 import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
 import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
@@ -45,7 +44,7 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [isSortModalOpen, setIsSortModalOpen] = useState(false);
   const [isProductosSortOpen, setIsProductosSortOpen] = useState(false);
-  const [isProductoCreatorOpen, setIsProductoCreatorOpen] = useState(false);
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
   const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
@@ -111,6 +110,50 @@ export default function MenuPage() {
       }
     } catch (error) {
       console.error("Error cargando productos:", error);
+    }
+  }
+
+  async function handleCreateProducto(producto: Omit<Producto, 'id'> & { grupos_adicionales?: string[] }) {
+    try {
+      setLoading(true);
+      const { grupos_adicionales, ...pData } = producto;
+
+      // Get max orden for this category
+      const { data: existing } = await supabase
+        .from("productos")
+        .select("orden")
+        .eq("categoria_id", pData.categoria_id)
+        .order("orden", { ascending: false })
+        .limit(1);
+
+      const maxOrden = existing?.[0]?.orden || 0;
+
+      const { data: newProd, error: insertError } = await supabase
+        .from("productos")
+        .insert([{ ...pData, orden: maxOrden + 1 }])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Link adicionales if any
+      if (grupos_adicionales && grupos_adicionales.length > 0 && newProd) {
+        const asignaciones = grupos_adicionales.map(gid => ({
+          producto_id: newProd.id,
+          grupo_id: gid
+        }));
+        await supabase.from("producto_grupos_adicionales").insert(asignaciones);
+      }
+
+      alert("Producto creado correctamente");
+      setIsCreatingProduct(false);
+      if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
+      if (newProd) setProductoSeleccionado(newProd.id);
+    } catch (error) {
+      console.error("Error al crear:", error);
+      alert("Error al crear el producto");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -310,7 +353,10 @@ export default function MenuPage() {
             productos={productosLista}
             productoSeleccionado={productoSeleccionado}
             onSelectProducto={setProductoSeleccionado}
-            onCreateProducto={() => setIsProductoCreatorOpen(true)}
+            onCreateProducto={() => {
+              setIsCreatingProduct(true);
+              setProductoSeleccionado(null);
+            }}
             onOpenSort={() => setIsProductosSortOpen(true)}
           />
         </div>
@@ -318,10 +364,16 @@ export default function MenuPage() {
         {/* Columna 3: Editor */}
         <div className="flex-1">
           <ProductoEditor
-            producto={productoActual}
+            producto={isCreatingProduct ? null : productoActual}
             categorias={categorias}
             onSave={handleSaveProducto}
-            onCancel={() => setProductoSeleccionado(null)}
+            onCancel={() => {
+              setProductoSeleccionado(null);
+              setIsCreatingProduct(false);
+            }}
+            isCreating={isCreatingProduct}
+            onCreate={handleCreateProducto}
+            defaultCategoriaId={categoriaSeleccionada || undefined}
           />
         </div>
       </div>
@@ -339,14 +391,6 @@ export default function MenuPage() {
         onClose={() => setIsProductosSortOpen(false)}
         productos={productosLista.map(p => ({ id: p.id, nombre: p.nombre, orden: p.orden || 0 }))}
         onSaved={() => { if (categoriaSeleccionada) loadProductos(categoriaSeleccionada); }}
-      />
-
-      <ProductoCreatorModal
-        isOpen={isProductoCreatorOpen}
-        onClose={() => setIsProductoCreatorOpen(false)}
-        categorias={categorias}
-        categoriaActual={categoriaSeleccionada}
-        onCreated={() => { if (categoriaSeleccionada) loadProductos(categoriaSeleccionada); }}
       />
 
       <CategoriaEditorModal
