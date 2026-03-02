@@ -72,20 +72,36 @@ function fmt(n: number) {
 /* ── Bell sound (Web Audio API) ── */
 function playBell() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
-    gain.gain.setValueAtTime(0.6, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 1.3);
+    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    // Si el contexto está suspendido (política de auto-play), intentar resumirlo
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    const playTone = (freq: number, start: number, duration: number, vol: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      osc.frequency.exponentialRampToValueAtTime(freq / 2, ctx.currentTime + start + duration);
+
+      gain.gain.setValueAtTime(vol, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + duration + 0.1);
+    };
+
+    // Sonido de "doble campanilla"
+    playTone(880, 0, 1.2, 0.4);
+    playTone(1760, 0.05, 0.8, 0.2); // Armónico
   } catch (e) {
-    // ignore if autoplay blocked
+    console.warn("Audio error:", e);
   }
 }
 
@@ -112,6 +128,11 @@ export default function PanelPedidosPage() {
 
     const timer = setInterval(() => setNow(new Date()), 60000);
 
+    // Polling de seguridad cada 15 segundos
+    const pollTimer = setInterval(() => {
+      fetchPedidos(true);
+    }, 15000);
+
     const channel = supabase
       .channel("pedidos-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "pedidos" }, (payload) => {
@@ -121,6 +142,7 @@ export default function PanelPedidosPage() {
 
     return () => {
       clearInterval(timer);
+      clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -268,7 +290,14 @@ export default function PanelPedidosPage() {
             />
           </div>
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              onClick={() => playBell()}
+              className="flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all active:scale-95"
+              title="Probar sonido de notificación y habilitar en el navegador"
+            >
+              🔔 Activar Sonido
+            </button>
             <button
               onClick={() => setIsNuevoPedidoOpen(true)}
               className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95"
