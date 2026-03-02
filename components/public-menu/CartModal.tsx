@@ -46,7 +46,6 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
     const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "takeaway">("delivery");
     const [nombre, setNombre] = useState("");
     const [telefono, setTelefono] = useState("");
-    const [email, setEmail] = useState("");
     const [direccion, setDireccion] = useState("");
     const [metodoPago, setMetodoPago] = useState<"efectivo" | "transferencia">("efectivo");
     const [conCuanto, setConCuanto] = useState("");
@@ -322,7 +321,6 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                 `*Tipo:* ${tipoEntrega === "delivery" ? "Delivery" : "Take Away"}\n` +
                 `*Cliente:* ${nombre}\n` +
                 `*Teléfono:* +54 ${telefono}\n` +
-                (email ? `*Email:* ${email}\n` : "") +
                 (tipoEntrega === "delivery" ? `*Dirección:* ${direccion}\n` : "") +
                 `\n*Productos:*\n${itemsTexto}\n\n` +
                 `*Subtotal:* $${new Intl.NumberFormat("es-AR").format(total)}\n` +
@@ -480,224 +478,217 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
                                     className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
                                 />
                             </div>
-                            <input
-                                type="email"
-                                placeholder="Email (Opcional)"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
-                            />
                         </div>
+                    </div>
 
-                        {/* Dirección de entrega (solo Delivery) */}
-                        {tipoEntrega === "delivery" && (
-                            <div className="bg-[#1a1a1a] rounded-xl p-4 space-y-3">
-                                <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">
-                                    <MapPin size={14} /><span>Dirección de entrega</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder="Ingresá tu dirección completa*"
-                                        value={direccion}
-                                        onChange={e => {
-                                            setDireccion(e.target.value);
-                                            setGeocodingState("idle");
-                                            setZonaDetectada(null);
-                                            setZonaError(null);
-                                        }}
-                                        onKeyDown={e => e.key === "Enter" && verificarDireccion(direccion)}
-                                        className={`flex-1 bg-white/5 border rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none transition-colors ${geocodingState === "ok" ? "border-green-500/50" :
-                                            geocodingState === "error" ? "border-red-500/50" :
-                                                "border-white/10 focus:border-orange-500/50"
-                                            }`}
-                                    />
-                                    <button
-                                        onClick={() => verificarDireccion(direccion)}
-                                        disabled={geocodingState === "loading" || !direccion.trim()}
-                                        className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
-                                    >
-                                        {geocodingState === "loading" ? (
-                                            <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                                        ) : "Verificar"}
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={handleUseCurrentLocation}
-                                    disabled={geocodingState === "loading"}
-                                    className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition-colors mt-1"
-                                >
-                                    <LocateFixed size={14} className={geocodingState === "loading" ? "animate-pulse" : ""} />
-                                    Usar mi ubicación actual
-                                </button>
-
-                                {/* Feedback zona OK */}
-                                {geocodingState === "ok" && (
-                                    <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">
-                                        <CheckCircle size={14} className="text-green-400 mt-0.5 shrink-0" />
-                                        <div>
-                                            {zonaDetectada ? (
-                                                <>
-                                                    <span className="text-green-300 font-semibold">¡Llegamos a tu zona!</span>
-                                                    <span className="text-slate-400 ml-2">Zona: {zonaDetectada.nombre}</span>
-                                                    <div className="text-slate-400 mt-0.5">
-                                                        Costo de envío:{" "}
-                                                        <span className="text-white font-bold">
-                                                            {costoEnvioCalc === 0 ? "GRATIS 🎉" : `$${new Intl.NumberFormat("es-AR").format(costoEnvioCalc)}`}
-                                                        </span>
-                                                        {zonaDetectada.tiempo_estimado_minutos && (
-                                                            <span className="ml-2 text-slate-500">· {zonaDetectada.tiempo_estimado_minutos} min estimados</span>
-                                                        )}
-                                                    </div>
-                                                    {zonaDetectada.minimo_compra > 0 && total < zonaDetectada.minimo_compra && (
-                                                        <div className="text-amber-400 mt-1">
-                                                            ⚠ Mínimo de compra: ${new Intl.NumberFormat("es-AR").format(zonaDetectada.minimo_compra)}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <span className="text-green-300 font-semibold">Dirección verificada ✓</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Feedback error */}
-                                {geocodingState === "error" && zonaError && (
-                                    <div className="flex items-center gap-2 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
-                                        <AlertCircle size={14} className="text-red-400 shrink-0" />
-                                        <span className="text-red-300">{zonaError}</span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-
-                        {/* Método de pago */}
+                    {/* Dirección de entrega (solo Delivery) */}
+                    {tipoEntrega === "delivery" && (
                         <div className="bg-[#1a1a1a] rounded-xl p-4 space-y-3">
                             <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">
-                                <Banknote size={14} /><span>Método de pago</span>
+                                <MapPin size={14} /><span>Dirección de entrega</span>
                             </div>
-                            <button
-                                onClick={() => setMetodoPago("efectivo")}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-sm font-bold uppercase tracking-wide ${metodoPago === "efectivo" ? "border-orange-500 bg-orange-600/20 text-orange-400" : "border-white/10 text-slate-400 hover:border-white/20"}`}
-                            >
-                                <Banknote size={16} /> Efectivo
-                            </button>
-                            {metodoPago === "efectivo" && (
+                            <div className="flex gap-2">
                                 <input
-                                    type="number"
-                                    placeholder="¿Con cuánto abonás?"
-                                    value={conCuanto}
-                                    onChange={e => setConCuanto(e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
+                                    type="text"
+                                    placeholder="Ingresá tu dirección completa*"
+                                    value={direccion}
+                                    onChange={e => {
+                                        setDireccion(e.target.value);
+                                        setGeocodingState("idle");
+                                        setZonaDetectada(null);
+                                        setZonaError(null);
+                                    }}
+                                    onKeyDown={e => e.key === "Enter" && verificarDireccion(direccion)}
+                                    className={`flex-1 bg-white/5 border rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none transition-colors ${geocodingState === "ok" ? "border-green-500/50" :
+                                        geocodingState === "error" ? "border-red-500/50" :
+                                            "border-white/10 focus:border-orange-500/50"
+                                        }`}
                                 />
-                            )}
-                            <button
-                                onClick={() => setMetodoPago("transferencia")}
-                                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-colors text-sm ${metodoPago === "transferencia" ? "border-orange-500 bg-orange-600/20" : "border-white/10 hover:border-white/20"}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <CreditCard size={16} className={metodoPago === "transferencia" ? "text-orange-400" : "text-slate-400"} />
-                                    <span className={`font-bold uppercase tracking-wide ${metodoPago === "transferencia" ? "text-orange-400" : "text-slate-400"}`}>
-                                        Transferencia
-                                    </span>
-                                </div>
-                                {metodoPago === "transferencia" && (
-                                    <span className="text-xs text-slate-400">Alias: {ALIAS_TRANSFERENCIA}</span>
-                                )}
-                            </button>
-                        </div>
-
-                        {/* Propina */}
-                        <div className="bg-[#1a1a1a] rounded-xl p-4">
-                            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
-                                <span>💛</span><span>Propina</span>
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                                {propinaOpciones.map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => { setPropina(p); setPropinaCustom(""); }}
-                                        className={`px-4 py-2 rounded-full text-sm font-bold border transition-colors ${propina === p && !propinaCustom ? "bg-orange-600 border-orange-600 text-white" : "border-white/20 text-slate-400 hover:border-white/40"}`}
-                                    >
-                                        {p === 0 ? "$0" : `$${p}`}
-                                    </button>
-                                ))}
                                 <button
-                                    onClick={() => setPropina(-1)}
-                                    className={`px-4 py-2 rounded-full text-sm font-bold border transition-colors ${propina === -1 ? "bg-orange-600 border-orange-600 text-white" : "border-white/20 text-slate-400 hover:border-white/40"}`}
+                                    onClick={() => verificarDireccion(direccion)}
+                                    disabled={geocodingState === "loading" || !direccion.trim()}
+                                    className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
                                 >
-                                    Otro
+                                    {geocodingState === "loading" ? (
+                                        <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                                    ) : "Verificar"}
                                 </button>
                             </div>
-                            {propina === -1 && (
-                                <input
-                                    type="number"
-                                    placeholder="Ingresá el monto"
-                                    value={propinaCustom}
-                                    onChange={e => setPropinaCustom(e.target.value)}
-                                    className="mt-2 w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50"
-                                />
+                            <button
+                                onClick={handleUseCurrentLocation}
+                                disabled={geocodingState === "loading"}
+                                className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition-colors mt-1"
+                            >
+                                <LocateFixed size={14} className={geocodingState === "loading" ? "animate-pulse" : ""} />
+                                Usar mi ubicación actual
+                            </button>
+
+                            {/* Feedback zona OK */}
+                            {geocodingState === "ok" && (
+                                <div className="flex items-start gap-2 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">
+                                    <CheckCircle size={14} className="text-green-400 mt-0.5 shrink-0" />
+                                    <div>
+                                        {zonaDetectada ? (
+                                            <>
+                                                <span className="text-green-300 font-semibold">¡Llegamos a tu zona!</span>
+                                                <span className="text-slate-400 ml-2">Zona: {zonaDetectada.nombre}</span>
+                                                <div className="text-slate-400 mt-0.5">
+                                                    Costo de envío:{" "}
+                                                    <span className="text-white font-bold">
+                                                        {costoEnvioCalc === 0 ? "GRATIS 🎉" : `$${new Intl.NumberFormat("es-AR").format(costoEnvioCalc)}`}
+                                                    </span>
+                                                    {zonaDetectada.tiempo_estimado_minutos && (
+                                                        <span className="ml-2 text-slate-500">· {zonaDetectada.tiempo_estimado_minutos} min estimados</span>
+                                                    )}
+                                                </div>
+                                                {zonaDetectada.minimo_compra > 0 && total < zonaDetectada.minimo_compra && (
+                                                    <div className="text-amber-400 mt-1">
+                                                        ⚠ Mínimo de compra: ${new Intl.NumberFormat("es-AR").format(zonaDetectada.minimo_compra)}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <span className="text-green-300 font-semibold">Dirección verificada ✓</span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Feedback error */}
+                            {geocodingState === "error" && zonaError && (
+                                <div className="flex items-center gap-2 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                                    <AlertCircle size={14} className="text-red-400 shrink-0" />
+                                    <span className="text-red-300">{zonaError}</span>
+                                </div>
                             )}
                         </div>
+                    )}
 
-                        {/* Código promocional */}
-                        <div className="bg-[#1a1a1a] rounded-xl p-4">
-                            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
-                                <Tag size={14} /><span>Código promocional</span>
-                            </div>
+
+                    {/* Método de pago */}
+                    <div className="bg-[#1a1a1a] rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">
+                            <Banknote size={14} /><span>Método de pago</span>
+                        </div>
+                        <button
+                            onClick={() => setMetodoPago("efectivo")}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-sm font-bold uppercase tracking-wide ${metodoPago === "efectivo" ? "border-orange-500 bg-orange-600/20 text-orange-400" : "border-white/10 text-slate-400 hover:border-white/20"}`}
+                        >
+                            <Banknote size={16} /> Efectivo
+                        </button>
+                        {metodoPago === "efectivo" && (
                             <input
-                                type="text"
-                                placeholder="Ingresá el código"
-                                value={codigoPromo}
-                                onChange={e => setCodigoPromo(e.target.value)}
+                                type="number"
+                                placeholder="¿Con cuánto abonás?"
+                                value={conCuanto}
+                                onChange={e => setConCuanto(e.target.value)}
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
                             />
-                        </div>
-
-                        {/* Resumen */}
-                        <div className="bg-[#1a1a1a] rounded-xl p-4">
-                            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
-                                <Receipt size={14} /><span>Resumen</span>
+                        )}
+                        <button
+                            onClick={() => setMetodoPago("transferencia")}
+                            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-colors text-sm ${metodoPago === "transferencia" ? "border-orange-500 bg-orange-600/20" : "border-white/10 hover:border-white/20"}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <CreditCard size={16} className={metodoPago === "transferencia" ? "text-orange-400" : "text-slate-400"} />
+                                <span className={`font-bold uppercase tracking-wide ${metodoPago === "transferencia" ? "text-orange-400" : "text-slate-400"}`}>
+                                    Transferencia
+                                </span>
                             </div>
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between text-slate-300">
-                                    <span>Productos</span>
-                                    <span>$ {new Intl.NumberFormat("es-AR").format(total)}</span>
-                                </div>
-                                {tipoEntrega === "delivery" && COSTO_ENVIO > 0 && (
-                                    <div className="flex justify-between text-slate-300">
-                                        <span>Envío</span>
-                                        <span>$ {new Intl.NumberFormat("es-AR").format(COSTO_ENVIO)}</span>
-                                    </div>
-                                )}
-                                {propina > 0 && (
-                                    <div className="flex justify-between text-slate-300">
-                                        <span>Propina</span>
-                                        <span>$ {new Intl.NumberFormat("es-AR").format(propina)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between text-white font-black text-base border-t border-white/10 pt-2">
-                                    <span>Total</span>
-                                    <span>$ {new Intl.NumberFormat("es-AR").format(totalConPropina)}</span>
-                                </div>
-                            </div>
-                        </div>
-
+                            {metodoPago === "transferencia" && (
+                                <span className="text-xs text-slate-400">Alias: {ALIAS_TRANSFERENCIA}</span>
+                            )}
+                        </button>
                     </div>
-                </div>
 
-                {/* Sticky footer */}
-                <div className="px-5 py-4 border-t border-white/10 bg-[#111]">
-                    <button
-                        onClick={handleRealizarPedido}
-                        disabled={sending || items.length === 0}
-                        className="w-full bg-orange-600 hover:bg-orange-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm uppercase tracking-widest transition-all"
-                    >
-                        {sending ? "Enviando..." : "Realizar pedido"}
-                    </button>
+                    {/* Propina */}
+                    <div className="bg-[#1a1a1a] rounded-xl p-4">
+                        <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
+                            <span>💛</span><span>Propina</span>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                            {propinaOpciones.map(p => (
+                                <button
+                                    key={p}
+                                    onClick={() => { setPropina(p); setPropinaCustom(""); }}
+                                    className={`px-4 py-2 rounded-full text-sm font-bold border transition-colors ${propina === p && !propinaCustom ? "bg-orange-600 border-orange-600 text-white" : "border-white/20 text-slate-400 hover:border-white/40"}`}
+                                >
+                                    {p === 0 ? "$0" : `$${p}`}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setPropina(-1)}
+                                className={`px-4 py-2 rounded-full text-sm font-bold border transition-colors ${propina === -1 ? "bg-orange-600 border-orange-600 text-white" : "border-white/20 text-slate-400 hover:border-white/40"}`}
+                            >
+                                Otro
+                            </button>
+                        </div>
+                        {propina === -1 && (
+                            <input
+                                type="number"
+                                placeholder="Ingresá el monto"
+                                value={propinaCustom}
+                                onChange={e => setPropinaCustom(e.target.value)}
+                                className="mt-2 w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50"
+                            />
+                        )}
+                    </div>
+
+                    {/* Código promocional */}
+                    <div className="bg-[#1a1a1a] rounded-xl p-4">
+                        <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
+                            <Tag size={14} /><span>Código promocional</span>
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Ingresá el código"
+                            value={codigoPromo}
+                            onChange={e => setCodigoPromo(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
+                        />
+                    </div>
+
+                    {/* Resumen */}
+                    <div className="bg-[#1a1a1a] rounded-xl p-4">
+                        <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
+                            <Receipt size={14} /><span>Resumen</span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between text-slate-300">
+                                <span>Productos</span>
+                                <span>$ {new Intl.NumberFormat("es-AR").format(total)}</span>
+                            </div>
+                            {tipoEntrega === "delivery" && COSTO_ENVIO > 0 && (
+                                <div className="flex justify-between text-slate-300">
+                                    <span>Envío</span>
+                                    <span>$ {new Intl.NumberFormat("es-AR").format(COSTO_ENVIO)}</span>
+                                </div>
+                            )}
+                            {propina > 0 && (
+                                <div className="flex justify-between text-slate-300">
+                                    <span>Propina</span>
+                                    <span>$ {new Intl.NumberFormat("es-AR").format(propina)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between text-white font-black text-base border-t border-white/10 pt-2">
+                                <span>Total</span>
+                                <span>$ {new Intl.NumberFormat("es-AR").format(totalConPropina)}</span>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
+            </div>
+
+            {/* Sticky footer */}
+            <div className="px-5 py-4 border-t border-white/10 bg-[#111]">
+                <button
+                    onClick={handleRealizarPedido}
+                    disabled={sending || items.length === 0}
+                    className="w-full bg-orange-600 hover:bg-orange-500 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm uppercase tracking-widest transition-all"
+                >
+                    {sending ? "Enviando..." : "Realizar pedido"}
+                </button>
             </div>
         </div>
     );

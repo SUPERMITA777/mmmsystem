@@ -47,7 +47,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
     const [tipo, setTipo] = useState<"delivery" | "takeaway">("delivery");
     const [metodoPagoId, setMetodoPagoId] = useState("");
     const [omitirCliente, setOmitirCliente] = useState(false);
-    const [cliente, setCliente] = useState({ nombre: "", telefono: "", email: "", direccion: "", entreCalles: "", instrucciones: "" });
+    const [cliente, setCliente] = useState({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
     const [notaPedido, setNotaPedido] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -63,7 +63,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
             fetchAll();
             setView("catalog");
             setCarrito([]);
-            setCliente({ nombre: "", telefono: "", email: "", direccion: "", entreCalles: "", instrucciones: "" });
+            setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
             setNotaPedido("");
             setSeAbona("");
         }
@@ -531,11 +531,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                                     <input type="text" value={cliente.nombre} onChange={e => setCliente({ ...cliente, nombre: e.target.value })} placeholder="Nombre"
                                         className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-900 bg-white" />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Email</label>
-                                    <input type="email" value={cliente.email} onChange={e => setCliente({ ...cliente, email: e.target.value })} placeholder="Email"
-                                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-gray-900 bg-white" />
-                                </div>
 
                                 {tipo === "delivery" && (
                                     <>
@@ -618,6 +613,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
