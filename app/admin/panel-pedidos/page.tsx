@@ -1,16 +1,15 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
 import { printComanda, printCocina } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
+import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
-type PedidoItem = {
+type PedidoItemType = {
   id: string;
   nombre_producto: string;
   cantidad: number;
@@ -36,17 +35,16 @@ type Pedido = {
   metodo_pago_nombre: string;
   notas: string;
   origen: string;
-  pedido_items: PedidoItem[];
+  pedido_items: PedidoItemType[];
   created_at: string;
   repartidor_id?: string | null;
+  tiempo_preparacion_minutos?: number;
 };
 
-const ESTADOS = [
-  { key: "pendiente", label: "Nuevos", color: "bg-blue-500", icon: Clock },
-  { key: "confirmado", label: "Confirmados", color: "bg-purple-500", icon: Check },
-  { key: "preparando", label: "En preparación", color: "bg-orange-500", icon: ChefHat },
-  { key: "listo", label: "Listos", color: "bg-green-500", icon: Bike },
-  { key: "en_camino", label: "En camino", color: "bg-purple-600", icon: Truck },
+const ESTADOS_3_COLUMNAS = [
+  { key: "nuevos", label: "Nuevos", color: "bg-blue-500", icon: Clock, states: ["pendiente"] },
+  { key: "preparacion", label: "En preparación", color: "bg-orange-500", icon: ChefHat, states: ["confirmado", "preparando"] },
+  { key: "listos", label: "Listos", color: "bg-green-500", icon: Bike, states: ["listo", "en_camino"] },
 ];
 
 const TIPO_BADGE: Record<string, { label: string; class: string }> = {
@@ -58,7 +56,7 @@ const TIPO_BADGE: Record<string, { label: string; class: string }> = {
 const ESTADO_OPTIONS = [
   { key: "pendiente", label: "Pendiente" },
   { key: "confirmado", label: "Confirmado" },
-  { key: "preparando", label: "Preparando" },
+  { key: "preparando", label: "En Cocina" },
   { key: "listo", label: "Listo" },
   { key: "en_camino", label: "En camino" },
   { key: "entregado", label: "Entregado" },
@@ -114,9 +112,11 @@ export default function PanelPedidosPage() {
   const [modalTab, setModalTab] = useState<"detalle" | "repartidores">("detalle");
   const [confirmTimePedido, setConfirmTimePedido] = useState<Pedido | null>(null);
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [printConfig, setPrintConfig] = useState<any>(null);
+  const [sucursalConfig, setSucursalConfig] = useState<any>(null);
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -125,6 +125,7 @@ export default function PanelPedidosPage() {
     fetchPedidos();
     fetchRepartidores();
     fetchPrintConfig();
+    fetchSucursalConfig();
 
     const timer = setInterval(() => setNow(new Date()), 60000);
 
@@ -165,7 +166,10 @@ export default function PanelPedidosPage() {
     if (fromRealtime && !firstLoadRef.current) {
       rows.forEach(p => {
         if (!knownIdsRef.current.has(p.id)) {
-          playBell();
+          // Check if notification is enabled in settings
+          if (!sucursalConfig?.panel_settings || sucursalConfig.panel_settings.notificacion_sonora !== false) {
+            playBell();
+          }
         }
       });
     }
@@ -178,7 +182,7 @@ export default function PanelPedidosPage() {
     setLoading(false);
 
     // Keep selectedPedido in sync
-    setSelectedPedido(prev => {
+    setSelectedPedido((prev: Pedido | null) => {
       if (!prev) return null;
       const updated = rows.find(p => p.id === prev.id);
       return updated || prev;
@@ -195,8 +199,42 @@ export default function PanelPedidosPage() {
     if (data) setPrintConfig(data);
   }
 
+  async function fetchSucursalConfig() {
+    const { data } = await supabase.from("config_sucursal").select("*").limit(1).maybeSingle();
+    if (data) setSucursalConfig(data);
+  }
+
+  const sendWhatsAppNotification = useCallback((pedido: Pedido, type: 'confirmado' | 'listo' | 'entregado') => {
+    if (!pedido.cliente_telefono) return;
+
+    // Get template from settings or use default
+    const templates = sucursalConfig?.panel_settings?.whatsapp_templates;
+    let msg = "";
+
+    if (type === 'confirmado') {
+      msg = templates?.confirmado || `Tu pedido realizado a MMM ha sido confirmado.`;
+    } else if (type === 'listo') {
+      msg = templates?.listo || `TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!`;
+    } else if (type === 'entregado') {
+      msg = templates?.entregado || `¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido.`;
+    }
+
+    if (!msg) return;
+
+    const rawPhone = pedido.cliente_telefono.replace(/\D/g, "");
+    const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
+    const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank');
+  }, [sucursalConfig]);
+
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
     await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
+
+    // Auto WhatsApp on listo
+    if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
+      sendWhatsAppNotification(pedido, 'listo');
+    }
+
     fetchPedidos();
     if (selectedPedido?.id === pedido.id) {
       setSelectedPedido({ ...pedido, estado: nuevoEstado });
@@ -213,18 +251,12 @@ export default function PanelPedidosPage() {
     const pedido = confirmTimePedido;
 
     await supabase.from("pedidos").update({
-      estado: "preparando",
+      estado: "confirmado", // Changed to confirmado instead of preparing immediately
       tiempo_preparacion_minutos: minutes
     }).eq("id", pedido.id);
 
     // Enviar WhatsApp de confirmación
-    if (pedido.cliente_telefono) {
-      const rawPhone = pedido.cliente_telefono.replace(/\D/g, "");
-      const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
-      const msg = `Tu pedido realizado a MMM ha sido confirmado y será entregado en ${minutes} minutos.`;
-      const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
-      window.open(waUrl, '_blank');
-    }
+    sendWhatsAppNotification(pedido, 'confirmado');
 
     setConfirmTimePedido(null);
     fetchPedidos();
@@ -237,9 +269,11 @@ export default function PanelPedidosPage() {
     return true;
   });
 
-  function pedidosPorEstado(key: string) {
-    return filtrados.filter(p => p.estado === key);
-  }
+  const getPedidosPorColumna = (columnKey: string) => {
+    const colConfig = ESTADOS_3_COLUMNAS.find(c => c.key === columnKey);
+    if (!colConfig) return [];
+    return filtrados.filter(p => colConfig.states.includes(p.estado));
+  };
 
   function getElapsedMinutes(dateStr: string) {
     return Math.floor((now.getTime() - new Date(dateStr).getTime()) / 60000);
@@ -299,6 +333,13 @@ export default function PanelPedidosPage() {
               🔔 Activar Sonido
             </button>
             <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
+              title="Ajustes del panel de pedidos"
+            >
+              <SettingsIcon size={20} />
+            </button>
+            <button
               onClick={() => setIsNuevoPedidoOpen(true)}
               className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95"
             >
@@ -310,24 +351,23 @@ export default function PanelPedidosPage() {
         {/* Kanban + Map */}
         <div className="flex-1 flex overflow-hidden">
           {/* Columnas */}
-          <div className="w-1/2 overflow-x-auto border-r border-gray-100 bg-slate-50/50">
-            <div className="flex gap-4 p-4 min-w-[1000px] h-full">
-              {ESTADOS.map(estado => {
-                const col = pedidosPorEstado(estado.key);
+          <div className={`${sucursalConfig?.panel_settings?.ocultar_mapa_delivery ? "w-full" : "w-1/2"} overflow-x-auto border-r border-gray-100 bg-slate-50/50`}>
+            <div className="flex gap-4 p-4 min-w-[800px] h-full">
+              {ESTADOS_3_COLUMNAS.map(coluna => {
+                const col = getPedidosPorColumna(coluna.key);
                 return (
-                  <div key={estado.key} className="flex-1 flex flex-col min-w-[200px]">
+                  <div key={coluna.key} className="flex-1 flex flex-col min-w-[250px]">
                     <div className="flex items-center justify-between mb-4 px-1">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${estado.color}`} />
-                        <h3 className="font-bold text-gray-700 text-[11px] uppercase tracking-wider">{estado.label}</h3>
+                        <span className={`w-2 h-2 rounded-full ${coluna.color}`} />
+                        <h3 className="font-extrabold text-gray-800 text-xs uppercase tracking-tight">{col.length} {coluna.label}</h3>
                       </div>
-                      <span className="text-[10px] font-black bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-full shadow-sm">{col.length}</span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto space-y-3 pb-6">
+                    <div className="flex-1 overflow-y-auto space-y-3 pb-6 pr-1">
                       {col.length === 0 ? (
-                        <div className="text-center py-10 opacity-40">
-                          <estado.icon size={24} className="mx-auto mb-2 text-gray-400" />
+                        <div className="text-center py-10 opacity-30 border-2 border-dashed border-gray-200 rounded-2xl">
+                          <coluna.icon size={24} className="mx-auto mb-2 text-gray-400" />
                           <p className="text-[11px] font-medium text-gray-500">Vacío</p>
                         </div>
                       ) : col.map(pedido => {
@@ -336,25 +376,19 @@ export default function PanelPedidosPage() {
                         const isWarning = elapsed > 40 && elapsed <= 60;
                         const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
                         return (
-                          <button
+                          <div
                             key={pedido.id}
                             onClick={() => setSelectedPedido(pedido)}
-                            className={`w-full text-left rounded-2xl p-4 border transition-all hover:shadow-lg active:scale-[0.98] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
+                            className={`w-full text-left rounded-2xl p-4 border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${isLate ? "bg-red-100 text-red-600" : isWarning ? "bg-orange-100 text-orange-600" : "bg-purple-50 text-[#7B1FA2]"}`}>
-                                ⏱ {elapsed} min
-                              </span>
-                              <span className="text-[11px] font-black text-gray-900">#{numCorto}</span>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-[11px] font-black text-gray-900">N°{numCorto} {tipoLabel(pedido.tipo)} <span className="text-[10px] font-bold text-green-600 ml-1">POS</span></span>
+                              <span className="text-[10px] text-gray-400 font-bold">{elapsed} mins | {pedido.metodo_pago_nombre || "Efectivo"} | {pedido.cliente_nombre?.toLowerCase()}</span>
                             </div>
-                            <p className="text-xs font-bold text-gray-900 mb-1 line-clamp-1">{pedido.cliente_nombre || "Sin nombre"}</p>
-                            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                              <span className="text-[13px] font-black text-gray-900">$ {fmt(pedido.total)}</span>
-                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${TIPO_BADGE[pedido.tipo]?.class || "bg-gray-100 text-gray-600"}`}>
-                                {TIPO_BADGE[pedido.tipo]?.label || pedido.tipo}
-                              </span>
-                            </div>
-                          </button>
+
+                            {/* Visual line at top based on state if needed */}
+                            <div className={`h-1.5 w-full rounded-full mb-1 ${isLate ? "bg-red-500" : isWarning ? "bg-orange-500" : "bg-gray-100"}`} />
+                          </div>
                         );
                       })}
                     </div>
@@ -365,256 +399,163 @@ export default function PanelPedidosPage() {
           </div>
 
           {/* Mapa */}
-          <div className="hidden lg:block w-1/2 bg-white relative">
-            <DynamicMap
-              pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
-              selectedPedidoId={selectedPedido?.id || null}
-              onSelectPedido={(id) => {
-                const found = pedidos.find(p => p.id === id);
-                if (found) setSelectedPedido(found);
-              }}
-            />
-          </div>
+          {!sucursalConfig?.panel_settings?.ocultar_mapa_delivery && (
+            <div className="hidden lg:block w-1/2 bg-white relative">
+              <DynamicMap
+                pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
+                selectedPedidoId={selectedPedido?.id || null}
+                onSelectPedido={(id) => {
+                  const found = pedidos.find(p => p.id === id);
+                  if (found) setSelectedPedido(found);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── MODAL DETALLE PEDIDO (estilo Pedisy) ── */}
+      {/* ── MODAL DETALLE PEDIDO ── */}
       {selectedPedido && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md"
           onClick={() => setSelectedPedido(null)}
         >
           <div
-            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+            className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
             onClick={e => e.stopPropagation()}
           >
             {/* ── Header ── */}
-            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
-              <h3 className="text-base font-bold text-gray-800">
-                {tipoLabel(selectedPedido.tipo)} Programado N°
-                {selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
-              </h3>
-              <button
-                onClick={() => setSelectedPedido(null)}
-                className="text-gray-400 hover:text-gray-700 p-1 rounded-full"
-              >
-                <X size={20} />
-              </button>
-            </div>
+            <div className="flex items-center justify-between px-8 py-5 bg-white border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-black text-gray-800">
+                  {tipoLabel(selectedPedido.tipo)} N°
+                  {selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
+                </h3>
+                <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase">POS</span>
+              </div>
 
-            {/* ── Body ── */}
-            <div className="flex flex-1 overflow-hidden">
-              {/* Left panel */}
-              <div className="flex-1 flex flex-col border-r border-gray-100 overflow-hidden">
-                {/* Tabs */}
-                <div className="flex border-b border-gray-200">
-                  {(["detalle", "repartidores"] as const).map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setModalTab(tab)}
-                      className={`flex-1 py-3 text-xs font-semibold transition-colors ${modalTab === tab ? "border-b-2 border-[#7B1FA2] text-[#7B1FA2]" : "text-gray-500 hover:text-gray-700"}`}
-                    >
-                      {tab === "detalle" ? "Detalle del pedido" : "Repartidores"}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  <label className="absolute -top-3 left-2 px-1 bg-white text-[9px] font-bold text-[#7B1FA2] uppercase">Estado</label>
+                  <div className="flex items-center gap-1 border border-[#7B1FA2] rounded-xl px-4 py-2 text-sm font-bold text-[#7B1FA2]">
+                    <span>{ESTADO_OPTIONS.find(o => o.key === selectedPedido.estado)?.label || selectedPedido.estado}</span>
+                    <ChevronDown size={14} />
 
-                <div className="flex-1 overflow-y-auto p-5">
-                  {modalTab === "detalle" && (
-                    <div className="space-y-4">
-                      {/* Tabla de productos */}
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-[10px] text-gray-400 uppercase font-semibold border-b border-gray-100">
-                            <td className="pb-2">Producto</td>
-                            <td className="pb-2 text-right">P. original</td>
-                            <td className="pb-2 text-right">P. final</td>
-                            <td className="pb-2 text-right">Total</td>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(selectedPedido.pedido_items ?? []).map(item => (
-                            <tr key={item.id} className="border-b border-gray-50">
-                              <td className="py-2 font-medium text-gray-800">
-                                {item.cantidad} {item.nombre_producto}
-                                {item.adicionales && item.adicionales.length > 0 && (
-                                  <div className="text-[10px] text-gray-400 mt-0.5">
-                                    {item.adicionales.map((a, i) => <span key={i} className="mr-2">+ {a.nombre}</span>)}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-2 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
-                              <td className="py-2 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
-                              <td className="py-2 text-right font-semibold">$ {fmt(item.precio_unitario * item.cantidad)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-
-                      {/* Subtotales */}
-                      <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-                        <div className="flex justify-between text-gray-700 font-semibold">
-                          <span>Productos</span>
-                          <span>$ {fmt(selectedPedido.subtotal)}</span>
-                        </div>
-                        {selectedPedido.costo_envio > 0 && (
-                          <div className="flex justify-between text-gray-500">
-                            <span>Envío</span>
-                            <span>$ {fmt(selectedPedido.costo_envio)}</span>
-                          </div>
-                        )}
-                        {selectedPedido.propina > 0 && (
-                          <div className="flex justify-between text-gray-500">
-                            <span>Propina</span>
-                            <span>$ {fmt(selectedPedido.propina)}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-gray-900 font-black text-base border-t border-gray-200 pt-2 mt-1">
-                          <span>Total ({selectedPedido.metodo_pago_nombre || "Efectivo"})</span>
-                          <span>$ {fmt(selectedPedido.total)}</span>
-                        </div>
-                      </div>
-
-                      {/* Cancelar */}
-                      <button
-                        onClick={() => { cambiarEstado(selectedPedido, "cancelado"); setSelectedPedido(null); }}
-                        className="text-red-500 text-xs font-semibold hover:underline"
-                      >
-                        Cancelar pedido
-                      </button>
-                    </div>
-                  )}
-
-                  {modalTab === "repartidores" && (
-                    <div className="space-y-3">
-                      <p className="text-xs text-gray-500 mb-3">Asigná un repartidor a este pedido delivery.</p>
-                      {repartidores.length === 0 ? (
-                        <p className="text-gray-400 text-xs">No hay repartidores activos.</p>
-                      ) : repartidores.map(r => (
+                    {/* Mock dropdown content */}
+                    <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover:block overflow-hidden z-20">
+                      {ESTADO_OPTIONS.map(opt => (
                         <button
-                          key={r.id}
-                          onClick={() => asignarRepartidor(selectedPedido.id, r.id)}
-                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors ${selectedPedido.repartidor_id === r.id ? "border-[#7B1FA2] bg-purple-50 text-[#7B1FA2]" : "border-gray-200 hover:border-[#7B1FA2]/50"}`}
+                          key={opt.key}
+                          onClick={() => cambiarEstado(selectedPedido, opt.key)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 text-xs font-semibold text-gray-700"
                         >
-                          <Bike size={16} />
-                          {r.nombre}
+                          {opt.label}
                         </button>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
+                <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-700 p-1">
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Body (Three sections in Pedisy style) ── */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left (Items) */}
+              <div className="flex-1 overflow-y-auto p-8 border-r border-gray-50">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-[10px] text-gray-400 uppercase font-black border-b border-gray-100">
+                      <td className="pb-3">1 Producto</td>
+                      <td className="pb-3 text-right">P. original</td>
+                      <td className="pb-3 text-right">P. final</td>
+                      <td className="pb-3 text-right">Total</td>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {(selectedPedido.pedido_items ?? []).map((item: PedidoItemType) => (
+                      <tr key={item.id} className="border-b border-gray-50">
+                        <td className="py-4 font-bold text-gray-800">
+                          {item.cantidad} {item.nombre_producto}
+                          {item.adicionales && item.adicionales.length > 0 && (
+                            <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
+                              {item.adicionales.map((a: { nombre: string, precio: number }, i: number) => <div key={i}>+ {a.nombre}</div>)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
+                        <td className="py-4 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
+                        <td className="py-4 text-right font-black text-gray-900">$ {fmt(item.precio_unitario * item.cantidad)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-extrabold text-gray-800">Productos</span>
+                    <span className="font-extrabold text-gray-900">$ {fmt(selectedPedido.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[15px] font-black pt-4 border-t border-gray-200">
+                    <span className="text-gray-800">Total ({selectedPedido.metodo_pago_nombre || "Efectivo"})</span>
+                    <span className="text-gray-900">$ {fmt(selectedPedido.total)}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { cambiarEstado(selectedPedido, "cancelado"); setSelectedPedido(null); }}
+                  className="mt-12 text-red-500 text-[11px] font-black uppercase tracking-tight hover:underline"
+                >
+                  Cancelar pedido
+                </button>
               </div>
 
-              {/* Right panel (info + acciones) */}
-              <div className="w-64 flex flex-col p-5 gap-4 overflow-y-auto">
-                {/* Estado selector */}
-                <div className="space-y-1">
-                  <label className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Estado</label>
-                  <div className="relative">
-                    <select
-                      value={selectedPedido.estado}
-                      onChange={e => cambiarEstado(selectedPedido, e.target.value)}
-                      className="w-full appearance-none border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-[#7B1FA2]/30"
-                    >
-                      {ESTADO_OPTIONS.map(opt => (
-                        <option key={opt.key} value={opt.key}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              {/* Right (Actions & Info) */}
+              <div className="w-80 bg-gray-50 p-8 space-y-8 overflow-y-auto">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-bold text-gray-800">Pedido <span className="text-blue-500 cursor-pointer">#{selectedPedido.numero_pedido}</span></span>
+                    <span className="text-xs text-gray-500">Cliente: {selectedPedido.cliente_nombre?.toLowerCase()}</span>
+                    <span className="text-xs text-gray-500">Pago: {selectedPedido.metodo_pago_nombre || "Efectivo"}</span>
+                    <span className="text-xs text-gray-500">Creado: {formatHora(selectedPedido.created_at)}, hace {getElapsedMinutes(selectedPedido.created_at)} min.</span>
+                    {selectedPedido.tiempo_preparacion_minutos && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input type="checkbox" checked readOnly className="rounded border-gray-300 pointer-events-none" />
+                        <span className="text-xs font-bold text-gray-700">Preparación: {selectedPedido.tiempo_preparacion_minutos} min.</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Pedido # */}
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Pedido</p>
-                  <p className="text-purple-600 font-semibold text-sm">#{selectedPedido.numero_pedido}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => printComanda(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Comandar</button>
+                  <button onClick={() => printCocina(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Cocina</button>
+                  <button className="col-span-2 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm opacity-50">Facturar</button>
                 </div>
 
-                {/* Cliente */}
-                <div className="space-y-1.5">
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Cliente</p>
-                  <div className="flex items-center gap-2">
-                    <User size={13} className="text-gray-400 shrink-0" />
-                    <span className="text-sm font-semibold text-gray-800">{selectedPedido.cliente_nombre || "Particular"}</span>
-                  </div>
-                  {selectedPedido.cliente_telefono && (
-                    <div className="flex items-center gap-2">
-                      <Phone size={13} className="text-gray-400 shrink-0" />
-                      <a
-                        href={`https://wa.me/${selectedPedido.cliente_telefono.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-purple-600 hover:underline"
-                      >
-                        {selectedPedido.cliente_telefono}
-                      </a>
-                    </div>
-                  )}
-                  {selectedPedido.cliente_direccion && (
-                    <div className="flex items-start gap-2">
-                      <MapPin size={13} className="text-gray-400 shrink-0 mt-0.5" />
-                      <a
-                        href={`https://maps.google.com/?q=${encodeURIComponent(selectedPedido.cliente_direccion)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-purple-600 hover:underline leading-tight"
-                      >
-                        {selectedPedido.cliente_direccion}
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {/* Pago */}
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Pago</p>
-                  <p className="text-sm text-gray-700">{selectedPedido.metodo_pago_nombre || "Efectivo"}</p>
-                </div>
-
-                {/* Creado */}
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1">Creado</p>
-                  <p className="text-xs text-gray-600">{formatFechaCorta(selectedPedido.created_at)} {formatHora(selectedPedido.created_at)} hs.</p>
-                </div>
-
-                {/* Botones de acción */}
-                <div className="flex flex-col gap-2 mt-auto">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => printComanda(selectedPedido, printConfig)}
-                      className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
-                    >
-                      COMANDAR
-                    </button>
-                    <button
-                      onClick={() => printCocina(selectedPedido, printConfig)}
-                      className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-2.5 rounded-xl text-xs font-bold transition-colors"
-                    >
-                      COCINA
-                    </button>
-                  </div>
-
-                  {/* Estado rápido (acción primaria) */}
+                <div className="pt-4 mt-auto">
+                  {/* Primary large button at bottom */}
                   {selectedPedido.estado === "pendiente" && (
                     <button
                       onClick={() => { setConfirmTimePedido(selectedPedido); setSelectedPedido(null); }}
-                      className="w-full bg-gray-900 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90 transition-all"
+                      className="w-full bg-black text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl hover:bg-gray-800 transition-all active:scale-95"
                     >
                       Confirmar
                     </button>
                   )}
                   {selectedPedido.estado === "confirmado" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="w-full bg-orange-500 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">En Cocina</button>
+                    <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Comenzar Cocina</button>
                   )}
-                  {selectedPedido.estado === "preparando" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="w-full bg-green-600 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Marcar listo</button>
+                  {(selectedPedido.estado === "preparando") && (
+                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="w-full bg-green-600 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Marcar Listo</button>
                   )}
                   {selectedPedido.estado === "listo" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="w-full bg-[#7B1FA2] text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Despachar</button>
+                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="w-full bg-[#7B1FA2] text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Despachar</button>
                   )}
                   {selectedPedido.estado === "en_camino" && (
-                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="w-full bg-gray-900 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest hover:opacity-90">Finalizar entrega</button>
+                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="w-full bg-black text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Entregado</button>
                   )}
                 </div>
               </div>
@@ -622,6 +563,14 @@ export default function PanelPedidosPage() {
           </div>
         </div>
       )}
+
+      <OrderPanelSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        configId={sucursalConfig?.id}
+        initialSettings={sucursalConfig?.panel_settings}
+        onSettingsUpdated={(newSettings) => setSucursalConfig({ ...sucursalConfig, panel_settings: newSettings })}
+      />
 
       <ConfirmTimeModal
         isOpen={confirmTimePedido !== null}
