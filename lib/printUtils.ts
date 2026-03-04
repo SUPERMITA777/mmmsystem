@@ -16,7 +16,7 @@ export type PrintConfig = {
   mostrar_direccion: boolean;
   mostrar_fecha_hora: boolean;
   color_accents: string;
-  negrita_adicionales: boolean;
+  boldMap?: Record<string, boolean>;
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -33,8 +33,12 @@ const DEFAULT_CONFIG: PrintConfig = {
   mostrar_direccion: true,
   mostrar_fecha_hora: true,
   color_accents: '#2563eb',
-  negrita_adicionales: false,
+  boldMap: {},
 };
+
+function bw(config: PrintConfig, key: string): string {
+  return config.boldMap?.[key] ? 'font-weight:bold;' : '';
+}
 
 function doPrint(html: string) {
   // Para evitar abrir nuevas pestañas, usamos un iframe oculto
@@ -107,8 +111,8 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
     const aggregated = aggregateAdicionales(item.adicionales ?? []);
     const ads = aggregated.map((a: any) =>
       `<tr>
-              <td style="padding-left:10px;font-size:${c.fuente_footer}px;color:#555;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">+ ${a.nombre}</td>
-              <td style="text-align:right;font-size:${c.fuente_footer}px;color:#555;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">+${fmtARS(a.precio ?? 0)}</td>
+              <td style="padding-left:10px;font-size:${c.fuente_footer}px;color:#555;${bw(c, 'fuente_items')}">+ ${a.nombre}</td>
+              <td style="text-align:right;font-size:${c.fuente_footer}px;color:#555;${bw(c, 'fuente_items')}">+${fmtARS(a.precio ?? 0)}</td>
             </tr>`
     ).join("");
     return `
@@ -142,10 +146,10 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 <body>
 
   <!-- TÍTULO -->
-  <div class="center" style="font-size:${c.fuente_titulo}px;font-weight:bold;margin-bottom:2px">
+  <div class="center" style="font-size:${c.fuente_titulo}px;${bw(c, 'fuente_titulo')}margin-bottom:2px">
     ${tipoLabel} N°${numCorto}
   </div>
-  <div class="center" style="font-size:${c.fuente_subtitulo}px;font-weight:bold;margin-bottom:6px">MMM Pizza</div>
+  <div class="center" style="font-size:${c.fuente_subtitulo}px;${bw(c, 'fuente_subtitulo')}margin-bottom:6px">MMM Pizza</div>
 
   <!-- FECHA Y HORA -->
   ${c.mostrar_fecha_hora ? `
@@ -156,9 +160,9 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <div style="margin: 8px 0"></div>
 
   <!-- CLIENTE -->
-  <div class="center" style="font-size:${c.fuente_cliente_nombre}px;font-weight:bold">${pedido.cliente_nombre || "Particular"}</div>
+  <div class="center" style="font-size:${c.fuente_cliente_nombre}px;${bw(c, 'fuente_cliente_nombre')}">${pedido.cliente_nombre || "Particular"}</div>
   ${pedido.cliente_telefono && c.mostrar_telefono
-      ? `<div class="center" style="font-size:${c.fuente_cliente_detalles}px;color:#333">${pedido.cliente_telefono}</div>`
+      ? `<div class="center" style="font-size:${c.fuente_cliente_detalles}px;${bw(c, 'fuente_cliente_detalles')}color:#333">${pedido.cliente_telefono}</div>`
       : ""}
 
   ${pedido.cliente_direccion && c.mostrar_direccion ? `
@@ -232,7 +236,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
             ${item.cantidad} ${item.nombre_producto.toUpperCase()}
         </div>
         ${(item.adicionales ?? []).length
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_items')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
       : ""}
         ${item.notas
       ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`

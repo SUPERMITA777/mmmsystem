@@ -244,15 +244,17 @@ function PublicMenuContent() {
         backgroundImage: `radial-gradient(circle at top, ${storeColors.secundario} 0%, #050505 100%)`,
       } as React.CSSProperties}
     >
-      {/* Header */}
-      <PublicHeader sucursal={sucursal} isOpen={isOpen} />
+      {/* Header — hidden when product detail modal is open */}
+      {!selectedProduct && <PublicHeader sucursal={sucursal} isOpen={isOpen} />}
 
-      {/* Category Nav */}
-      <PublicCategoryNav
-        categorias={categorias}
-        activeCategoryId={activeCategoryId}
-        onCategoryClick={handleCategoryClick}
-      />
+      {/* Category Nav — hidden when product detail modal is open */}
+      {!selectedProduct && (
+        <PublicCategoryNav
+          categorias={categorias}
+          activeCategoryId={activeCategoryId}
+          onCategoryClick={handleCategoryClick}
+        />
+      )}
 
       {/* Product List */}
       <PublicProductList
@@ -260,8 +262,8 @@ function PublicMenuContent() {
         onProductClick={openProduct}
       />
 
-      {/* Floating Cart Button */}
-      <FloatingCartButton onClick={openCart} />
+      {/* Floating Cart Button — hidden when product detail modal is open */}
+      {!selectedProduct && <FloatingCartButton onClick={openCart} />}
 
       {/* Product Detail Modal */}
       {selectedProduct && (

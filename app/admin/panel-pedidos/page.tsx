@@ -134,8 +134,7 @@ export default function PanelPedidosPage() {
   const [now, setNow] = useState(new Date());
   const [printConfig, setPrintConfig] = useState<any>(null);
   const [sucursalConfig, setSucursalConfig] = useState<any>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editFields, setEditFields] = useState({ cliente_nombre: '', cliente_telefono: '', cliente_direccion: '', notas: '' });
+  const [editingPedido, setEditingPedido] = useState<any>(null);
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -215,7 +214,10 @@ export default function PanelPedidosPage() {
 
   async function fetchPrintConfig() {
     const { data } = await supabase.from("config_impresion").select("*").limit(1).maybeSingle();
-    if (data) setPrintConfig(data);
+    const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").limit(1).maybeSingle();
+    const boldMap = suc?.panel_settings?.print_bold || {};
+    if (data) setPrintConfig({ ...data, boldMap });
+    else setPrintConfig({ boldMap });
   }
 
   async function fetchSucursalConfig() {
@@ -535,13 +537,8 @@ export default function PanelPedidosPage() {
                     </span>
                     <button
                       onClick={() => {
-                        setEditFields({
-                          cliente_nombre: selectedPedido.cliente_nombre || '',
-                          cliente_telefono: selectedPedido.cliente_telefono || '',
-                          cliente_direccion: selectedPedido.cliente_direccion || '',
-                          notas: selectedPedido.notas || '',
-                        });
-                        setIsEditing(true);
+                        setEditingPedido(selectedPedido);
+                        setSelectedPedido(null);
                       }}
                       className="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
                     >
@@ -648,81 +645,7 @@ export default function PanelPedidosPage() {
         </div>
       )}
 
-      {/* ── MODAL EDITAR PEDIDO ── */}
-      {isEditing && selectedPedido && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-          onClick={() => setIsEditing(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-black text-gray-800">Editar Pedido #{selectedPedido.numero_pedido?.split('-')[1]}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre del cliente</label>
-                <input
-                  type="text"
-                  value={editFields.cliente_nombre}
-                  onChange={e => setEditFields({ ...editFields, cliente_nombre: e.target.value })}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono</label>
-                <input
-                  type="text"
-                  value={editFields.cliente_telefono}
-                  onChange={e => setEditFields({ ...editFields, cliente_telefono: e.target.value })}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dirección</label>
-                <input
-                  type="text"
-                  value={editFields.cliente_direccion}
-                  onChange={e => setEditFields({ ...editFields, cliente_direccion: e.target.value })}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas</label>
-                <textarea
-                  value={editFields.notas}
-                  onChange={e => setEditFields({ ...editFields, notas: e.target.value })}
-                  rows={3}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setIsEditing(false)}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={async () => {
-                  await supabase.from('pedidos').update({
-                    cliente_nombre: editFields.cliente_nombre,
-                    cliente_telefono: editFields.cliente_telefono,
-                    cliente_direccion: editFields.cliente_direccion,
-                    notas: editFields.notas,
-                  }).eq('id', selectedPedido.id);
-                  setIsEditing(false);
-                  fetchPedidos();
-                }}
-                className="flex-1 py-3 bg-black text-white rounded-xl text-sm font-black hover:bg-gray-800 transition-colors"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       <OrderPanelSettingsModal
         isOpen={isSettingsOpen}
@@ -740,9 +663,10 @@ export default function PanelPedidosPage() {
       />
 
       <NuevoPedidoModal
-        isOpen={isNuevoPedidoOpen}
-        onClose={() => setIsNuevoPedidoOpen(false)}
-        onCreated={() => { fetchPedidos(); setIsNuevoPedidoOpen(false); }}
+        isOpen={isNuevoPedidoOpen || !!editingPedido}
+        onClose={() => { setIsNuevoPedidoOpen(false); setEditingPedido(null); }}
+        onCreated={() => { fetchPedidos(); setIsNuevoPedidoOpen(false); setEditingPedido(null); }}
+        editPedido={editingPedido || undefined}
       />
     </div>
   );

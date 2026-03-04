@@ -9,6 +9,7 @@ interface NuevoPedidoModalProps {
     isOpen: boolean;
     onClose: () => void;
     onCreated: () => void;
+    editPedido?: any;
 }
 
 type CartItem = {
@@ -22,7 +23,7 @@ type CartItem = {
     adicionales?: { nombre: string; precio: number; cantidad: number }[];
 };
 
-export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPedidoModalProps) {
+export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedido }: NuevoPedidoModalProps) {
     // Data
     const [productos, setProductos] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
@@ -62,10 +63,35 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
         if (isOpen) {
             fetchAll();
             setView("catalog");
-            setCarrito([]);
-            setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
-            setNotaPedido("");
-            setSeAbona("");
+            if (editPedido) {
+                // Pre-fill from existing order
+                const items: CartItem[] = (editPedido.pedido_items || []).map((item: any) => ({
+                    id: item.id || crypto.randomUUID(),
+                    nombre: item.nombre_producto,
+                    precio: item.precio_unitario,
+                    precioOverride: item.precio_unitario,
+                    cantidad: item.cantidad,
+                    nota: item.notas || "",
+                    adicionales: (item.adicionales || []).map((a: any) => ({ nombre: a.nombre, precio: a.precio || 0, cantidad: a.cantidad || 1 })),
+                }));
+                setCarrito(items);
+                setCliente({
+                    nombre: editPedido.cliente_nombre || "",
+                    telefono: editPedido.cliente_telefono || "",
+                    direccion: editPedido.cliente_direccion || "",
+                    entreCalles: "",
+                    instrucciones: "",
+                });
+                setTipo(editPedido.tipo || "delivery");
+                setNotaPedido(editPedido.notas || "");
+                setSeAbona("");
+                if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
+            } else {
+                setCarrito([]);
+                setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
+                setNotaPedido("");
+                setSeAbona("");
+            }
         }
     }, [isOpen]);
 
@@ -270,37 +296,66 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
         if (!omitirCliente && !cliente.nombre) { alert("Ingresá el nombre del cliente"); return; }
         setLoading(true);
         try {
-            const numRandom = Math.floor(1000 + Math.random() * 9000);
-            const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                numero_pedido: `MMM-${numRandom}`,
-                cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
-                cliente_telefono: cliente.telefono,
-                cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
-                tipo, subtotal, costo_envio: costoEnvio, total,
-                metodo_pago_id: metodoPagoId,
-                estado: "pendiente",
-                notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
-                cliente_lat: direccionGeocoded?.lat,
-                cliente_lng: direccionGeocoded?.lng
-            }).select().single();
-            if (pError) throw pError;
+            if (editPedido) {
+                // UPDATE existing order
+                const { error: uError } = await supabase.from("pedidos").update({
+                    cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
+                    cliente_telefono: cliente.telefono,
+                    cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
+                    tipo, subtotal, costo_envio: costoEnvio, total,
+                    metodo_pago_id: metodoPagoId,
+                    notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
+                    cliente_lat: direccionGeocoded?.lat,
+                    cliente_lng: direccionGeocoded?.lng
+                }).eq("id", editPedido.id);
+                if (uError) throw uError;
 
-            const items = carrito.map(item => ({
-                pedido_id: pedido.id,
-                nombre_producto: item.nombre,
-                cantidad: item.cantidad,
-                precio_unitario: item.precioOverride,
-                notas: item.nota || "",
-                adicionales: item.adicionales || []
-            }));
-            const { error: iError } = await supabase.from("pedido_items").insert(items);
-            if (iError) throw iError;
+                // Delete old items and insert new
+                await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+                const items = carrito.map(item => ({
+                    pedido_id: editPedido.id,
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precioOverride,
+                    notas: item.nota || "",
+                    adicionales: item.adicionales || []
+                }));
+                const { error: iError } = await supabase.from("pedido_items").insert(items);
+                if (iError) throw iError;
+            } else {
+                // CREATE new order
+                const numRandom = Math.floor(1000 + Math.random() * 9000);
+                const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
+                    numero_pedido: `MMM-${numRandom}`,
+                    cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
+                    cliente_telefono: cliente.telefono,
+                    cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
+                    tipo, subtotal, costo_envio: costoEnvio, total,
+                    metodo_pago_id: metodoPagoId,
+                    estado: "pendiente",
+                    notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
+                    cliente_lat: direccionGeocoded?.lat,
+                    cliente_lng: direccionGeocoded?.lng
+                }).select().single();
+                if (pError) throw pError;
+
+                const items = carrito.map(item => ({
+                    pedido_id: pedido.id,
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precioOverride,
+                    notas: item.nota || "",
+                    adicionales: item.adicionales || []
+                }));
+                const { error: iError } = await supabase.from("pedido_items").insert(items);
+                if (iError) throw iError;
+            }
 
             onCreated();
             onClose();
         } catch (e: any) {
             console.error(e);
-            alert("Error al crear pedido: " + (e.message || ""));
+            alert("Error al " + (editPedido ? "editar" : "crear") + " pedido: " + (e.message || ""));
         } finally { setLoading(false); }
     }
 
@@ -695,7 +750,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                                 disabled={loading || carrito.length === 0}
                                 className="flex-1 bg-gray-900 text-white py-3 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                             >
-                                {loading ? "Creando..." : "Crear pedido"}
+                                {loading ? (editPedido ? "Editando..." : "Creando...") : (editPedido ? "Editar pedido" : "Crear pedido")}
                             </button>
                         </div>
                     </div>
