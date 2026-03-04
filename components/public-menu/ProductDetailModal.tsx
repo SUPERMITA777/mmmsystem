@@ -177,15 +177,17 @@ export default function ProductDetailModal({
             </div>
 
             {/* Hero Image FullScreen-ish */}
-            <div className="relative w-full h-[35vh] md:h-[45vh] bg-slate-900 shrink-0">
-                <img
-                    src={producto.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop"}
-                    alt={producto.nombre}
-                    className="w-full h-full object-cover"
-                />
-                {/* Gradient overlay fuerte */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-black/20 to-transparent" />
-            </div>
+            {grupos.length === 0 && (
+                <div className="relative w-full h-[35vh] md:h-[45vh] bg-slate-900 shrink-0">
+                    <img
+                        src={producto.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop"}
+                        alt={producto.nombre}
+                        className="w-full h-full object-cover"
+                    />
+                    {/* Gradient overlay fuerte */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-black/20 to-transparent" />
+                </div>
+            )}
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto">

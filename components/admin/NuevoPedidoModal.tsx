@@ -30,6 +30,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [metodosPago, setMetodosPago] = useState<any[]>([]);
     const [gruposAdicionales, setGruposAdicionales] = useState<any[]>([]);
     const [adicionales, setAdicionales] = useState<any[]>([]);
+    const [productoGrupos, setProductoGrupos] = useState<any[]>([]);
 
     // UI State
     const [busqueda, setBusqueda] = useState("");
@@ -39,6 +40,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [customQty, setCustomQty] = useState(1);
     const [customNota, setCustomNota] = useState("");
     const [customAdicionales, setCustomAdicionales] = useState<Record<string, number>>({});
+    const [editCartIndex, setEditCartIndex] = useState<number | null>(null);
 
     // Cart
     const [carrito, setCarrito] = useState<CartItem[]>([]);
@@ -120,6 +122,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setGruposAdicionales(grps || []);
         const { data: ads } = await supabase.from("adicionales").select("*");
         setAdicionales(ads || []);
+        const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*");
+        setProductoGrupos(pg || []);
     }
 
     async function validarDireccion(address: string) {
@@ -220,11 +224,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     // Product click -> open customization if it has adicionales, else add directly
     function handleProductClick(p: any) {
-        const prodGrupos = gruposAdicionales.filter(g => {
-            // For now, show all groups - can be filtered by product association later
-            return true;
-        });
-        const hasAdicionales = prodGrupos.length > 0 && adicionales.length > 0;
+        const allowedGroupIds = productoGrupos.filter((pg: any) => pg.producto_id === p.id).map((pg: any) => pg.grupo_id);
+        const prodGrupos = gruposAdicionales.filter((g: any) => allowedGroupIds.includes(g.id));
+        const hasAdicionales = prodGrupos.length > 0 && adicionales.some((a: any) => allowedGroupIds.includes(a.grupo_id));
 
         if (hasAdicionales) {
             setProductoCustom(p);
@@ -254,6 +256,24 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setProductoCustom(null);
     }
 
+    function updateCartItem(idx: number, p: any, qty: number, nota: string, ads: { nombre: string; precio: number; cantidad: number }[]) {
+        const adTotal = ads.reduce((s, a) => s + a.precio * a.cantidad, 0);
+        setCarrito(prev => prev.map((item, i) => {
+            if (i !== idx) return item;
+            return {
+                ...item,
+                precio: p.precio + adTotal,
+                precioOverride: p.precio + adTotal,
+                cantidad: qty,
+                nota,
+                adicionales: ads.filter(a => a.cantidad > 0)
+            };
+        }));
+        setView("catalog");
+        setProductoCustom(null);
+        setEditCartIndex(null);
+    }
+
     function handleAddCustomized() {
         if (!productoCustom) return;
         const selectedAds = Object.entries(customAdicionales)
@@ -262,7 +282,37 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const ad = adicionales.find(a => a.id === id);
                 return { nombre: ad?.nombre || "", precio: ad?.precio_venta || 0, cantidad: qty };
             });
-        addToCart(productoCustom, customQty, customNota, selectedAds);
+
+        if (editCartIndex !== null) {
+            updateCartItem(editCartIndex, productoCustom, customQty, customNota, selectedAds);
+        } else {
+            addToCart(productoCustom, customQty, customNota, selectedAds);
+        }
+    }
+
+    function editCartItem(idx: number) {
+        const item = carrito[idx];
+        const p = productos.find(prod => prod.nombre === item.nombre);
+        if (!p) {
+            alert("No se puede editar este producto porque ya no se encuentra en el catálogo.");
+            return;
+        }
+        setProductoCustom(p);
+        setCustomQty(item.cantidad);
+        setCustomNota(item.nota || "");
+
+        const adsMapping: Record<string, number> = {};
+        if (item.adicionales) {
+            item.adicionales.forEach(a => {
+                const adici = adicionales.find(ad => ad.nombre === a.nombre);
+                if (adici) {
+                    adsMapping[adici.id] = (adsMapping[adici.id] || 0) + (a.cantidad || 1);
+                }
+            });
+        }
+        setCustomAdicionales(adsMapping);
+        setEditCartIndex(idx);
+        setView("customize");
     }
 
     function updateCartQty(idx: number, delta: number) {
@@ -284,6 +334,15 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
     const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
     const total = subtotal + costoEnvio;
+
+    const isCustomValid = productoCustom ? gruposAdicionales.every((grp: any) => {
+        const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom.id && pg.grupo_id === grp.id);
+        if (!isAllowed || !grp.seleccion_obligatoria) return true;
+
+        const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
+        const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
+        return totalInGroup >= (grp.seleccion_minima || 1);
+    }) : true;
 
     const productosFiltrados = productos.filter(p => {
         if (busqueda && !p.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
@@ -387,8 +446,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         <p className="text-xs font-bold text-gray-900 truncate">{item.nombre}</p>
                                         {item.adicionales && item.adicionales.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-1">
-                                                {item.adicionales.map((a, i) => (
-                                                    <span key={i} className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded font-medium">+ {a.nombre}</span>
+                                                {Object.entries(
+                                                    item.adicionales.reduce((acc, a) => {
+                                                        const qty = a.cantidad || 1;
+                                                        acc[a.nombre] = (acc[a.nombre] || 0) + qty;
+                                                        return acc;
+                                                    }, {} as Record<string, number>)
+                                                ).map(([nombre, qty], i) => (
+                                                    <span key={i} className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded font-medium">
+                                                        + {qty > 1 ? `${nombre} X ${qty}` : nombre}
+                                                    </span>
                                                 ))}
                                             </div>
                                         )}
@@ -411,9 +478,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         <span className="text-xs font-bold w-4 text-center">{item.cantidad}</span>
                                         <button onClick={() => updateCartQty(idx, 1)} className="text-gray-400 hover:text-gray-900"><Plus size={12} /></button>
                                     </div>
-                                    <button onClick={() => removeFromCart(idx)} className="text-xs text-red-400 hover:text-red-600 font-bold transition-colors">
-                                        Eliminar
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => editCartItem(idx)} className="text-xs text-blue-500 hover:text-blue-700 font-bold transition-colors">
+                                            Editar
+                                        </button>
+                                        <button onClick={() => removeFromCart(idx)} className="text-xs text-red-400 hover:text-red-600 font-bold transition-colors">
+                                            Eliminar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -505,7 +577,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             {/* Header */}
                             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => setView("catalog")} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><ArrowLeft size={18} /></button>
+                                    <button onClick={() => { setView("catalog"); setEditCartIndex(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><ArrowLeft size={18} /></button>
                                     <h3 className="font-bold text-gray-900">{productoCustom?.nombre}</h3>
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -517,9 +589,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     <span className="text-sm font-bold text-gray-900">$ {fmt(productoCustom?.precio || 0)}</span>
                                     <button
                                         onClick={handleAddCustomized}
-                                        className="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors"
+                                        disabled={!isCustomValid}
+                                        className="bg-gray-900 text-white px-5 py-2 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Agregar
+                                        {editCartIndex !== null ? "Actualizar" : "Agregar"}
                                     </button>
                                 </div>
                             </div>
@@ -527,6 +600,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             {/* Adicionales groups */}
                             <div className="flex-1 overflow-y-auto p-5 space-y-6">
                                 {gruposAdicionales.map(grp => {
+                                    const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
+                                    if (!isAllowed) return null;
+
                                     const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
                                     if (grpAds.length === 0) return null;
                                     return (
@@ -537,7 +613,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                     <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">[Obligatorio]</span>
                                                 )}
                                                 <span className="text-[10px] text-gray-400 font-medium">
-                                                    Máx. {grp.seleccion_maxima}
+                                                    Máx. {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| Mín. ${grp.seleccion_minima}`}
                                                 </span>
                                             </div>
                                             <div className="space-y-1">
@@ -545,13 +621,18 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                     const qty = customAdicionales[ad.id] || 0;
                                                     // Calculate total selected in this group
                                                     const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
-                                                    const atMax = grp.seleccion_maxima > 0 && totalInGroup >= grp.seleccion_maxima;
+                                                    const atMaxGroup = grp.seleccion_maxima > 0 && totalInGroup >= grp.seleccion_maxima;
+                                                    const atMaxItem = ad.seleccion_maxima > 0 && qty >= ad.seleccion_maxima;
+                                                    const disabledPlus = atMaxGroup || atMaxItem;
                                                     return (
                                                         <div key={ad.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
                                                             <div>
                                                                 <span className="text-sm text-gray-700 font-medium">{ad.nombre}</span>
                                                                 {ad.precio_venta > 0 && (
                                                                     <span className="text-xs text-gray-400 ml-2">+$ {fmt(ad.precio_venta)}</span>
+                                                                )}
+                                                                {ad.seleccion_maxima > 0 && (
+                                                                    <span className="text-[10px] text-gray-400 block mt-0.5">Máx. {ad.seleccion_maxima}</span>
                                                                 )}
                                                             </div>
                                                             <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-2 py-1">
@@ -562,10 +643,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                                 <span className="text-xs font-bold w-4 text-center">{qty}</span>
                                                                 <button
                                                                     onClick={() => {
-                                                                        if (!atMax) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
+                                                                        if (!disabledPlus) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
                                                                     }}
-                                                                    className={`transition-colors ${atMax ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
-                                                                    disabled={atMax}
+                                                                    className={`transition-colors ${disabledPlus ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                                                    disabled={disabledPlus}
                                                                 ><Plus size={12} /></button>
                                                             </div>
                                                         </div>

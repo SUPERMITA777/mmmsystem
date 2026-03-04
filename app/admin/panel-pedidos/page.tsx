@@ -69,13 +69,14 @@ function fmt(n: number) {
   return new Intl.NumberFormat("es-AR").format(n);
 }
 
-function aggregateAds(adicionales: { nombre: string; precio: number }[]) {
+function aggregateAds(adicionales: any[]) {
   const counts: Record<string, { count: number; precio: number }> = {};
   adicionales.forEach(a => {
+    const qty = a.cantidad || 1;
     if (!counts[a.nombre]) {
-      counts[a.nombre] = { count: 1, precio: a.precio || 0 };
+      counts[a.nombre] = { count: qty, precio: a.precio || 0 };
     } else {
-      counts[a.nombre].count++;
+      counts[a.nombre].count += qty;
     }
   });
   return Object.entries(counts).map(([nombre, data]) => ({
