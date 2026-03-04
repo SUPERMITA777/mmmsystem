@@ -433,61 +433,52 @@ export default function PanelPedidosPage() {
         </div>
       </div>
 
-      {/* ── MODAL DETALLE PEDIDO ── */}
+      {/* ── MODAL DETALLE PEDIDO (Pedisy style) ── */}
       {selectedPedido && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md"
           onClick={() => setSelectedPedido(null)}
         >
           <div
-            className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+            className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
             onClick={e => e.stopPropagation()}
           >
             {/* ── Header ── */}
-            <div className="flex items-center justify-between px-8 py-5 bg-white border-b border-gray-100">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-black text-gray-800">
-                  {tipoLabel(selectedPedido.tipo)} N°
-                  {selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
+                <h3 className="text-xl font-bold text-gray-900">
+                  {tipoLabel(selectedPedido.tipo)} N°{selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
                 </h3>
-                <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-lg uppercase">POS</span>
+                <span className="bg-green-100 text-green-700 text-[10px] font-black px-2.5 py-1 rounded-md uppercase">POS</span>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <div className="relative group">
-                  <label className="absolute -top-3 left-2 px-1 bg-white text-[9px] font-bold text-[#7B1FA2] uppercase">Estado</label>
-                  <div className="flex items-center gap-1 border border-[#7B1FA2] rounded-xl px-4 py-2 text-sm font-bold text-[#7B1FA2]">
-                    <span>{ESTADO_OPTIONS.find(o => o.key === selectedPedido.estado)?.label || selectedPedido.estado}</span>
-                    <ChevronDown size={14} />
-
-                    {/* Mock dropdown content */}
-                    <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover:block overflow-hidden z-20">
-                      {ESTADO_OPTIONS.map(opt => (
-                        <button
-                          key={opt.key}
-                          onClick={() => cambiarEstado(selectedPedido, opt.key)}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-50 text-xs font-semibold text-gray-700"
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <label className="absolute -top-2.5 left-3 px-1 bg-white text-[9px] font-semibold text-gray-400 uppercase z-10">Estado</label>
+                  <select
+                    value={selectedPedido.estado}
+                    onChange={e => cambiarEstado(selectedPedido, e.target.value)}
+                    className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 bg-white cursor-pointer focus:ring-2 focus:ring-purple-500 outline-none appearance-auto"
+                  >
+                    {ESTADO_OPTIONS.map(opt => (
+                      <option key={opt.key} value={opt.key}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
-                <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-700 p-1">
-                  <X size={24} />
+                <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-700 p-1 transition-colors">
+                  <X size={22} />
                 </button>
               </div>
             </div>
 
-            {/* ── Body (Three sections in Pedisy style) ── */}
+            {/* ── Body ── */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Left (Items) */}
-              <div className="flex-1 overflow-y-auto p-8 border-r border-gray-50">
+              {/* Left Panel — Items Table */}
+              <div className="flex-1 overflow-y-auto p-6 border-r border-gray-100">
                 <table className="w-full">
                   <thead>
-                    <tr className="text-[10px] text-gray-400 uppercase font-black border-b border-gray-100">
-                      <td className="pb-3">1 Producto</td>
+                    <tr className="text-[11px] text-gray-400 uppercase font-semibold border-b border-gray-100">
+                      <td className="pb-3">{(selectedPedido.pedido_items ?? []).length} Producto</td>
                       <td className="pb-3 text-right">P. original</td>
                       <td className="pb-3 text-right">P. final</td>
                       <td className="pb-3 text-right">Total</td>
@@ -496,99 +487,159 @@ export default function PanelPedidosPage() {
                   <tbody className="text-sm">
                     {(selectedPedido.pedido_items ?? []).map((item: PedidoItemType) => (
                       <tr key={item.id} className="border-b border-gray-50">
-                        <td className="py-4 font-bold text-gray-800">
+                        <td className="py-4 font-semibold text-gray-800">
                           {item.cantidad} {item.nombre_producto}
                           {item.adicionales && item.adicionales.length > 0 && (
                             <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
                               {aggregateAds(item.adicionales).map((a, i) => <div key={i}>+ {a.nombre}</div>)}
                             </div>
                           )}
+                          {item.notas && (
+                            <div className="text-[10px] text-gray-400 mt-1 italic">📝 {item.notas}</div>
+                          )}
                         </td>
                         <td className="py-4 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
                         <td className="py-4 text-right text-gray-500">$ {fmt(item.precio_unitario)}</td>
-                        <td className="py-4 text-right font-black text-gray-900">$ {fmt(item.precio_unitario * item.cantidad)}</td>
+                        <td className="py-4 text-right font-bold text-gray-900">$ {fmt(item.precio_unitario * item.cantidad)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="font-extrabold text-gray-800">Productos</span>
-                    <span className="font-extrabold text-gray-900">$ {fmt(selectedPedido.subtotal)}</span>
+                {/* Totals */}
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between items-center text-sm font-semibold text-gray-700 border-t border-gray-100 pt-4">
+                    <span>Productos</span>
+                    <span>$ {fmt(selectedPedido.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between items-center text-[15px] font-black pt-4 border-t border-gray-200">
-                    <span className="text-gray-800">Total ({selectedPedido.metodo_pago_nombre || "Efectivo"})</span>
-                    <span className="text-gray-900">$ {fmt(selectedPedido.total)}</span>
+                  {(selectedPedido.costo_envio ?? 0) > 0 && (
+                    <div className="flex justify-between items-center text-sm text-gray-500">
+                      <span>Costo de envío</span>
+                      <span>$ {fmt(selectedPedido.costo_envio)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-base font-black text-gray-900 border-t border-gray-200 pt-3">
+                    <span>Total ({selectedPedido.metodo_pago_nombre || "Efectivo"})</span>
+                    <span>$ {fmt(selectedPedido.total)}</span>
                   </div>
                 </div>
-
-                <button
-                  onClick={() => { cambiarEstado(selectedPedido, "cancelado"); setSelectedPedido(null); }}
-                  className="mt-12 text-red-500 text-[11px] font-black uppercase tracking-tight hover:underline"
-                >
-                  Cancelar pedido
-                </button>
               </div>
 
-              {/* Right (Actions & Info) */}
-              <div className="w-80 bg-gray-50 p-8 space-y-8 overflow-y-auto">
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold text-gray-800">Pedido <span className="text-blue-500 cursor-pointer">#{selectedPedido.numero_pedido}</span></span>
-                    <span className="text-xs text-gray-500">Cliente: {selectedPedido.cliente_nombre?.toLowerCase()}</span>
-                    <span className="text-xs text-gray-500">Pago: {selectedPedido.metodo_pago_nombre || "Efectivo"}</span>
-                    <span className="text-xs text-gray-500">Creado: {formatHora(selectedPedido.created_at)}, hace {getElapsedMinutes(selectedPedido.created_at)} min.</span>
-                    {selectedPedido.tiempo_preparacion_minutos && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <input type="checkbox" checked readOnly className="rounded border-gray-300 pointer-events-none" />
-                        <span className="text-xs font-bold text-gray-700">Preparación: {selectedPedido.tiempo_preparacion_minutos} min.</span>
+              {/* Right Panel — Order Info */}
+              <div className="w-[340px] flex flex-col bg-gray-50/50 overflow-y-auto">
+                <div className="p-6 space-y-5 flex-1">
+                  {/* Pedido # + Editar */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-800">
+                      Pedido <span className="text-purple-600">#{selectedPedido.numero_pedido}</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setEditFields({
+                          cliente_nombre: selectedPedido.cliente_nombre || '',
+                          cliente_telefono: selectedPedido.cliente_telefono || '',
+                          cliente_direccion: selectedPedido.cliente_direccion || '',
+                          notas: selectedPedido.notas || '',
+                        });
+                        setIsEditing(true);
+                      }}
+                      className="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
+                    >
+                      Editar
+                    </button>
+                  </div>
+
+                  {/* Client info rows */}
+                  <div className="space-y-0 divide-y divide-gray-100 border border-gray-100 rounded-xl bg-white overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <span className="text-sm text-gray-600">Cliente: {selectedPedido.cliente_nombre || "—"}</span>
+                    </div>
+                    {selectedPedido.cliente_telefono && (
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm">
+                          WhatsApp: <span className="text-purple-600 font-medium">{selectedPedido.cliente_telefono}</span>
+                        </span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_telefono)}
+                          className="text-gray-300 hover:text-gray-500 transition-colors"
+                          title="Copiar"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                        </button>
+                      </div>
+                    )}
+                    {selectedPedido.cliente_direccion && (
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-purple-600 font-medium truncate max-w-[240px]">{selectedPedido.cliente_direccion}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_direccion)}
+                          className="text-gray-300 hover:text-gray-500 transition-colors shrink-0"
+                          title="Copiar"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                        </button>
                       </div>
                     )}
                   </div>
+
+                  {/* Repartidor dropdown */}
+                  <div className="border border-gray-100 rounded-xl bg-white overflow-hidden">
+                    <select
+                      value={selectedPedido.repartidor_id || ""}
+                      onChange={e => asignarRepartidor(selectedPedido.id, e.target.value)}
+                      className="w-full px-4 py-3 text-sm text-gray-600 bg-transparent outline-none cursor-pointer"
+                    >
+                      <option value="">Repartidor</option>
+                      {repartidores.map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Payment & timestamps */}
+                  <div className="space-y-0 divide-y divide-gray-100 border border-gray-100 rounded-xl bg-white overflow-hidden text-sm text-gray-600">
+                    <div className="px-4 py-3">Pago: {selectedPedido.metodo_pago_nombre || "Efectivo"}</div>
+                    <div className="px-4 py-3">Creado: {formatHora(selectedPedido.created_at)}, hace {getElapsedMinutes(selectedPedido.created_at)} mins.</div>
+                    {selectedPedido.tiempo_preparacion_minutos && (
+                      <div className="px-4 py-3">Preparación: {selectedPedido.tiempo_preparacion_minutos} minutos.</div>
+                    )}
+                  </div>
+
+                  {/* Action buttons: Comandar / Cocina / Facturar */}
+                  <div className="flex gap-2">
+                    <button onClick={() => printComanda(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Comandar</button>
+                    <button onClick={() => printCocina(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cocina</button>
+                    <button className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors opacity-50">Facturar</button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => printComanda(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Comandar</button>
-                  <button onClick={() => printCocina(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Cocina</button>
+                {/* Footer: Cancel + Primary Action */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-white">
                   <button
-                    onClick={() => {
-                      setEditFields({
-                        cliente_nombre: selectedPedido.cliente_nombre || '',
-                        cliente_telefono: selectedPedido.cliente_telefono || '',
-                        cliente_direccion: selectedPedido.cliente_direccion || '',
-                        notas: selectedPedido.notas || '',
-                      });
-                      setIsEditing(true);
-                    }}
-                    className="bg-amber-100 hover:bg-amber-200 text-amber-700 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm flex items-center justify-center gap-2"
+                    onClick={() => { cambiarEstado(selectedPedido, "cancelado"); setSelectedPedido(null); }}
+                    className="text-red-500 text-sm font-semibold hover:underline"
                   >
-                    <Pencil size={14} /> Editar
+                    Cancelar pedido
                   </button>
-                  <button className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm opacity-50">Facturar</button>
-                </div>
-
-                <div className="pt-4 mt-auto">
-                  {/* Primary large button at bottom */}
                   {selectedPedido.estado === "pendiente" && (
                     <button
                       onClick={() => { setConfirmTimePedido(selectedPedido); setSelectedPedido(null); }}
-                      className="w-full bg-black text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl hover:bg-gray-800 transition-all active:scale-95"
+                      className="bg-gray-900 text-white font-bold px-6 py-3 rounded-xl text-sm hover:bg-gray-800 transition-colors"
                     >
                       Confirmar
                     </button>
                   )}
                   {selectedPedido.estado === "confirmado" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Comenzar Cocina</button>
+                    <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm">Comenzar Cocina</button>
                   )}
-                  {(selectedPedido.estado === "preparando") && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="w-full bg-green-600 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Marcar Listo</button>
+                  {selectedPedido.estado === "preparando" && (
+                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="bg-green-600 text-white font-bold px-6 py-3 rounded-xl text-sm">Marcar Listo</button>
                   )}
                   {selectedPedido.estado === "listo" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="w-full bg-[#7B1FA2] text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Despachar</button>
+                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm">Despachar</button>
                   )}
                   {selectedPedido.estado === "en_camino" && (
-                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="w-full bg-black text-white font-black py-5 rounded-2xl text-xs uppercase tracking-widest shadow-xl">Entregado</button>
+                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="bg-gray-900 text-white font-bold px-6 py-3 rounded-xl text-sm">Entregado</button>
                   )}
                 </div>
               </div>
