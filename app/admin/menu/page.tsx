@@ -10,6 +10,7 @@ import ProductosSortModal from "@/components/menu/ProductosSortModal";
 import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
 import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
+import CartaGeneratorButton from "@/components/admin/CartaGeneratorButton";
 import { Download, Upload, DollarSign, Plus, Megaphone } from "lucide-react";
 
 type Categoria = {
@@ -314,6 +315,7 @@ export default function MenuPage() {
             <Megaphone size={15} />
             FLYER
           </button>
+          <CartaGeneratorButton sucursalId={sucursalId} />
           <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
             <Upload size={15} />
             Importar menú

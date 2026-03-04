@@ -2,6 +2,7 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminTopBar } from "@/components/admin/AdminTopBar";
 import { AiAssistantBar } from "@/components/admin/AiAssistantBar";
 import { AuthProvider } from "@/components/admin/AuthProvider";
+import versionData from "@/version.json";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <AdminTopBar />
           <AiAssistantBar />
           <main className="flex-1 overflow-y-auto">{children}</main>
+        </div>
+        <div className="fixed bottom-2 right-3 text-[10px] font-mono text-gray-400/60 select-none pointer-events-none z-50">
+          Ver. {versionData.version}
         </div>
       </div>
     </AuthProvider>
