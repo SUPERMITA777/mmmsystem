@@ -235,9 +235,25 @@ export default function ProductDetailModal({
                         )}
 
                         {/* Price */}
-                        <p className="text-2xl font-black text-white mb-6 border-b border-slate-800 pb-6">
-                            $ {new Intl.NumberFormat("es-AR").format(producto.precio)}
-                        </p>
+                        <div className="mb-6 border-b border-slate-800 pb-6">
+                            {discount && discount.tipo === 'porcentaje' ? (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-lg font-bold text-slate-500 line-through">
+                                        $ {new Intl.NumberFormat("es-AR").format(producto.precio)}
+                                    </span>
+                                    <span className="text-2xl font-black text-green-400">
+                                        $ {new Intl.NumberFormat("es-AR").format(precioBase)}
+                                    </span>
+                                    <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg uppercase">
+                                        {discount.valor}% OFF
+                                    </span>
+                                </div>
+                            ) : (
+                                <p className="text-2xl font-black text-white">
+                                    $ {new Intl.NumberFormat("es-AR").format(precioBase)}
+                                </p>
+                            )}
+                        </div>
 
                         {/* Groups of Additionals */}
                         <div className="space-y-8 pb-10 mt-6">

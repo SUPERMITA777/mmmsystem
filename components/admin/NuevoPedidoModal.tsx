@@ -31,6 +31,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [gruposAdicionales, setGruposAdicionales] = useState<any[]>([]);
     const [adicionales, setAdicionales] = useState<any[]>([]);
     const [productoGrupos, setProductoGrupos] = useState<any[]>([]);
+    const [descuentos, setDescuentos] = useState<any[]>([]);
 
     // UI State
     const [busqueda, setBusqueda] = useState("");
@@ -124,6 +125,20 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setAdicionales(ads || []);
         const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*");
         setProductoGrupos(pg || []);
+        const { data: descs } = await supabase.from("descuentos").select("*").eq("activo", true);
+        setDescuentos(descs || []);
+    }
+
+    function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number } {
+        const prodDisc = descuentos.find(d => d.aplicar_a === 'producto' && d.producto_id === producto.id);
+        const catDisc = descuentos.find(d => d.aplicar_a === 'categoria' && d.categoria_id === producto.categoria_id);
+        const genDisc = descuentos.find(d => d.aplicar_a === 'general');
+        const disc = prodDisc || catDisc || genDisc;
+        if (!disc) return { original: producto.precio, final: producto.precio, porcentaje: 0 };
+        if (disc.tipo === 'porcentaje') {
+            return { original: producto.precio, final: Math.round(producto.precio * (1 - disc.valor / 100)), porcentaje: disc.valor };
+        }
+        return { original: producto.precio, final: Math.max(0, producto.precio - disc.valor), porcentaje: 0 };
     }
 
     async function validarDireccion(address: string) {
@@ -244,8 +259,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         const item: CartItem = {
             id: `${p.id}-${Date.now()}`,
             nombre: p.nombre,
-            precio: p.precio + adTotal,
-            precioOverride: p.precio + adTotal,
+            precio: getDiscountedPrice(p).final + adTotal,
+            precioOverride: getDiscountedPrice(p).final + adTotal,
             cantidad: qty,
             imagen_url: p.imagen_url,
             nota,
@@ -262,8 +277,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             if (i !== idx) return item;
             return {
                 ...item,
-                precio: p.precio + adTotal,
-                precioOverride: p.precio + adTotal,
+                precio: getDiscountedPrice(p).final + adTotal,
+                precioOverride: getDiscountedPrice(p).final + adTotal,
                 cantidad: qty,
                 nota,
                 adicionales: ads.filter(a => a.cantidad > 0)
@@ -565,7 +580,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         </div>
                                         <div className="p-3 flex-1 flex flex-col justify-between">
                                             <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.nombre}</p>
-                                            <p className="text-xs font-black text-gray-500 mt-2">$ {fmt(p.precio)}</p>
+                                            {(() => {
+                                                const dp = getDiscountedPrice(p); return dp.porcentaje > 0 ? (
+                                                    <div className="mt-2 flex items-center gap-1.5">
+                                                        <span className="text-[10px] text-gray-400 line-through">$ {fmt(dp.original)}</span>
+                                                        <span className="text-xs font-black text-green-600">$ {fmt(dp.final)}</span>
+                                                        <span className="bg-red-500 text-white text-[7px] font-black px-1 py-0.5 rounded">{dp.porcentaje}%</span>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs font-black text-gray-500 mt-2">$ {fmt(dp.final)}</p>
+                                                );
+                                            })()}
                                         </div>
                                     </button>
                                 ))}
@@ -586,7 +611,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         <span className="text-sm font-bold w-5 text-center">{customQty}</span>
                                         <button onClick={() => setCustomQty(customQty + 1)} className="text-gray-400 hover:text-gray-900"><Plus size={14} /></button>
                                     </div>
-                                    <span className="text-sm font-bold text-gray-900">$ {fmt(productoCustom?.precio || 0)}</span>
+                                    {(() => {
+                                        if (!productoCustom) return null; const dp = getDiscountedPrice(productoCustom); return dp.porcentaje > 0 ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-xs text-gray-400 line-through">$ {fmt(dp.original)}</span>
+                                                <span className="text-sm font-bold text-green-600">$ {fmt(dp.final)}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-sm font-bold text-gray-900">$ {fmt(dp.final)}</span>
+                                        );
+                                    })()}
                                     <button
                                         onClick={handleAddCustomized}
                                         disabled={!isCustomValid}
