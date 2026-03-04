@@ -4,9 +4,9 @@ import { useState, useCallback } from "react";
 import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
+import { pointInPolygon, getDistance, LatLng } from "@/lib/geoutils";
 
-// ========== Utilidades geoespaciales ==========
-type LatLng = { lat: number; lng: number };
+// ========== Tipos de Entrega ==========
 type ZonaEntrega = {
     id: string;
     nombre: string;
@@ -19,27 +19,6 @@ type ZonaEntrega = {
     tipo_precio: "fijo" | "por_km";
     precio_por_km: number;
 };
-
-function pointInPolygon(point: LatLng, polygon: LatLng[]): boolean {
-    if (!polygon || polygon.length < 3) return false;
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const xi = polygon[i].lng, yi = polygon[i].lat;
-        const xj = polygon[j].lng, yj = polygon[j].lat;
-        const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
-            (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
-}
-
-function haversineKm(a: LatLng, b: LatLng): number {
-    const R = 6371;
-    const dLat = (b.lat - a.lat) * Math.PI / 180;
-    const dLng = (b.lng - a.lng) * Math.PI / 180;
-    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
 
 export default function CartModal({ onClose, isOpen }: { onClose: () => void, isOpen: boolean }) {
     const { items, updateQty, removeItem, total, clearCart } = useCart();
@@ -141,7 +120,7 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             // 5. Calcular costo de envío
             let costoFinal = zonaEncontrada.costo_envio;
             if (zonaEncontrada.tipo_precio === "por_km" && localPt) {
-                const distKm = haversineKm(localPt, clientePt);
+                const distKm = getDistance(localPt, clientePt);
                 // Usar precio_por_km de la zona, o $850 de base si es 0
                 const rate = zonaEncontrada.precio_por_km > 0 ? zonaEncontrada.precio_por_km : 850;
                 costoFinal = Math.round(distKm * rate);
