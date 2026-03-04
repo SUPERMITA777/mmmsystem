@@ -204,10 +204,10 @@ export default function OrderPanelSettingsModal({
                             <div className="space-y-1">
                                 <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">De "Nuevo" a "En Preparación"</label>
                                 <textarea
-                                    value={settings.whatsapp_templates.confirmado}
+                                    value={settings.whatsapp_templates?.confirmado || ""}
                                     onChange={e => setSettings({
                                         ...settings,
-                                        whatsapp_templates: { ...settings.whatsapp_templates, confirmado: e.target.value }
+                                        whatsapp_templates: { ...(settings.whatsapp_templates || {}), confirmado: e.target.value } as any
                                     })}
                                     className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
                                     placeholder="Mensaje al confirmar..."
@@ -217,10 +217,10 @@ export default function OrderPanelSettingsModal({
                             <div className="space-y-1">
                                 <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">De "En Preparación" a "Listo"</label>
                                 <textarea
-                                    value={settings.whatsapp_templates.listo}
+                                    value={settings.whatsapp_templates?.listo || ""}
                                     onChange={e => setSettings({
                                         ...settings,
-                                        whatsapp_templates: { ...settings.whatsapp_templates, listo: e.target.value }
+                                        whatsapp_templates: { ...(settings.whatsapp_templates || {}), listo: e.target.value } as any
                                     })}
                                     className="w-full h-24 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold uppercase resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
                                     placeholder="Mensaje al estar listo..."
