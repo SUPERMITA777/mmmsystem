@@ -16,6 +16,7 @@ export type PrintConfig = {
   mostrar_direccion: boolean;
   mostrar_fecha_hora: boolean;
   color_accents: string;
+  negrita_adicionales: boolean;
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -32,6 +33,7 @@ const DEFAULT_CONFIG: PrintConfig = {
   mostrar_direccion: true,
   mostrar_fecha_hora: true,
   color_accents: '#2563eb',
+  negrita_adicionales: false,
 };
 
 function doPrint(html: string) {
@@ -65,6 +67,22 @@ function fmtARS(n: number) {
   return "$ " + new Intl.NumberFormat("es-AR", { minimumFractionDigits: 0 }).format(n);
 }
 
+function aggregateAdicionales(adicionales: any[]) {
+  const counts: Record<string, { count: number, precio: number }> = {};
+  adicionales.forEach(a => {
+    if (!counts[a.nombre]) {
+      counts[a.nombre] = { count: 1, precio: a.precio || 0 };
+    } else {
+      counts[a.nombre].count++;
+    }
+  });
+  return Object.entries(counts).map(([nombre, data]) => ({
+    nombre: data.count > 1 ? `${nombre} X ${data.count}` : nombre,
+    precio: data.precio * data.count,
+    count: data.count
+  }));
+}
+
 /* ──────────────────────────────────────────────────────
    COMANDAR  – Ticket completo
    ────────────────────────────────────────────────────── */
@@ -86,10 +104,11 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 
   const itemsRows = (pedido.pedido_items ?? []).map((item: any) => {
     const subtotal = item.precio_unitario * item.cantidad;
-    const ads = (item.adicionales ?? []).map((a: any) =>
+    const aggregated = aggregateAdicionales(item.adicionales ?? []);
+    const ads = aggregated.map((a: any) =>
       `<tr>
-              <td style="padding-left:10px;font-size:${c.fuente_footer}px;color:#555">+ ${a.nombre}</td>
-              <td style="text-align:right;font-size:${c.fuente_footer}px;color:#555">+${fmtARS(a.precio ?? 0)}</td>
+              <td style="padding-left:10px;font-size:${c.fuente_footer}px;color:#555;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">+ ${a.nombre}</td>
+              <td style="text-align:right;font-size:${c.fuente_footer}px;color:#555;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">+${fmtARS(a.precio ?? 0)}</td>
             </tr>`
     ).join("");
     return `
@@ -213,7 +232,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
             ${item.cantidad} ${item.nombre_producto.toUpperCase()}
         </div>
         ${(item.adicionales ?? []).length
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;color:#333">${(item.adicionales ?? []).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${c.negrita_adicionales ? 'font-weight:bold;' : ''}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
       : ""}
         ${item.notas
       ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`

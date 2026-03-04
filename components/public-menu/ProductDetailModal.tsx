@@ -165,24 +165,26 @@ export default function ProductDetailModal({
     const totalLinea = (producto.precio + calculoAdicionales) * cantidad;
 
     return (
-        <div className="fixed inset-0 z-50 bg-[#0d0d0d] flex flex-col overflow-hidden">
-            {/* Hero Image */}
-            <div className="relative w-full h-64 md:h-80 bg-slate-900 shrink-0">
+        <div className="fixed inset-0 z-50 bg-[#0d0d0d] flex flex-col">
+            {/* Header Flotante Premium */}
+            <div className="absolute top-0 left-0 right-0 z-50 p-4 flex items-center justify-between pointer-events-none">
+                <button
+                    onClick={onClose}
+                    className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/60 transition-all pointer-events-auto active:scale-90"
+                >
+                    <ArrowLeft size={24} />
+                </button>
+            </div>
+
+            {/* Hero Image FullScreen-ish */}
+            <div className="relative w-full h-[35vh] md:h-[45vh] bg-slate-900 shrink-0">
                 <img
                     src={producto.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&h=600&fit=crop"}
                     alt={producto.nombre}
                     className="w-full h-full object-cover"
                 />
-                {/* Gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-transparent to-transparent" />
-
-                {/* Back button */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 left-4 w-10 h-10 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors"
-                >
-                    <ArrowLeft size={20} />
-                </button>
+                {/* Gradient overlay fuerte */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-black/20 to-transparent" />
             </div>
 
             {/* Scrollable content */}

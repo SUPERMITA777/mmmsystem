@@ -18,6 +18,7 @@ export function ComandasTab() {
         mostrar_direccion: true,
         mostrar_fecha_hora: true,
         color_accents: '#2563eb',
+        negrita_adicionales: false,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -49,6 +50,7 @@ export function ComandasTab() {
                     mostrar_direccion: data.mostrar_direccion ?? true,
                     mostrar_fecha_hora: data.mostrar_fecha_hora ?? true,
                     color_accents: data.color_accents ?? '#2563eb',
+                    negrita_adicionales: data.negrita_adicionales ?? false,
                 });
             }
         } catch (error) {
@@ -64,6 +66,7 @@ export function ComandasTab() {
             const { data: sucursal } = await supabase.from("sucursales").select("id").limit(1).single();
             if (!sucursal) throw new Error("No se encontró sucursal");
 
+            // First try with all fields
             const { error } = await supabase
                 .from("config_impresion")
                 .upsert({
@@ -71,6 +74,22 @@ export function ComandasTab() {
                     ...config,
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'sucursal_id' });
+
+            if (error && error.message?.includes('negrita_adicionales')) {
+                // If column doesn't exist, try without it
+                console.warn("Column 'negrita_adicionales' is missing in DB. Saving other fields.");
+                const { negrita_adicionales, ...rest } = config;
+                const { error: error2 } = await supabase
+                    .from("config_impresion")
+                    .upsert({
+                        sucursal_id: sucursal.id,
+                        ...rest,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'sucursal_id' });
+                if (error2) throw error2;
+            } else if (error) {
+                throw error;
+            }
 
             if (error) throw error;
             alert("Configuración de comandos guardada");
@@ -157,6 +176,13 @@ export function ComandasTab() {
                             <p className="text-sm text-slate-500">Incluye el momento de creación del pedido</p>
                         </div>
                         <input type="checkbox" checked={config.mostrar_fecha_hora} onChange={(e) => setConfig({ ...config, mostrar_fecha_hora: e.target.checked })} className="w-5 h-5 text-purple-600 rounded" />
+                    </label>
+                    <label className="flex items-center justify-between p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <div>
+                            <span className="font-medium">Negrita en adicionales</span>
+                            <p className="text-sm text-slate-500">Resalta las opciones adicionales en negrita</p>
+                        </div>
+                        <input type="checkbox" checked={config.negrita_adicionales} onChange={(e) => setConfig({ ...config, negrita_adicionales: e.target.checked })} className="w-5 h-5 text-purple-600 rounded" />
                     </label>
 
                     <div className="p-3 border border-slate-200 rounded-lg">
