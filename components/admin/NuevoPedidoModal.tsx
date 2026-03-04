@@ -90,45 +90,106 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
         setZonas(szonas || []);
         const { data: cfg } = await supabase.from("config_sucursal").select("*").limit(1).maybeSingle();
         setConfigSucursal(cfg);
-        const { data: grps } = await supabase.from("grupos_adicionales").select("*").eq("visible", true);
+        const { data: grps } = await supabase.from("grupos_adicionales").select("*");
         setGruposAdicionales(grps || []);
-        const { data: ads } = await supabase.from("adicionales").select("*").eq("visible", true);
+        const { data: ads } = await supabase.from("adicionales").select("*");
         setAdicionales(ads || []);
     }
 
     async function validarDireccion(address: string) {
+        if (!address.trim()) return;
         setValidacionDelivery(prev => ({ ...prev, loading: true, error: undefined }));
         setAlternativas([]);
         try {
-            const localidades = configSucursal?.localidades || [];
-            const locNames = localidades.map((l: any) => l.nombre).join(',');
-            const params = new URLSearchParams({ q: address, format: 'jsonv2', limit: '5', ...(locNames ? { localidades: locNames } : {}) });
-            const res = await fetch(`/api/geocode?${params.toString()}`);
-            const data = await res.json();
-            const results = Array.isArray(data) ? data : [data];
+            // 1. Geocodificar dirección (misma lógica que CartModal)
+            const geoRes = await fetch(`/api/geocode?q=${encodeURIComponent(address)}`);
+            const geoData = await geoRes.json();
 
-            if (results.length > 0 && results[0]?.lat) {
-                const point = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
-                setDireccionGeocoded(point);
-                let zonaEncontrada = null;
-                for (const z of zonas) {
-                    if (z.polygon_coords && pointInPolygon(point, z.polygon_coords)) { zonaEncontrada = z; break; }
+            if (!geoData[0]) {
+                // Try with locality hint
+                const localidades = configSucursal?.localidades || [];
+                if (localidades.length > 0) {
+                    const locName = localidades[0]?.nombre || '';
+                    const geoRes2 = await fetch(`/api/geocode?q=${encodeURIComponent(address + ', ' + locName)}&limit=5`);
+                    const geoData2 = await geoRes2.json();
+                    const results2 = Array.isArray(geoData2) ? geoData2 : [geoData2];
+                    if (results2.length > 0 && results2[0]?.lat) {
+                        // Found with locality hint, continue with these results
+                        return processGeoResults(results2);
+                    }
                 }
-                if (zonaEncontrada) {
-                    let costo = 0;
-                    if (zonaEncontrada.tipo_precio === "por_km" && configSucursal?.local_lat) {
-                        costo = Math.ceil(getDistance(point, { lat: configSucursal.local_lat, lng: configSucursal.local_lng }) * (zonaEncontrada.precio_por_km || 0));
-                    } else { costo = zonaEncontrada.costo_envio || 0; }
-                    if (zonaEncontrada.envio_gratis_desde && subtotal >= zonaEncontrada.envio_gratis_desde) costo = 0;
-                    setValidacionDelivery({ valid: true, zona: zonaEncontrada.nombre, costo, loading: false });
-                } else {
-                    if (results.length > 1) setAlternativas(results.slice(0, 5));
-                    setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Dirección fuera de la zona de entrega" });
-                }
-            } else {
-                setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "No se pudo encontrar la dirección" });
+                setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "No se encontró la dirección. Verificá que sea correcta." });
+                return;
             }
-        } catch { setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Error al validar" }); }
+
+            const results = Array.isArray(geoData) ? geoData : [geoData];
+            await processGeoResults(results);
+        } catch {
+            setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Error al verificar la dirección." });
+        }
+    }
+
+    async function processGeoResults(results: any[]) {
+        const clientePt = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+        setDireccionGeocoded(clientePt);
+
+        // 2. Obtener sucursal_id y cargar zonas frescas
+        const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
+        if (!suc) {
+            setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Error interno." });
+            return;
+        }
+
+        const { data: zonasDB } = await supabase
+            .from("zonas_entrega")
+            .select("*")
+            .eq("sucursal_id", suc.id)
+            .eq("activo", true);
+
+        // 3. Cargar config del local
+        const { data: cfg } = await supabase
+            .from("config_sucursal")
+            .select("local_lat, local_lng")
+            .eq("sucursal_id", suc.id)
+            .limit(1)
+            .maybeSingle();
+
+        const localPt = cfg?.local_lat && cfg?.local_lng
+            ? { lat: cfg.local_lat, lng: cfg.local_lng }
+            : null;
+
+        // 4. Verificar en qué zona está
+        const zonasConPoligono = (zonasDB || []).filter(
+            (z: any) => z.polygon_coords && z.polygon_coords.length >= 3
+        );
+
+        let zonaEncontrada: any = null;
+        for (const zona of zonasConPoligono) {
+            if (pointInPolygon(clientePt, zona.polygon_coords)) {
+                zonaEncontrada = zona;
+                break;
+            }
+        }
+
+        if (!zonaEncontrada) {
+            if (results.length > 1) setAlternativas(results.slice(0, 5));
+            setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Dirección fuera de la zona de entrega" });
+            return;
+        }
+
+        // 5. Calcular costo de envío (misma lógica que CartModal)
+        let costoFinal = zonaEncontrada.costo_envio || 0;
+        if (zonaEncontrada.tipo_precio === "por_km" && localPt) {
+            const distKm = getDistance(localPt, clientePt);
+            const rate = zonaEncontrada.precio_por_km > 0 ? zonaEncontrada.precio_por_km : 850;
+            costoFinal = Math.round(distKm * rate);
+        }
+        // Envío gratis desde
+        if (zonaEncontrada.envio_gratis_desde && subtotal >= zonaEncontrada.envio_gratis_desde) {
+            costoFinal = 0;
+        }
+
+        setValidacionDelivery({ valid: true, zona: zonaEncontrada.nombre, costo: costoFinal, loading: false });
     }
 
     // Product click -> open customization if it has adicionales, else add directly
