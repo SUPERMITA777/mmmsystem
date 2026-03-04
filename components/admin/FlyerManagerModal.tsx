@@ -182,7 +182,7 @@ export default function FlyerManagerModal({
                                 <img
                                     src={flyer.imagen_url}
                                     alt="Flyer Preview"
-                                    className="w-full aspect-[4/5] object-cover"
+                                    className="w-full aspect-[9/16] object-cover"
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button
@@ -202,7 +202,7 @@ export default function FlyerManagerModal({
                         ) : (
                             <button
                                 onClick={() => document.getElementById("flyer-upload")?.click()}
-                                className="w-full aspect-[4/5] border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-purple-300 hover:bg-purple-50 transition-all group"
+                                className="w-full aspect-[9/16] border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-purple-300 hover:bg-purple-50 transition-all group"
                             >
                                 <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-white transition-colors">
                                     <Upload className="text-gray-400 group-hover:text-purple-500" size={24} />

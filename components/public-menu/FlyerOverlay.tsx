@@ -126,7 +126,7 @@ export default function FlyerOverlay({
                     <img
                         src={flyer.imagen_url}
                         alt="Promoción Especial"
-                        className="w-full aspect-[4/5] object-cover"
+                        className="w-full aspect-[9/16] object-cover"
                     />
                 </div>
             </div>
