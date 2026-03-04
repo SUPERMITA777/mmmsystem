@@ -182,19 +182,23 @@ function PublicMenuContent() {
             producto_sugerido,
             visible_en_menu,
             producto_oculto,
-            activo
+            activo,
+            orden
           )
         `)
         .eq("activo", true)
-        .order("orden", { ascending: true });
+        .order("orden", { ascending: true })
+        .order("orden", { ascending: true, referencedTable: "productos" });
 
       if (catsData) {
         const filteredCats = catsData
           .map((cat: any) => ({
             ...cat,
-            productos: (cat.productos || []).filter((p: any) =>
-              p.activo && p.visible_en_menu && !p.producto_oculto
-            ),
+            productos: (cat.productos || [])
+              .filter((p: any) =>
+                p.activo && p.visible_en_menu && !p.producto_oculto
+              )
+              .sort((a: any, b: any) => (a.orden ?? 999) - (b.orden ?? 999)),
           }))
           .filter((cat: any) => cat.productos.length > 0);
 
