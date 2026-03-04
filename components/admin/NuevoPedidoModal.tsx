@@ -543,6 +543,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             <div className="space-y-1">
                                                 {grpAds.map(ad => {
                                                     const qty = customAdicionales[ad.id] || 0;
+                                                    // Calculate total selected in this group
+                                                    const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
+                                                    const atMax = grp.seleccion_maxima > 0 && totalInGroup >= grp.seleccion_maxima;
                                                     return (
                                                         <div key={ad.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
                                                             <div>
@@ -558,8 +561,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                                 ><Minus size={12} /></button>
                                                                 <span className="text-xs font-bold w-4 text-center">{qty}</span>
                                                                 <button
-                                                                    onClick={() => setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 })}
-                                                                    className="text-gray-400 hover:text-gray-900"
+                                                                    onClick={() => {
+                                                                        if (!atMax) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
+                                                                    }}
+                                                                    className={`transition-colors ${atMax ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                                                    disabled={atMax}
                                                                 ><Plus size={12} /></button>
                                                             </div>
                                                         </div>

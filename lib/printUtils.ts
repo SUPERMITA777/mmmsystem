@@ -9,6 +9,7 @@ export type PrintConfig = {
   fuente_cliente_detalles: number;
   fuente_direccion: number;
   fuente_items: number;
+  fuente_adicionales?: number;
   fuente_totales: number;
   fuente_total_bold: number;
   fuente_footer: number;
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: PrintConfig = {
   fuente_cliente_detalles: 13,
   fuente_direccion: 14,
   fuente_items: 15,
+  fuente_adicionales: 12,
   fuente_totales: 14,
   fuente_total_bold: 18,
   fuente_footer: 12,
@@ -111,8 +113,8 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
     const aggregated = aggregateAdicionales(item.adicionales ?? []);
     const ads = aggregated.map((a: any) =>
       `<tr>
-              <td style="padding-left:10px;font-size:${c.fuente_footer}px;color:#555;${bw(c, 'fuente_items')}">+ ${a.nombre}</td>
-              <td style="text-align:right;font-size:${c.fuente_footer}px;color:#555;${bw(c, 'fuente_items')}">+${fmtARS(a.precio ?? 0)}</td>
+              <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+ ${a.nombre}</td>
+              <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
             </tr>`
     ).join("");
     return `
@@ -236,7 +238,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
             ${item.cantidad} ${item.nombre_producto.toUpperCase()}
         </div>
         ${(item.adicionales ?? []).length
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_items')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+      ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
       : ""}
         ${item.notas
       ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`

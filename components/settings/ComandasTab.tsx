@@ -10,6 +10,7 @@ const FONT_ITEMS = [
     { key: "fuente_cliente_detalles", label: "Detalles Cliente (Tel/Mail)" },
     { key: "fuente_direccion", label: "Dirección" },
     { key: "fuente_items", label: "Items de Producto" },
+    { key: "fuente_adicionales", label: "Adicionales" },
     { key: "fuente_totales", label: "Totales (Subtotal/Envío)" },
     { key: "fuente_total_bold", label: "Total Grande" },
     { key: "fuente_footer", label: "Footer / Fecha / Hora" },
@@ -22,6 +23,7 @@ const DEFAULT_BOLD: Record<string, boolean> = {
     fuente_cliente_detalles: false,
     fuente_direccion: false,
     fuente_items: false,
+    fuente_adicionales: false,
     fuente_totales: false,
     fuente_total_bold: true,
     fuente_footer: false,
@@ -35,6 +37,7 @@ export function ComandasTab() {
         fuente_cliente_detalles: 13,
         fuente_direccion: 14,
         fuente_items: 15,
+        fuente_adicionales: 12,
         fuente_totales: 14,
         fuente_total_bold: 18,
         fuente_footer: 12,
@@ -77,10 +80,13 @@ export function ComandasTab() {
                 });
             }
 
-            // Load bold settings from config_sucursal.panel_settings
+            // Load bold settings + fuente_adicionales from config_sucursal.panel_settings
             const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").limit(1).maybeSingle();
             if (suc?.panel_settings?.print_bold) {
                 setBoldMap({ ...DEFAULT_BOLD, ...suc.panel_settings.print_bold });
+            }
+            if (suc?.panel_settings?.fuente_adicionales) {
+                setConfig(prev => ({ ...prev, fuente_adicionales: suc.panel_settings.fuente_adicionales }));
             }
         } catch (error) {
             console.error("Error cargando configuración de impresión:", error);
@@ -117,10 +123,10 @@ export function ComandasTab() {
                 }, { onConflict: 'sucursal_id' });
             if (error) throw error;
 
-            // Save bold settings to config_sucursal.panel_settings (JSON column)
+            // Save bold settings + fuente_adicionales to config_sucursal.panel_settings (JSON column)
             const { data: currentCfg } = await supabase.from("config_sucursal").select("id, panel_settings").eq("sucursal_id", sucursal.id).maybeSingle();
             if (currentCfg) {
-                const newSettings = { ...(currentCfg.panel_settings || {}), print_bold: boldMap };
+                const newSettings = { ...(currentCfg.panel_settings || {}), print_bold: boldMap, fuente_adicionales: config.fuente_adicionales };
                 await supabase.from("config_sucursal").update({ panel_settings: newSettings }).eq("id", currentCfg.id);
             }
 
