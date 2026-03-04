@@ -70,10 +70,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
     }, [isOpen]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            if (tipo === "delivery" && cliente.direccion.length > 5) validarDireccion(cliente.direccion);
-        }, 1500);
-        return () => clearTimeout(timer);
+        // Reset validation when address changes
+        if (tipo === "delivery") {
+            setValidacionDelivery({ valid: false, costo: 0, loading: false });
+            setDireccionGeocoded(null);
+            setAlternativas([]);
+        }
     }, [cliente.direccion, tipo]);
 
     async function fetchAll() {
@@ -536,24 +538,49 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                                     <>
                                         <div>
                                             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Dirección</label>
-                                            <input type="text" value={cliente.direccion} onChange={e => setCliente({ ...cliente, direccion: e.target.value })} placeholder="Dirección"
-                                                className={`w-full border rounded-lg px-3 py-2.5 text-sm outline-none bg-white ${validacionDelivery.error ? 'border-red-300' : validacionDelivery.valid ? 'border-green-300' : 'border-gray-200 focus:border-gray-900'}`} />
+                                            <div className="flex gap-2">
+                                                <input type="text" value={cliente.direccion} onChange={e => setCliente({ ...cliente, direccion: e.target.value })}
+                                                    onKeyDown={e => e.key === "Enter" && cliente.direccion.length > 3 && validarDireccion(cliente.direccion)}
+                                                    placeholder="Ingresá la dirección completa"
+                                                    className={`flex-1 border rounded-lg px-3 py-2.5 text-sm outline-none bg-white ${validacionDelivery.error ? 'border-red-300' : validacionDelivery.valid ? 'border-green-300' : 'border-gray-200 focus:border-gray-900'}`} />
+                                                <button
+                                                    onClick={() => validarDireccion(cliente.direccion)}
+                                                    disabled={validacionDelivery.loading || cliente.direccion.length < 4}
+                                                    className="bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-lg transition-colors flex items-center gap-1.5 shrink-0 active:scale-95"
+                                                >
+                                                    {validacionDelivery.loading ? (
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                    ) : "Verificar"}
+                                                </button>
+                                            </div>
                                             {/* Validation feedback */}
                                             {validacionDelivery.loading && (
-                                                <p className="text-[10px] text-gray-400 font-bold mt-1 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Validando...</p>
+                                                <p className="text-[10px] text-gray-400 font-bold mt-1.5 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Buscando dirección...</p>
                                             )}
-                                            {validacionDelivery.error && (
-                                                <p className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1"><AlertCircle size={10} /> {validacionDelivery.error}</p>
+                                            {validacionDelivery.error && !validacionDelivery.loading && (
+                                                <div className="mt-1.5 flex items-start gap-1.5 text-[10px] text-red-500 font-bold bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100">
+                                                    <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                                                    <span>{validacionDelivery.error}</span>
+                                                </div>
                                             )}
-                                            {validacionDelivery.valid && (
-                                                <p className="text-[10px] text-green-600 font-bold mt-1 flex items-center gap-1"><CheckCircle2 size={10} /> {validacionDelivery.zona} — Envío: ${fmt(validacionDelivery.costo)}</p>
+                                            {validacionDelivery.valid && !validacionDelivery.loading && (
+                                                <div className="mt-1.5 flex items-start gap-1.5 text-[10px] font-bold bg-green-50 px-2.5 py-1.5 rounded-lg border border-green-100">
+                                                    <CheckCircle2 size={12} className="text-green-600 shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <span className="text-green-700">¡Dirección verificada!</span>
+                                                        {validacionDelivery.zona && <span className="text-gray-500 ml-1">Zona: {validacionDelivery.zona}</span>}
+                                                        <div className="text-gray-600 mt-0.5">
+                                                            Costo de envío: <span className="text-gray-900 font-black">{validacionDelivery.costo === 0 ? "GRATIS" : `$ ${fmt(validacionDelivery.costo)}`}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             )}
                                             {/* Alternatives */}
                                             {alternativas.length > 0 && !validacionDelivery.valid && !validacionDelivery.loading && (
-                                                <div className="mt-1 space-y-1">
+                                                <div className="mt-1.5 space-y-1">
                                                     <p className="text-[9px] font-bold text-gray-400">¿Quisiste decir?</p>
                                                     {alternativas.map((alt: any, i: number) => (
-                                                        <button key={i} type="button" onClick={() => { setCliente({ ...cliente, direccion: alt.display_name }); setAlternativas([]); }}
+                                                        <button key={i} type="button" onClick={() => { setCliente({ ...cliente, direccion: alt.display_name }); setAlternativas([]); setTimeout(() => validarDireccion(alt.display_name), 100); }}
                                                             className="w-full text-left px-2 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center gap-1.5">
                                                             <MapPin size={9} className="shrink-0" /><span className="truncate">{alt.display_name}</span>
                                                         </button>
