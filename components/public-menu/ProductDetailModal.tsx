@@ -13,6 +13,7 @@ type Producto = {
     imagen_url?: string;
     producto_sugerido?: boolean;
     categoria_nombre?: string;
+    categoria_id?: string;
 };
 
 type Adicional = {
@@ -34,9 +35,11 @@ type GrupoAdicional = {
 export default function ProductDetailModal({
     producto,
     onClose,
+    descuentos = [],
 }: {
     producto: Producto;
     onClose: () => void;
+    descuentos?: any[];
 }) {
     const [cantidad, setCantidad] = useState(1);
     const [grupos, setGrupos] = useState<GrupoAdicional[]>([]);
@@ -144,7 +147,7 @@ export default function ProductDetailModal({
         addItem({
             productoId: producto.id,
             nombre: producto.nombre,
-            precio: producto.precio,
+            precio: precioBase,
             cantidad,
             imagen_url: producto.imagen_url,
             adicionales: adicionalesSeleccionados,
@@ -162,7 +165,21 @@ export default function ProductDetailModal({
         return acc + sub;
     }, 0);
 
-    const totalLinea = (producto.precio + calculoAdicionales) * cantidad;
+    // Compute discounted price
+    const discount = (() => {
+        const prodDisc = descuentos.find(d => d.aplicar_a === 'producto' && d.producto_id === producto.id);
+        const catDisc = descuentos.find(d => d.aplicar_a === 'categoria' && d.categoria_id === producto.categoria_id);
+        const genDisc = descuentos.find(d => d.aplicar_a === 'general');
+        return prodDisc || catDisc || genDisc || null;
+    })();
+
+    const precioBase = discount && discount.tipo === 'porcentaje'
+        ? Math.round(producto.precio * (1 - discount.valor / 100))
+        : discount && discount.tipo === 'fijo'
+            ? Math.max(0, producto.precio - discount.valor)
+            : producto.precio;
+
+    const totalLinea = (precioBase + calculoAdicionales) * cantidad;
 
     return (
         <div className="fixed inset-0 z-50 bg-[#0d0d0d] md:bg-black/60 md:backdrop-blur-sm flex items-center justify-center">

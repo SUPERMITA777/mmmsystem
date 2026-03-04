@@ -19,6 +19,7 @@ type Producto = {
   imagen_url?: string;
   producto_sugerido?: boolean;
   categoria_nombre?: string;
+  categoria_id?: string;
 };
 
 export default function PublicMenuPage() {
@@ -283,6 +284,7 @@ function PublicMenuContent() {
         <ProductDetailModal
           producto={selectedProduct}
           onClose={closeProduct}
+          descuentos={descuentos}
         />
       )}
 

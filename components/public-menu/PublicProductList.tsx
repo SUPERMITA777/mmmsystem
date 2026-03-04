@@ -10,6 +10,7 @@ interface Product {
     imagen_url?: string;
     producto_sugerido?: boolean;
     categoria_nombre?: string;
+    categoria_id?: string;
 }
 
 interface CategoryWithProducts {
@@ -104,7 +105,7 @@ export default function PublicProductList({ categorias, onProductClick, descuent
                             return (
                                 <button
                                     key={prod.id}
-                                    onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre })}
+                                    onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre, categoria_id: cat.id })}
                                     className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 hover:bg-slate-800/40 hover:border-slate-700/50 transition-all duration-300 text-left group active:scale-[0.98] shadow-lg shadow-black/20"
                                 >
                                     {/* Info */}
