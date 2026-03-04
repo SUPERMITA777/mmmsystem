@@ -74,21 +74,25 @@ export default function AdicionalesManagerModal({
     }
 
     async function handleToggleGroupVisibility(g: GrupoAdicional) {
-        const nv = !g.visible;
-        setGrupos(grupos.map(x => x.id === g.id ? { ...x, visible: nv } : x));
-        await supabase.from("grupos_adicionales").update({ visible: nv }).eq("id", g.id);
+        // Since 'visible' is missing in DB for grupos_adicionales, we'll only update local state
+        // and avoid the DB call that causes 400 until migration is run.
+        setGrupos(grupos.map(x => x.id === g.id ? { ...x, visible: !g.visible } : x));
+        console.warn("Visibility toggle for groups is disabled because 'visible' column is missing in DB.");
     }
 
     async function handleDuplicateGrupo(id: string) {
         setLoading(true);
         const { data: og } = await supabase.from("grupos_adicionales").select("*").eq("id", id).single();
         if (!og) { setLoading(false); return; }
-        const { id: _, created_at, updated_at, ...gd } = og;
+        const { id: _, created_at, updated_at, visible, ...gd } = og as any;
         const { data: ng, error } = await supabase.from("grupos_adicionales").insert({ ...gd, titulo: `${og.titulo} (copia)` }).select().single();
         if (error || !ng) { alert("Error al duplicar"); setLoading(false); return; }
         const { data: ads } = await supabase.from("adicionales").select("*").eq("grupo_id", id);
         if (ads?.length) {
-            const na = ads.map(a => { const { id: __, created_at: ___, updated_at: ____, ...ad } = a; return { ...ad, grupo_id: ng.id }; });
+            const na = ads.map(a => {
+                const { id: __, created_at: ___, updated_at: ____, stock, restaurar, vender_sin_stock, ...ad } = a as any;
+                return { ...ad, grupo_id: ng.id };
+            });
             await supabase.from("adicionales").insert(na);
         }
         await loadGrupos();
@@ -139,20 +143,24 @@ export default function AdicionalesManagerModal({
         try {
             let gid = grupoSeleccionado.id;
             if (gid.startsWith("temp-")) {
-                const { id, ...gd } = grupoSeleccionado;
+                const { id, visible, ...gd } = grupoSeleccionado as any;
                 const { data, error } = await supabase.from("grupos_adicionales").insert(gd).select().single();
                 if (error) throw error;
                 gid = data.id;
             } else {
-                const { error } = await supabase.from("grupos_adicionales").update(grupoSeleccionado).eq("id", gid);
+                const { id, visible, created_at, updated_at, ...gd } = grupoSeleccionado as any;
+                const { error } = await supabase.from("grupos_adicionales").update(gd).eq("id", gid);
                 if (error) throw error;
             }
             for (const ad of adicionales) {
                 if (ad.id.startsWith("temp-")) {
-                    const { id, ...d } = ad;
-                    await supabase.from("adicionales").insert({ ...d, grupo_id: gid });
+                    const { id, stock, restaurar, vender_sin_stock, ...d } = ad as any;
+                    const { error } = await supabase.from("adicionales").insert({ ...d, grupo_id: gid });
+                    if (error) throw error;
                 } else {
-                    await supabase.from("adicionales").update(ad).eq("id", ad.id);
+                    const { id, stock, restaurar, vender_sin_stock, created_at, updated_at, ...d } = ad as any;
+                    const { error } = await supabase.from("adicionales").update(d).eq("id", ad.id);
+                    if (error) throw error;
                 }
             }
             alert("Cambios guardados correctamente");
