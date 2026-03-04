@@ -41,7 +41,7 @@ function haversineKm(a: LatLng, b: LatLng): number {
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-export default function CartModal({ onClose }: { onClose: () => void }) {
+export default function CartModal({ onClose, isOpen }: { onClose: () => void, isOpen: boolean }) {
     const { items, updateQty, removeItem, total, clearCart } = useCart();
     const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "takeaway">("delivery");
     const [nombre, setNombre] = useState("");
@@ -214,6 +214,7 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
     }
 
     async function handleRealizarPedido() {
+        if (!isOpen) { alert("El local se encuentra cerrado en este momento. No se pueden realizar pedidos."); return; }
         if (!nombre.trim()) { alert("Por favor ingresá tu nombre."); return; }
         if (!telefono.trim()) { alert("Por favor ingresá tu teléfono."); return; }
         if (tipoEntrega === "delivery" && !direccion.trim()) { alert("Por favor ingresá tu dirección de entrega."); return; }
@@ -686,9 +687,15 @@ export default function CartModal({ onClose }: { onClose: () => void }) {
 
                 {/* Sticky footer */}
                 <div className="px-5 py-4 border-t border-white/10 bg-[#111] shrink-0 rounded-b-2xl">
+                    {!isOpen && (
+                        <div className="mb-3 text-center text-red-400 text-xs font-bold uppercase tracking-widest bg-red-900/20 py-2 rounded-xl">
+                            El local está cerrado
+                        </div>
+                    )}
                     <button
                         onClick={handleRealizarPedido}
                         disabled={
+                            !isOpen ||
                             sending ||
                             items.length === 0 ||
                             (tipoEntrega === "delivery" && geocodingState !== "ok")

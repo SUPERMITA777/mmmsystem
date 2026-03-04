@@ -273,7 +273,7 @@ function PublicMenuContent() {
 
       {/* Cart Modal */}
       {cartOpen && (
-        <CartModal onClose={closeCart} />
+        <CartModal onClose={closeCart} isOpen={isOpen} />
       )}
 
       {/* Flyer Overlay */}

@@ -42,7 +42,7 @@ export function HorariosTab() {
         .from("config_sucursal")
         .select("cerrado_temporalmente")
         .single();
-      
+
       if (config) {
         setCerradoTemporalmente(config.cerrado_temporalmente ?? false);
       }
@@ -55,14 +55,14 @@ export function HorariosTab() {
       if (data) {
         const horariosMap: typeof horarios = {};
         data.forEach((h) => {
-            horariosMap[h.dia] = {
-              cerrado: h.cerrado ?? false,
-              apertura1: h.apertura1 || "",
-              cierre1: h.cierre1 || "",
-              apertura2: h.apertura2 || "",
-              cierre2: h.cierre2 || "",
-              disponibleEn: h.disponible_en || [],
-            };
+          horariosMap[h.dia] = {
+            cerrado: h.cerrado ?? false,
+            apertura1: h.apertura1 || "",
+            cierre1: h.cierre1 || "",
+            apertura2: h.apertura2 || "",
+            cierre2: h.cierre2 || "",
+            disponibleEn: h.disponible_en || [],
+          };
         });
 
         // Inicializar días faltantes
@@ -110,19 +110,45 @@ export function HorariosTab() {
   async function handleSave() {
     setSaving(true);
     try {
-      // Guardar cerrado temporalmente
+      // 1. Get sucursal_id
+      const { data: config } = await supabase
+        .from("config_sucursal")
+        .select("sucursal_id, cerrado_temporalmente")
+        .limit(1)
+        .single();
+
+      if (!config?.sucursal_id) throw new Error("No se encontró sucursal_id");
+
+      // 2. Guardar cerrado temporalmente
       await supabase
         .from("config_sucursal")
         .update({ cerrado_temporalmente: cerradoTemporalmente })
-        .select()
-        .single();
+        .eq("sucursal_id", config.sucursal_id);
 
-      // Guardar horarios
-      // TODO: Implementar guardado completo de horarios con disponible_en
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // 3. Guardar horarios
+      const horariosArray = Object.entries(horarios).map(([diaStr, h]) => ({
+        sucursal_id: config.sucursal_id,
+        dia: parseInt(diaStr, 10),
+        cerrado: h.cerrado,
+        apertura1: h.apertura1 || null,
+        cierre1: h.cierre1 || null,
+        apertura2: h.apertura2 || null,
+        cierre2: h.cierre2 || null,
+        disponible_en: h.disponibleEn || [],
+      }));
+
+      const { error: horariosError } = await supabase
+        .from("horarios_sucursal")
+        .upsert(horariosArray, {
+          onConflict: "sucursal_id, dia"
+        });
+
+      if (horariosError) throw horariosError;
+
       alert("Horarios guardados correctamente");
-    } catch (error) {
-      alert("Error al guardar los horarios");
+    } catch (error: any) {
+      console.error(error);
+      alert("Error al guardar los horarios: " + (error.message || ""));
     } finally {
       setSaving(false);
     }
@@ -152,7 +178,7 @@ export function HorariosTab() {
 
     const disponibleEn = horario.disponibleEn || [];
     const index = disponibleEn.indexOf(modalidad);
-    
+
     if (index > -1) {
       disponibleEn.splice(index, 1);
     } else {

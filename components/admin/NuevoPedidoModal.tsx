@@ -77,7 +77,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
     }, [cliente.direccion, tipo]);
 
     async function fetchAll() {
-        const { data: prods } = await supabase.from("productos").select("*").eq("activo", true).order("nombre");
+        const { data: prods } = await supabase.from("productos").select("*").order("nombre");
         setProductos(prods || []);
         const { data: cats } = await supabase.from("categorias").select("*").order("orden");
         setCategorias(cats || []);
@@ -357,25 +357,25 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated }: NuevoPe
                             </div>
 
                             {/* Product grid */}
-                            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                            <div className="flex-1 overflow-y-auto p-5 grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-max h-max content-start">
                                 {productosFiltrados.map(p => (
                                     <button
                                         key={p.id}
                                         onClick={() => handleProductClick(p)}
-                                        className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-gray-300 transition-all group text-left active:scale-[0.98]"
+                                        className={`bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-gray-300 transition-all group text-left active:scale-[0.98] flex flex-col h-full ${!p.activo ? "border-red-200 opacity-60" : "border-gray-100"}`}
                                     >
-                                        <div className="aspect-square bg-gray-50 overflow-hidden">
+                                        <div className="aspect-square w-full bg-gray-50 flex-shrink-0 relative">
                                             {p.imagen_url ? (
                                                 <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                             ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-gray-200">
+                                                <div className="absolute inset-0 flex items-center justify-center text-gray-200 bg-gray-100">
                                                     <ShoppingBag size={28} />
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="p-3">
-                                            <p className="text-xs font-bold text-gray-900 truncate">{p.nombre}</p>
-                                            <p className="text-xs font-bold text-gray-500 mt-0.5">$ {fmt(p.precio)}</p>
+                                        <div className="p-3 flex-1 flex flex-col justify-between">
+                                            <p className="text-xs font-bold text-gray-900 line-clamp-2 leading-tight">{p.nombre}</p>
+                                            <p className="text-xs font-black text-gray-500 mt-2">$ {fmt(p.precio)}</p>
                                         </div>
                                     </button>
                                 ))}

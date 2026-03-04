@@ -44,8 +44,24 @@ export default function UsuariosPage() {
         activo: true
     });
     const [submitting, setSubmitting] = useState(false);
+    const [syncing, setSyncing] = useState(false);
 
     useEffect(() => { fetchUsuarios(); }, []);
+
+    async function syncUsuarios() {
+        if (!confirm("Esto sincronizará los usuarios de autenticación con la base de datos. ¿Continuar?")) return;
+        setSyncing(true);
+        try {
+            const res = await fetch('/api/admin/users/sync', { method: 'POST' });
+            if (!res.ok) throw new Error("Error al sincronizar");
+            await fetchUsuarios();
+            alert("Sincronización completada.");
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setSyncing(false);
+        }
+    }
 
     async function fetchUsuarios() {
         const { data } = await supabase.from("usuarios").select("*").order("nombre");
@@ -143,12 +159,21 @@ export default function UsuariosPage() {
                     <h2 className="text-2xl font-black text-gray-900">Gestión de Usuarios</h2>
                     <p className="text-gray-500 text-sm">Crea y administra los accesos de tu equipo.</p>
                 </div>
-                <button
-                    onClick={() => openModal("new")}
-                    className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-95"
-                >
-                    <Plus size={18} /> Nuevo Usuario
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={syncUsuarios}
+                        disabled={syncing}
+                        className="flex items-center gap-2 bg-gray-100 text-gray-600 px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-gray-200 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                    >
+                        {syncing ? "Sincronizando..." : "Sincronizar Auth"}
+                    </button>
+                    <button
+                        onClick={() => openModal("new")}
+                        className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-95"
+                    >
+                        <Plus size={18} /> Nuevo Usuario
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
