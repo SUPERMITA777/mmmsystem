@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
 import { printComanda, printCocina } from "@/lib/printUtils";
@@ -69,6 +69,21 @@ function fmt(n: number) {
   return new Intl.NumberFormat("es-AR").format(n);
 }
 
+function aggregateAds(adicionales: { nombre: string; precio: number }[]) {
+  const counts: Record<string, { count: number; precio: number }> = {};
+  adicionales.forEach(a => {
+    if (!counts[a.nombre]) {
+      counts[a.nombre] = { count: 1, precio: a.precio || 0 };
+    } else {
+      counts[a.nombre].count++;
+    }
+  });
+  return Object.entries(counts).map(([nombre, data]) => ({
+    nombre: data.count > 1 ? `${nombre} X ${data.count}` : nombre,
+    precio: data.precio * data.count,
+  }));
+}
+
 /* ── Bell sound (Web Audio API) ── */
 function playBell() {
   try {
@@ -119,6 +134,8 @@ export default function PanelPedidosPage() {
   const [now, setNow] = useState(new Date());
   const [printConfig, setPrintConfig] = useState<any>(null);
   const [sucursalConfig, setSucursalConfig] = useState<any>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFields, setEditFields] = useState({ cliente_nombre: '', cliente_telefono: '', cliente_direccion: '', notas: '' });
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -483,7 +500,7 @@ export default function PanelPedidosPage() {
                           {item.cantidad} {item.nombre_producto}
                           {item.adicionales && item.adicionales.length > 0 && (
                             <div className="text-[10px] text-gray-400 mt-1 space-y-0.5">
-                              {item.adicionales.map((a: { nombre: string, precio: number }, i: number) => <div key={i}>+ {a.nombre}</div>)}
+                              {aggregateAds(item.adicionales).map((a, i) => <div key={i}>+ {a.nombre}</div>)}
                             </div>
                           )}
                         </td>
@@ -534,7 +551,21 @@ export default function PanelPedidosPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => printComanda(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Comandar</button>
                   <button onClick={() => printCocina(selectedPedido, printConfig)} className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm">Cocina</button>
-                  <button className="col-span-2 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm opacity-50">Facturar</button>
+                  <button
+                    onClick={() => {
+                      setEditFields({
+                        cliente_nombre: selectedPedido.cliente_nombre || '',
+                        cliente_telefono: selectedPedido.cliente_telefono || '',
+                        cliente_direccion: selectedPedido.cliente_direccion || '',
+                        notas: selectedPedido.notas || '',
+                      });
+                      setIsEditing(true);
+                    }}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-700 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Pencil size={14} /> Editar
+                  </button>
+                  <button className="bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-sm opacity-50">Facturar</button>
                 </div>
 
                 <div className="pt-4 mt-auto">
@@ -561,6 +592,82 @@ export default function PanelPedidosPage() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL EDITAR PEDIDO ── */}
+      {isEditing && selectedPedido && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setIsEditing(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-black text-gray-800">Editar Pedido #{selectedPedido.numero_pedido?.split('-')[1]}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre del cliente</label>
+                <input
+                  type="text"
+                  value={editFields.cliente_nombre}
+                  onChange={e => setEditFields({ ...editFields, cliente_nombre: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Teléfono</label>
+                <input
+                  type="text"
+                  value={editFields.cliente_telefono}
+                  onChange={e => setEditFields({ ...editFields, cliente_telefono: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Dirección</label>
+                <input
+                  type="text"
+                  value={editFields.cliente_direccion}
+                  onChange={e => setEditFields({ ...editFields, cliente_direccion: e.target.value })}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notas</label>
+                <textarea
+                  value={editFields.notas}
+                  onChange={e => setEditFields({ ...editFields, notas: e.target.value })}
+                  rows={3}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  await supabase.from('pedidos').update({
+                    cliente_nombre: editFields.cliente_nombre,
+                    cliente_telefono: editFields.cliente_telefono,
+                    cliente_direccion: editFields.cliente_direccion,
+                    notas: editFields.notas,
+                  }).eq('id', selectedPedido.id);
+                  setIsEditing(false);
+                  fetchPedidos();
+                }}
+                className="flex-1 py-3 bg-black text-white rounded-xl text-sm font-black hover:bg-gray-800 transition-colors"
+              >
+                Guardar
+              </button>
             </div>
           </div>
         </div>
