@@ -39,6 +39,7 @@ function PublicMenuContent() {
   const [flyerOpen, setFlyerOpen] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
+  const [descuentos, setDescuentos] = useState<any[]>([]);
 
   useEffect(() => {
     fetchMenuData();
@@ -207,6 +208,13 @@ function PublicMenuContent() {
           setActiveCategoryId(filteredCats[0].id);
         }
       }
+
+      // Fetch active discounts
+      const { data: descs } = await supabase
+        .from("descuentos")
+        .select("*")
+        .eq("activo", true);
+      setDescuentos(descs || []);
     } catch (error) {
       console.error("Error fetching menu data:", error);
     } finally {
@@ -264,6 +272,7 @@ function PublicMenuContent() {
       <PublicProductList
         categorias={categorias}
         onProductClick={openProduct}
+        descuentos={descuentos}
       />
 
       {/* Floating Cart Button — hidden when product detail modal is open */}

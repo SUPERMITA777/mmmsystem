@@ -20,12 +20,45 @@ interface CategoryWithProducts {
     productos: Product[];
 }
 
+interface Descuento {
+    id: string;
+    tipo: string;
+    valor: number;
+    activo: boolean;
+    aplicar_a: string;
+    producto_id?: string | null;
+    categoria_id?: string | null;
+}
+
 interface PublicProductListProps {
     categorias: CategoryWithProducts[];
     onProductClick: (producto: Product & { categoria_nombre: string }) => void;
+    descuentos?: Descuento[];
 }
 
-export default function PublicProductList({ categorias, onProductClick }: PublicProductListProps) {
+function getProductDiscount(productId: string, categoryId: string, descuentos: Descuento[]): { porcentaje: number; precioFinal: (precio: number) => number } | null {
+    // Priority: product-specific > category > general
+    const prodDisc = descuentos.find(d => d.aplicar_a === "producto" && d.producto_id === productId);
+    const catDisc = descuentos.find(d => d.aplicar_a === "categoria" && d.categoria_id === categoryId);
+    const genDisc = descuentos.find(d => d.aplicar_a === "general");
+
+    const disc = prodDisc || catDisc || genDisc;
+    if (!disc) return null;
+
+    if (disc.tipo === "porcentaje") {
+        return {
+            porcentaje: disc.valor,
+            precioFinal: (precio: number) => Math.round(precio * (1 - disc.valor / 100)),
+        };
+    }
+    // fijo
+    return {
+        porcentaje: 0,
+        precioFinal: (precio: number) => Math.max(0, precio - disc.valor),
+    };
+}
+
+export default function PublicProductList({ categorias, onProductClick, descuentos = [] }: PublicProductListProps) {
     return (
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-12 pb-32">
             {categorias.map((cat) => (
@@ -63,54 +96,78 @@ export default function PublicProductList({ categorias, onProductClick }: Public
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {cat.productos.map((prod) => (
-                            <button
-                                key={prod.id}
-                                onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre })}
-                                className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 hover:bg-slate-800/40 hover:border-slate-700/50 transition-all duration-300 text-left group active:scale-[0.98] shadow-lg shadow-black/20"
-                            >
-                                {/* Info */}
-                                <div className="flex-1 space-y-1.5 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        <h3 className="font-black text-slate-100 text-[13px] uppercase tracking-wide leading-tight line-clamp-2">
-                                            {prod.nombre}
-                                        </h3>
-                                        {prod.producto_sugerido && (
-                                            <Star size={12} className="text-orange-400 fill-orange-400 shrink-0" />
+                        {cat.productos.map((prod) => {
+                            const discount = getProductDiscount(prod.id, cat.id, descuentos);
+                            const hasPercentDiscount = discount && discount.porcentaje > 0;
+                            const precioConDescuento = discount ? discount.precioFinal(prod.precio) : prod.precio;
+
+                            return (
+                                <button
+                                    key={prod.id}
+                                    onClick={() => onProductClick({ ...prod, categoria_nombre: cat.nombre })}
+                                    className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/50 hover:bg-slate-800/40 hover:border-slate-700/50 transition-all duration-300 text-left group active:scale-[0.98] shadow-lg shadow-black/20"
+                                >
+                                    {/* Info */}
+                                    <div className="flex-1 space-y-1.5 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <h3 className="font-black text-slate-100 text-[13px] uppercase tracking-wide leading-tight line-clamp-2">
+                                                {prod.nombre}
+                                            </h3>
+                                            {prod.producto_sugerido && (
+                                                <Star size={12} className="text-orange-400 fill-orange-400 shrink-0" />
+                                            )}
+                                        </div>
+                                        {prod.descripcion && (
+                                            <p className="text-slate-500 text-[10px] line-clamp-2 leading-relaxed uppercase tracking-wider font-medium">
+                                                {prod.descripcion}
+                                            </p>
                                         )}
+                                        <div className="pt-1 flex items-center gap-2">
+                                            {hasPercentDiscount ? (
+                                                <>
+                                                    <span className="text-slate-500 font-bold text-sm line-through">
+                                                        $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
+                                                    </span>
+                                                    <span className="text-green-400 font-black text-base tracking-tight">
+                                                        $ {new Intl.NumberFormat("es-AR").format(precioConDescuento)}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className="text-white font-black text-base tracking-tight">
+                                                    $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    {prod.descripcion && (
-                                        <p className="text-slate-500 text-[10px] line-clamp-2 leading-relaxed uppercase tracking-wider font-medium">
-                                            {prod.descripcion}
-                                        </p>
-                                    )}
-                                    <div className="pt-1">
-                                        <span className="text-white font-black text-base tracking-tight">
-                                            $ {new Intl.NumberFormat("es-AR").format(prod.precio)}
-                                        </span>
-                                    </div>
-                                </div>
 
-                                {/* Image */}
-                                <div className="relative shrink-0 w-[92px] h-[92px] rounded-[1.25rem] overflow-hidden bg-slate-800 shadow-inner">
-                                    <img
-                                        src={prod.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&h=300&fit=crop"}
-                                        alt={prod.nombre}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                    />
-                                    {/* Subtle Overlay on hover */}
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+                                    {/* Image */}
+                                    <div className="relative shrink-0 w-[92px] h-[92px] rounded-[1.25rem] overflow-hidden bg-slate-800 shadow-inner">
+                                        <img
+                                            src={prod.imagen_url || "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&h=300&fit=crop"}
+                                            alt={prod.nombre}
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                        />
+                                        {/* Subtle Overlay on hover */}
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
 
-                                    {/* + button overlaid at bottom right */}
-                                    <div
-                                        className="absolute bottom-1 right-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
-                                        style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
-                                    >
-                                        <Plus size={14} className="text-white" strokeWidth={3} />
+                                        {/* Discount Badge */}
+                                        {hasPercentDiscount && (
+                                            <div className="absolute top-1 left-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg shadow-lg uppercase tracking-wide">
+                                                {discount.porcentaje}% OFF
+                                            </div>
+                                        )}
+
+                                        {/* + button overlaid at bottom right */}
+                                        <div
+                                            className="absolute bottom-1 right-1 w-6 h-6 rounded-lg flex items-center justify-center shadow-lg transform translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
+                                            style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
+                                        >
+                                            <Plus size={14} className="text-white" strokeWidth={3} />
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
-                        ))}
+                                </button>
+                            );
+                        })}
                     </div>
                 </section>
             ))}
