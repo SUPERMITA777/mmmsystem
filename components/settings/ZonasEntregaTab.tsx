@@ -42,6 +42,8 @@ function MapaZonas({
     tempPoints,
     onMapClick,
     onLocalDrag,
+    editingVerticesZonaId,
+    onVertexDrag,
 }: {
     zonas: Zona[];
     localPos: LatLng | null;
@@ -49,6 +51,8 @@ function MapaZonas({
     tempPoints: LatLng[];
     onMapClick: (latlng: LatLng) => void;
     onLocalDrag: (latlng: LatLng) => void;
+    editingVerticesZonaId: string | null;
+    onVertexDrag: (zonaId: string, index: number, latlng: LatLng) => void;
 }) {
     const { MapContainer, TileLayer, Polygon, Marker, useMapEvents, Polyline } = require("react-leaflet");
     const L = require("leaflet");
@@ -145,6 +149,29 @@ function MapaZonas({
                     ))}
                 </>
             )}
+
+            {/* Draggable vertices for editing existing polygon */}
+            {editingVerticesZonaId && zonas.filter(z => z.id === editingVerticesZonaId).map(zona =>
+                zona.polygon_coords?.map((p, i) => (
+                    <Marker
+                        key={`vertex-${zona.id}-${i}`}
+                        position={[p.lat, p.lng]}
+                        draggable={true}
+                        icon={L.divIcon({
+                            html: `<div style="background:#ef4444;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:grab"></div>`,
+                            iconSize: [14, 14],
+                            iconAnchor: [7, 7],
+                            className: "",
+                        })}
+                        eventHandlers={{
+                            dragend: (e: any) => {
+                                const pos = e.target.getLatLng();
+                                onVertexDrag(zona.id, i, { lat: pos.lat, lng: pos.lng });
+                            },
+                        }}
+                    />
+                ))
+            )}
         </MapContainer>
     );
 }
@@ -165,6 +192,7 @@ export function ZonasEntregaTab() {
     const [editingZonaId, setEditingZonaId] = useState<string | null>(null);
     const [drawingZonaId, setDrawingZonaId] = useState<string | null>(null);
     const [tempPoints, setTempPoints] = useState<LatLng[]>([]);
+    const [editingVerticesZonaId, setEditingVerticesZonaId] = useState<string | null>(null);
     const [localSearch, setLocalSearch] = useState("");
     const [searching, setSearching] = useState(false);
     const [sucursalId, setSucursalId] = useState<string | null>(null);
@@ -398,6 +426,29 @@ export function ZonasEntregaTab() {
         saveLocalPosition(latlng.lat, latlng.lng);
     }
 
+    function handleVertexDrag(zonaId: string, index: number, latlng: LatLng) {
+        setZonas(prev => prev.map(z => {
+            if (z.id !== zonaId || !z.polygon_coords) return z;
+            const updated = [...z.polygon_coords];
+            updated[index] = latlng;
+            return { ...z, polygon_coords: updated };
+        }));
+    }
+
+    async function saveEditedVertices(zonaId: string) {
+        const zona = zonas.find(z => z.id === zonaId);
+        if (!zona?.polygon_coords) return;
+        const { error } = await supabase.from("zonas_entrega")
+            .update({ polygon_coords: zona.polygon_coords })
+            .eq("id", zonaId);
+        if (error) {
+            alert("Error al guardar: " + error.message);
+            return;
+        }
+        setEditingVerticesZonaId(null);
+        fetchData();
+    }
+
     const localPos = config.local_lat && config.local_lng
         ? { lat: config.local_lat, lng: config.local_lng }
         : null;
@@ -471,6 +522,8 @@ export function ZonasEntregaTab() {
                         tempPoints={tempPoints}
                         onMapClick={handleMapClick}
                         onLocalDrag={handleLocalDrag}
+                        editingVerticesZonaId={editingVerticesZonaId}
+                        onVertexDrag={handleVertexDrag}
                     />
                 ) : (
                     <div className="h-[400px] bg-gray-100 flex items-center justify-center">
@@ -616,14 +669,29 @@ export function ZonasEntregaTab() {
                                                 <button onClick={savePolygon} className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-green-500">✓ Ok</button>
                                                 <button onClick={cancelDrawing} className="bg-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-400">✕</button>
                                             </div>
+                                        ) : editingVerticesZonaId === zona.id ? (
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={() => saveEditedVertices(zona.id)} className="bg-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-green-500">✓ Guardar</button>
+                                                <button onClick={() => { setEditingVerticesZonaId(null); fetchData(); }} className="bg-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-400">✕</button>
+                                            </div>
                                         ) : (
-                                            <button
-                                                onClick={() => startDrawing(zona.id)}
-                                                className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                                            >
-                                                <Navigation size={11} />
-                                                {hasPolygon ? "Redibujar" : "Dibujar zona"}
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                {hasPolygon && (
+                                                    <button
+                                                        onClick={() => setEditingVerticesZonaId(zona.id)}
+                                                        className="flex items-center gap-1 text-xs text-purple-600 border border-purple-200 bg-purple-50 px-3 py-1.5 rounded-lg hover:bg-purple-100 transition-colors"
+                                                    >
+                                                        <Edit3 size={11} /> Editar zona
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => startDrawing(zona.id)}
+                                                    className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 bg-white px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                                                >
+                                                    <Navigation size={11} />
+                                                    {hasPolygon ? "Redibujar" : "Dibujar zona"}
+                                                </button>
+                                            </div>
                                         )}
                                         <button
                                             onClick={() => toggleActivo(zona)}

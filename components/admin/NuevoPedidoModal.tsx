@@ -401,20 +401,20 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const todayStr = new Date().toISOString().split('T')[0];
                 const { data: lastP } = await supabase
                     .from("pedidos")
-                    .select("numero_pedido")
+                    .select("numero_pedido, created_at")
                     .gte("created_at", `${todayStr}T00:00:00`)
                     .lte("created_at", `${todayStr}T23:59:59`)
-                    .like("numero_pedido", "MMM-%")
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .maybeSingle();
                 let nextSeq = 1;
                 if (lastP?.numero_pedido) {
-                    const lastNum = parseInt(lastP.numero_pedido.replace("MMM-", ""), 10);
-                    if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+                    const match = lastP.numero_pedido.match(/(\d+)$/);
+                    if (match) nextSeq = parseInt(match[1], 10) + 1;
                 }
+                const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                    numero_pedido: `MMM-${nextSeq}`,
+                    numero_pedido: `${tipoPrefix}-${nextSeq}`,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
