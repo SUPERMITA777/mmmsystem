@@ -44,9 +44,29 @@ export default function CartaGeneratorButton({ sucursalId }: { sucursalId: strin
                 return null;
             }
 
-            // 4. Canvas setup (9:16 ratio)
+            // 4. Calc total height needed
             const W = 1080;
-            const H = 1920;
+            const PADDING_X = 80;
+            const NAME_LEFT = PADDING_X;
+            const PRICE_RIGHT = W - PADDING_X;
+            const ROW_H = 38;
+            const CAT_TITLE_H = 55;
+            const CAT_GAP = 20;
+            const HEADER_H = 220; // logo + name + divider
+            const FOOTER_H = 60;
+
+            let totalContentH = HEADER_H;
+            for (const cat of filteredCats) {
+                totalContentH += CAT_TITLE_H + CAT_GAP;
+                totalContentH += cat.productos.length * ROW_H;
+                totalContentH += CAT_GAP;
+            }
+            totalContentH += FOOTER_H;
+
+            // Ensure minimum 9:16 ratio
+            const minH = Math.round(W * 16 / 9);
+            const H = Math.max(minH, totalContentH);
+
             const canvas = document.createElement("canvas");
             canvas.width = W;
             canvas.height = H;
@@ -58,76 +78,65 @@ export default function CartaGeneratorButton({ sucursalId }: { sucursalId: strin
 
             // Decorative top gradient
             const grd = ctx.createLinearGradient(0, 0, 0, 300);
-            grd.addColorStop(0, "rgba(249,115,22,0.15)");
+            grd.addColorStop(0, "rgba(249,115,22,0.12)");
             grd.addColorStop(1, "rgba(0,0,0,0)");
             ctx.fillStyle = grd;
             ctx.fillRect(0, 0, W, 300);
 
-            let y = 60;
+            let y = 50;
 
             // 5. Draw logo
             if (suc?.logo_url) {
                 try {
                     const logo = await loadImage(suc.logo_url);
-                    const logoH = 120;
+                    const logoH = 100;
                     const logoW = (logo.width / logo.height) * logoH;
                     ctx.drawImage(logo, (W - logoW) / 2, y, logoW, logoH);
-                    y += logoH + 30;
+                    y += logoH + 20;
                 } catch {
-                    y += 20;
+                    y += 10;
                 }
             }
 
             // Store name
             if (suc?.nombre) {
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "bold 36px 'Arial', sans-serif";
+                ctx.font = "bold 32px 'Arial', sans-serif";
                 ctx.textAlign = "center";
                 ctx.fillText(suc.nombre.toUpperCase(), W / 2, y);
-                y += 20;
+                y += 15;
             }
 
             // Divider
-            y += 20;
+            y += 15;
             ctx.strokeStyle = "rgba(255,255,255,0.1)";
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(80, y);
-            ctx.lineTo(W - 80, y);
+            ctx.moveTo(PADDING_X, y);
+            ctx.lineTo(W - PADDING_X, y);
             ctx.stroke();
-            y += 30;
+            y += 25;
 
             const fmt = (n: number) => new Intl.NumberFormat("es-AR").format(n);
 
             // 6. Draw categories and products
             for (const cat of filteredCats) {
-                // Check if we need a new "page" (won't overflow)
-                const neededHeight = 60 + cat.productos.length * 42;
-                if (y + neededHeight > H - 80) {
-                    // Stop drawing — won't fit
-                    ctx.fillStyle = "rgba(255,255,255,0.3)";
-                    ctx.font = "italic 20px 'Arial', sans-serif";
-                    ctx.textAlign = "center";
-                    ctx.fillText("... continúa", W / 2, H - 50);
-                    break;
-                }
-
                 // Category title
                 ctx.fillStyle = "#f97316";
-                ctx.font = "bold 32px 'Arial', sans-serif";
+                ctx.font = "bold 28px 'Arial', sans-serif";
                 ctx.textAlign = "center";
                 ctx.fillText(cat.nombre.toUpperCase(), W / 2, y);
-                y += 12;
+                y += 8;
 
                 // Category underline
                 const tw = ctx.measureText(cat.nombre.toUpperCase()).width;
-                ctx.strokeStyle = "rgba(249,115,22,0.4)";
+                ctx.strokeStyle = "rgba(249,115,22,0.35)";
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo((W - tw) / 2, y);
                 ctx.lineTo((W + tw) / 2, y);
                 ctx.stroke();
-                y += 25;
+                y += CAT_GAP;
 
                 // Products
                 for (const prod of cat.productos) {
@@ -135,55 +144,67 @@ export default function CartaGeneratorButton({ sucursalId }: { sucursalId: strin
 
                     // Product name (left aligned)
                     ctx.fillStyle = "#e2e8f0";
-                    ctx.font = "500 22px 'Arial', sans-serif";
+                    ctx.font = "500 20px 'Arial', sans-serif";
                     ctx.textAlign = "left";
-                    ctx.fillText(prod.nombre, 100, y);
+                    ctx.fillText(prod.nombre, NAME_LEFT, y);
+                    const nameW = ctx.measureText(prod.nombre).width;
 
                     // Price (right aligned)
+                    let priceEndX: number;
                     if (disc && disc > 0) {
-                        const originalPrice = `$ ${fmt(prod.precio)}`;
                         const discountedPrice = `$ ${fmt(Math.round(prod.precio * (1 - disc / 100)))}`;
 
-                        // Original price crossed out
-                        ctx.fillStyle = "rgba(255,255,255,0.3)";
-                        ctx.font = "500 18px 'Arial', sans-serif";
+                        // Discounted price right-aligned
+                        ctx.fillStyle = "#4ade80";
+                        ctx.font = "bold 20px 'Arial', sans-serif";
                         ctx.textAlign = "right";
+                        ctx.fillText(discountedPrice, PRICE_RIGHT, y);
+                        const dpW = ctx.measureText(discountedPrice).width;
+
+                        // Original price crossed out, left of discounted
+                        const originalPrice = `$ ${fmt(prod.precio)}`;
+                        ctx.fillStyle = "rgba(255,255,255,0.3)";
+                        ctx.font = "500 16px 'Arial', sans-serif";
+                        ctx.textAlign = "right";
+                        const opX = PRICE_RIGHT - dpW - 12;
+                        ctx.fillText(originalPrice, opX, y);
                         const opW = ctx.measureText(originalPrice).width;
-                        ctx.fillText(originalPrice, W - 200, y);
                         ctx.strokeStyle = "rgba(255,255,255,0.4)";
                         ctx.lineWidth = 1;
                         ctx.beginPath();
-                        ctx.moveTo(W - 200 - opW, y - 6);
-                        ctx.lineTo(W - 200, y - 6);
+                        ctx.moveTo(opX - opW, y - 5);
+                        ctx.lineTo(opX, y - 5);
                         ctx.stroke();
 
-                        // Discounted price
-                        ctx.fillStyle = "#4ade80";
-                        ctx.font = "bold 22px 'Arial', sans-serif";
-                        ctx.textAlign = "right";
-                        ctx.fillText(discountedPrice, W - 100, y);
+                        priceEndX = opX - opW - 10;
                     } else {
+                        const priceText = `$ ${fmt(prod.precio)}`;
                         ctx.fillStyle = "#ffffff";
-                        ctx.font = "bold 22px 'Arial', sans-serif";
+                        ctx.font = "bold 20px 'Arial', sans-serif";
                         ctx.textAlign = "right";
-                        ctx.fillText(`$ ${fmt(prod.precio)}`, W - 100, y);
+                        ctx.fillText(priceText, PRICE_RIGHT, y);
+                        const prW = ctx.measureText(priceText).width;
+                        priceEndX = PRICE_RIGHT - prW - 10;
                     }
 
                     // Dotted line between name and price
-                    ctx.setLineDash([2, 4]);
-                    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-                    ctx.lineWidth = 1;
-                    const nameW = ctx.measureText(prod.nombre).width;
-                    ctx.beginPath();
-                    ctx.moveTo(110 + nameW, y - 6);
-                    ctx.lineTo(W - 220, y - 6);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
+                    const dotsStartX = NAME_LEFT + nameW + 8;
+                    const dotsEndX = priceEndX;
+                    if (dotsEndX > dotsStartX + 10) {
+                        ctx.setLineDash([2, 5]);
+                        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(dotsStartX, y - 5);
+                        ctx.lineTo(dotsEndX, y - 5);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
 
-                    y += 42;
+                    y += ROW_H;
                 }
 
-                y += 25; // spacing between categories
+                y += CAT_GAP;
             }
 
             // 7. Download

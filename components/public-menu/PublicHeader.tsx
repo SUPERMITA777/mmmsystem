@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { Clock, MapPin, Star, ChevronLeft } from "lucide-react";
+import { Clock } from "lucide-react";
 
 interface PublicHeaderProps {
     sucursal: any;
@@ -10,29 +9,12 @@ interface PublicHeaderProps {
 
 export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
     return (
-        <header className="relative w-full overflow-hidden bg-slate-950">
-            {/* Background Hero Image */}
-            <div className="relative h-64 md:h-80 w-full overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent z-10" />
-                {sucursal?.banner_url ? (
-                    <img
-                        src={sucursal.banner_url}
-                        alt="Banner"
-                        className="w-full h-full object-cover object-center opacity-80"
-                    />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-orange-600 via-purple-700 to-slate-950" />
-                )}
-                <button className="absolute top-4 left-4 z-20 p-2 bg-slate-950/50 backdrop-blur-md rounded-full text-white hover:bg-slate-950 transition-colors">
-                    <ChevronLeft size={24} />
-                </button>
-            </div>
-
+        <header className="relative w-full bg-slate-950">
             {/* Info Container */}
-            <div className="relative z-20 max-w-5xl mx-auto px-4 -mt-16 pb-6">
-                <div className="flex flex-col md:flex-row md:items-end gap-6">
+            <div className="relative z-20 max-w-5xl mx-auto px-4 pt-6 pb-6">
+                <div className="flex flex-col items-center gap-4">
                     {/* Logo */}
-                    <div className="relative shrink-0 border-4 border-slate-950 rounded-2xl overflow-hidden bg-slate-900 shadow-2xl h-32 w-32 md:h-40 md:w-40">
+                    <div className="shrink-0 rounded-2xl overflow-hidden bg-slate-900 shadow-2xl h-28 w-28">
                         {sucursal?.logo_url ? (
                             <img
                                 src={sucursal.logo_url}
@@ -41,39 +23,24 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
                             />
                         ) : (
                             <div className="w-full h-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-                                <span className="text-4xl md:text-5xl font-black text-white">{sucursal?.nombre?.charAt(0) || 'M'}</span>
+                                <span className="text-4xl font-black text-white">{sucursal?.nombre?.charAt(0) || 'M'}</span>
                             </div>
                         )}
                     </div>
 
-                    {/* Business Info */}
-                    <div className="flex-1 space-y-1">
-                        <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">
-                            {sucursal?.nombre || "MMM PIZZA"}
-                        </h1>
-
-                        <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-slate-400 text-[10px] uppercase font-bold tracking-[0.1em]">
-                            <div className="flex items-center gap-1.5 px-0 py-1 rounded-md">
-                                <Star size={12} className="text-orange-500 fill-orange-500" />
-                                <span className="text-white">5.0</span>
-                                <span className="text-slate-500">(5 reseñas)</span>
-                            </div>
-                            <span className="hidden md:inline text-slate-600">•</span>
-                            <div className="flex items-center gap-1.5">
-                                <MapPin size={16} className="text-slate-500" />
-                                <span>{sucursal?.direccion || "Pizza Artesanal"}</span>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Store Name */}
+                    <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter text-center">
+                        {sucursal?.nombre || "MMM PIZZA ARTESANAL"}
+                    </h1>
                 </div>
 
                 {/* Status Bar */}
-                <div className="mt-6 flex flex-col gap-3">
+                <div className="mt-5 flex flex-col gap-3">
                     <div className={`w-full py-2.5 rounded-xl text-center font-black text-[10px] tracking-[0.2em] uppercase transition-all ${isOpen
                         ? "bg-white/5 text-green-400 border border-green-500/20"
                         : "bg-red-500/10 text-red-500 border border-red-500/20"
                         }`}>
-                        {isOpen ? "Abierto ahora" : "Cerrado • Abre a las 18:45"}
+                        {isOpen ? "Abierto ahora" : "Cerrado"}
                     </div>
 
                     {/* Delivery/Retiro Switch */}
