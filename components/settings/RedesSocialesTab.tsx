@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Instagram, Facebook, MessageCircle, Globe, Save } from "lucide-react";
+import { useTenant } from "@/context/TenantContext";
 
 export function RedesSocialesTab() {
     const [config, setConfig] = useState({
@@ -10,18 +11,20 @@ export function RedesSocialesTab() {
         instagram_url: "",
         facebook_url: "",
     });
-    const [sucursalId, setSucursalId] = useState("");
+    const { sucursalId } = useTenant();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => { fetchConfig(); }, []);
+    useEffect(() => {
+        if (sucursalId) fetchConfig();
+    }, [sucursalId]);
 
     async function fetchConfig() {
-        const { data: suc } = await supabase.from("sucursales").select("id, whatsapp_numero").limit(1).single();
+        if (!sucursalId) return;
+        const { data: suc } = await supabase.from("sucursales").select("id, whatsapp_numero").eq("id", sucursalId).single();
         if (suc) {
-            setSucursalId(suc.id);
             setConfig(prev => ({ ...prev, whatsapp_numero: suc.whatsapp_numero || "" }));
-            const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", suc.id).single();
+            const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).single();
             if (cfg) {
                 setConfig({
                     whatsapp_numero: suc.whatsapp_numero || "",

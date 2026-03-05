@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Palette, Image, Save } from "lucide-react";
+import { useTenant } from "@/context/TenantContext";
 
 export function MarketingTab() {
     const [config, setConfig] = useState({
@@ -10,19 +11,21 @@ export function MarketingTab() {
         color_secundario: "#1a1a2e",
         banner_url: "",
     });
-    const [sucursalId, setSucursalId] = useState("");
+    const { sucursalId } = useTenant();
     const [logoUrl, setLogoUrl] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => { fetchConfig(); }, []);
+    useEffect(() => {
+        if (sucursalId) fetchConfig();
+    }, [sucursalId]);
 
     async function fetchConfig() {
-        const { data: suc } = await supabase.from("sucursales").select("id, logo_url").limit(1).single();
+        if (!sucursalId) return;
+        const { data: suc } = await supabase.from("sucursales").select("id, logo_url").eq("id", sucursalId).single();
         if (suc) {
-            setSucursalId(suc.id);
             setLogoUrl(suc.logo_url || "");
-            const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", suc.id).single();
+            const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).single();
             if (cfg) {
                 setConfig({
                     color_primario: (cfg as any).color_primario || "#f97316",

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Check, X } from "lucide-react";
+import { useTenant } from "@/context/TenantContext";
 
 export function ModalidadesTab() {
   const [config, setConfig] = useState({
@@ -12,17 +13,19 @@ export function ModalidadesTab() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { sucursalId } = useTenant();
 
   useEffect(() => {
-    loadConfig();
-  }, []);
+    if (sucursalId) loadConfig();
+  }, [sucursalId]);
 
   async function loadConfig() {
+    if (!sucursalId) return;
     try {
-      // TODO: Obtener sucursal_id del usuario autenticado
       const { data, error } = await supabase
         .from("config_sucursal")
         .select("*")
+        .eq("sucursal_id", sucursalId)
         .single();
 
       if (data) {
@@ -40,12 +43,22 @@ export function ModalidadesTab() {
   }
 
   async function handleSave() {
+    if (!sucursalId) return;
     setSaving(true);
     try {
-      // TODO: Implementar guardado
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const { error } = await supabase
+        .from("config_sucursal")
+        .update({
+          enable_delivery: config.enable_delivery,
+          enable_takeaway: config.enable_takeaway,
+          enable_salon: config.enable_salon,
+        })
+        .eq("sucursal_id", sucursalId);
+
+      if (error) throw error;
       alert("Configuración guardada correctamente");
     } catch (error) {
+      console.error(error);
       alert("Error al guardar la configuración");
     } finally {
       setSaving(false);

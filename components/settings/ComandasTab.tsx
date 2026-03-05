@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useTenant } from "@/context/TenantContext";
 
 const FONT_ITEMS = [
     { key: "fuente_titulo", label: "Título (Delivery N°)" },
@@ -49,17 +50,19 @@ export function ComandasTab() {
     const [boldMap, setBoldMap] = useState<Record<string, boolean>>({ ...DEFAULT_BOLD });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const { sucursalId } = useTenant();
 
     useEffect(() => {
-        loadConfig();
-    }, []);
+        if (sucursalId) loadConfig();
+    }, [sucursalId]);
 
     async function loadConfig() {
+        if (!sucursalId) return;
         try {
             const { data } = await supabase
                 .from("config_impresion")
                 .select("*")
-                .limit(1)
+                .eq("sucursal_id", sucursalId)
                 .maybeSingle();
 
             if (data) {
@@ -81,7 +84,7 @@ export function ComandasTab() {
             }
 
             // Load bold settings + fuente_adicionales from config_sucursal.panel_settings
-            const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").limit(1).maybeSingle();
+            const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).maybeSingle();
             if (suc?.panel_settings?.print_bold) {
                 setBoldMap({ ...DEFAULT_BOLD, ...suc.panel_settings.print_bold });
             }
@@ -96,16 +99,14 @@ export function ComandasTab() {
     }
 
     async function handleSave() {
+        if (!sucursalId) return;
         setSaving(true);
         try {
-            const { data: sucursal } = await supabase.from("sucursales").select("id").limit(1).single();
-            if (!sucursal) throw new Error("No se encontró sucursal");
-
             // Save font sizes and visibility to config_impresion (only known DB columns)
             const { error } = await supabase
                 .from("config_impresion")
                 .upsert({
-                    sucursal_id: sucursal.id,
+                    sucursal_id: sucursalId,
                     fuente_titulo: config.fuente_titulo,
                     fuente_subtitulo: config.fuente_subtitulo,
                     fuente_cliente_nombre: config.fuente_cliente_nombre,
@@ -124,7 +125,7 @@ export function ComandasTab() {
             if (error) throw error;
 
             // Save bold settings + fuente_adicionales to config_sucursal.panel_settings (JSON column)
-            const { data: currentCfg } = await supabase.from("config_sucursal").select("id, panel_settings").eq("sucursal_id", sucursal.id).maybeSingle();
+            const { data: currentCfg } = await supabase.from("config_sucursal").select("id, panel_settings").eq("sucursal_id", sucursalId).maybeSingle();
             if (currentCfg) {
                 const newSettings = { ...(currentCfg.panel_settings || {}), print_bold: boldMap, fuente_adicionales: config.fuente_adicionales };
                 await supabase.from("config_sucursal").update({ panel_settings: newSettings }).eq("id", currentCfg.id);

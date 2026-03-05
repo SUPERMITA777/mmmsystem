@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useTenant } from "@/context/TenantContext";
 
 const METODOS_PAGO_DEFAULT = [
   { codigo: "bna_plus", nombre: "BNA+" },
@@ -30,15 +31,19 @@ export function MetodosPagoTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const { sucursalId } = useTenant();
+
   useEffect(() => {
-    loadMetodos();
-  }, []);
+    if (sucursalId) loadMetodos();
+  }, [sucursalId]);
 
   async function loadMetodos() {
+    if (!sucursalId) return;
     try {
       const { data } = await supabase
         .from("metodos_pago")
         .select("*")
+        .eq("sucursal_id", sucursalId)
         .order("orden");
 
       if (data && data.length > 0) {
@@ -68,14 +73,11 @@ export function MetodosPagoTab() {
   }
 
   async function handleSave() {
+    if (!sucursalId) return;
     setSaving(true);
     try {
-      // Obtener el ID de la sucursal (en un futuro esto vendrá de un contexto global o auth)
-      const { data: sucursal } = await supabase.from("sucursales").select("id").single();
-      if (!sucursal) throw new Error("No se encontró la sucursal");
-
       const dataToSave = metodos.map((m, index) => ({
-        sucursal_id: sucursal.id,
+        sucursal_id: sucursalId,
         nombre: m.nombre,
         codigo: m.codigo,
         activo: m.activo,
@@ -137,8 +139,8 @@ export function MetodosPagoTab() {
                     className="sr-only peer"
                   />
                   <div className={`w-5 h-5 border-2 rounded ${metodo.activo
-                      ? "bg-purple-600 border-purple-600"
-                      : "border-slate-300"
+                    ? "bg-purple-600 border-purple-600"
+                    : "border-slate-300"
                     } flex items-center justify-center`}>
                     {metodo.activo && (
                       <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

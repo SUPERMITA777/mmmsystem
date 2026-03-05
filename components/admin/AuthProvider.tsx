@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useParams } from "next/navigation";
 
 interface AuthUser {
     id: string;
@@ -26,6 +26,9 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
+    const pathname = usePathname();
+    const params = useParams();
+    const tenant = params?.tenant || pathname.split('/')[1] || "demo";
     const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -54,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             await fetch("/api/auth/logout", { method: "POST" });
             setUser(null);
-            router.push("/admin/login");
+            router.push(`/${tenant}/admin/login`);
             router.refresh();
         } catch (err) {
             console.error("Error al cerrar sesión:", err);

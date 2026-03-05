@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Plus, X, MapPin, Save, Search, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { useTenant } from "@/context/TenantContext";
 
 type Localidad = {
     nombre: string;
@@ -13,27 +14,26 @@ type Localidad = {
 
 export function LocalidadesTab() {
     const [localidades, setLocalidades] = useState<Localidad[]>([]);
-    const [sucursalId, setSucursalId] = useState("");
+    const { sucursalId } = useTenant();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [searchInput, setSearchInput] = useState("");
     const [searching, setSearching] = useState(false);
     const [searchResults, setSearchResults] = useState<any[]>([]);
 
-    useEffect(() => { fetchConfig(); }, []);
+    useEffect(() => {
+        if (sucursalId) fetchConfig();
+    }, [sucursalId]);
 
     async function fetchConfig() {
-        const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-        if (suc) {
-            setSucursalId(suc.id);
-            const { data: cfg } = await supabase
-                .from("config_sucursal")
-                .select("localidades")
-                .eq("sucursal_id", suc.id)
-                .maybeSingle();
-            if (cfg?.localidades) {
-                setLocalidades(cfg.localidades);
-            }
+        if (!sucursalId) return;
+        const { data: cfg } = await supabase
+            .from("config_sucursal")
+            .select("localidades")
+            .eq("sucursal_id", sucursalId)
+            .maybeSingle();
+        if (cfg?.localidades) {
+            setLocalidades(cfg.localidades);
         }
         setLoading(false);
     }
@@ -85,6 +85,7 @@ export function LocalidadesTab() {
     }
 
     async function handleSave() {
+        if (!sucursalId) return;
         setSaving(true);
         try {
             const { error } = await supabase

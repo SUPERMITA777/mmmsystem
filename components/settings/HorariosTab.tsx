@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useTenant } from "@/context/TenantContext";
 
 const DIAS_SEMANA = [
   { id: 0, nombre: "Lunes" },
@@ -30,17 +31,20 @@ export function HorariosTab() {
   >({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { sucursalId } = useTenant();
 
   useEffect(() => {
-    loadHorarios();
-  }, []);
+    if (sucursalId) loadHorarios();
+  }, [sucursalId]);
 
   async function loadHorarios() {
+    if (!sucursalId) return;
     try {
       // Cargar configuración de cerrado temporal
       const { data: config } = await supabase
         .from("config_sucursal")
         .select("cerrado_temporalmente")
+        .eq("sucursal_id", sucursalId)
         .single();
 
       if (config) {
@@ -50,6 +54,7 @@ export function HorariosTab() {
       const { data } = await supabase
         .from("horarios_sucursal")
         .select("*")
+        .eq("sucursal_id", sucursalId)
         .order("dia");
 
       if (data) {
@@ -108,26 +113,18 @@ export function HorariosTab() {
   }
 
   async function handleSave() {
+    if (!sucursalId) return;
     setSaving(true);
     try {
-      // 1. Get sucursal_id
-      const { data: config } = await supabase
-        .from("config_sucursal")
-        .select("sucursal_id, cerrado_temporalmente")
-        .limit(1)
-        .single();
-
-      if (!config?.sucursal_id) throw new Error("No se encontró sucursal_id");
-
       // 2. Guardar cerrado temporalmente
       await supabase
         .from("config_sucursal")
         .update({ cerrado_temporalmente: cerradoTemporalmente })
-        .eq("sucursal_id", config.sucursal_id);
+        .eq("sucursal_id", sucursalId);
 
       // 3. Guardar horarios
       const horariosArray = Object.entries(horarios).map(([diaStr, h]) => ({
-        sucursal_id: config.sucursal_id,
+        sucursal_id: sucursalId,
         dia: parseInt(diaStr, 10),
         cerrado: h.cerrado,
         apertura1: h.apertura1 || null,

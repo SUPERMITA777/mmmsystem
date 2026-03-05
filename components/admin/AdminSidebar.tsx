@@ -19,7 +19,7 @@ import {
   UserCheck
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
 
 const items = [
   { href: "/admin/settings", icon: Settings, label: "Configuraciones" },
@@ -40,6 +40,16 @@ const items = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const params = useParams();
+
+  // Extract tenant from params or pathname fallback
+  const tenant = params?.tenant || pathname.split('/')[1] || "demo";
+
+  // Rebuild items dynamically based on the current tenant
+  const dynamicItems = items.map(item => ({
+    ...item,
+    href: `/${tenant}${item.href}`
+  }));
 
   return (
     <aside className="w-56 bg-white flex flex-col border-r border-gray-200 shrink-0">
@@ -50,9 +60,9 @@ export function AdminSidebar() {
 
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto px-3 py-1 text-[13px]">
-        {items.map((item) => {
+        {dynamicItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname.startsWith(item.href);
+          const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useTenant } from "@/context/TenantContext";
 
 export function PedidosTab() {
   const [config, setConfig] = useState({
@@ -17,16 +18,19 @@ export function PedidosTab() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { sucursalId } = useTenant();
 
   useEffect(() => {
-    loadConfig();
-  }, []);
+    if (sucursalId) loadConfig();
+  }, [sucursalId]);
 
   async function loadConfig() {
+    if (!sucursalId) return;
     try {
       const { data } = await supabase
         .from("config_sucursal")
         .select("*")
+        .eq("sucursal_id", sucursalId)
         .single();
 
       if (data) {
@@ -50,11 +54,28 @@ export function PedidosTab() {
   }
 
   async function handleSave() {
+    if (!sucursalId) return;
     setSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const { error } = await supabase
+        .from("config_sucursal")
+        .update({
+          aceptar_pedidos: config.aceptar_pedidos,
+          confirmar_por_whatsapp: config.confirmar_por_whatsapp,
+          pedidos_programados: config.pedidos_programados,
+          aceptar_propinas: config.aceptar_propinas,
+          datos_cliente_obligatorios: config.datos_cliente_obligatorios,
+          monto_minimo: config.monto_minimo,
+          tiempo_preparacion_default: config.tiempo_preparacion_default,
+          notificar_nuevo_pedido: config.notificar_nuevo_pedido,
+          notificar_pedido_listo: config.notificar_pedido_listo,
+        })
+        .eq("sucursal_id", sucursalId);
+
+      if (error) throw error;
       alert("Configuración guardada correctamente");
     } catch (error) {
+      console.error(error);
       alert("Error al guardar la configuración");
     } finally {
       setSaving(false);

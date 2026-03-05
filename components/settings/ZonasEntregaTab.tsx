@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Plus, Trash2, Edit3, Check, X, Navigation } from "lucide-react";
 import dynamic from "next/dynamic";
 import { LatLng, pointInPolygon } from "@/lib/geoutils";
+import { useTenant } from "@/context/TenantContext";
 
 // Tipos
 type Zona = {
@@ -195,7 +196,7 @@ export function ZonasEntregaTab() {
     const [editingVerticesZonaId, setEditingVerticesZonaId] = useState<string | null>(null);
     const [localSearch, setLocalSearch] = useState("");
     const [searching, setSearching] = useState(false);
-    const [sucursalId, setSucursalId] = useState<string | null>(null);
+    const { sucursalId } = useTenant();
     const [configId, setConfigId] = useState<string | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [savingLocal, setSavingLocal] = useState(false);
@@ -203,32 +204,30 @@ export function ZonasEntregaTab() {
 
     useEffect(() => {
         setIsMounted(true);
-        fetchData();
-    }, []);
+        if (sucursalId) fetchData();
+    }, [sucursalId]);
 
     async function fetchData() {
-        const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-        if (suc) {
-            setSucursalId(suc.id);
-            const { data: zonasData } = await supabase
-                .from("zonas_entrega")
-                .select("*")
-                .eq("sucursal_id", suc.id)
-                .order("nombre");
-            setZonas(zonasData || []);
+        if (!sucursalId) return;
+        const { data: zonasData } = await supabase
+            .from("zonas_entrega")
+            .select("*")
+            .eq("sucursal_id", sucursalId)
+            .order("nombre");
+        setZonas(zonasData || []);
 
-            const { data: cfg } = await supabase
-                .from("config_sucursal")
-                .select("id, local_lat, local_lng, local_direccion")
-                .eq("sucursal_id", suc.id)
-                .limit(1)
-                .maybeSingle();
-            if (cfg) {
-                setConfigId(cfg.id);
-                setConfig({ local_lat: cfg.local_lat, local_lng: cfg.local_lng, local_direccion: cfg.local_direccion });
-                setLocalSearch(cfg.local_direccion || "");
-            }
+        const { data: cfg } = await supabase
+            .from("config_sucursal")
+            .select("id, local_lat, local_lng, local_direccion")
+            .eq("sucursal_id", sucursalId)
+            .limit(1)
+            .maybeSingle();
+        if (cfg) {
+            setConfigId(cfg.id);
+            setConfig({ local_lat: cfg.local_lat, local_lng: cfg.local_lng, local_direccion: cfg.local_direccion });
+            setLocalSearch(cfg.local_direccion || "");
         }
+
         setLoading(false);
     }
 
