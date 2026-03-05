@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Calendar, Filter, X, ChevronLeft, ChevronRight, User, MapPin, Phone, Clock } from "lucide-react";
+import { Calendar, Filter, X, ChevronLeft, ChevronRight, User, MapPin, Phone, Clock, Trash2 } from "lucide-react";
 
 type Pedido = {
     id: string;
@@ -112,13 +112,14 @@ export default function PedidosPage() {
                                 <th className="px-4 py-3 text-left font-semibold">Estado</th>
                                 <th className="px-4 py-3 text-right font-semibold">Total</th>
                                 <th className="px-4 py-3 text-left font-semibold">Fecha</th>
+                                <th className="px-4 py-3 w-10"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                                <tr><td colSpan={7} className="text-center py-10 text-gray-400">Cargando...</td></tr>
                             ) : pedidos.length === 0 ? (
-                                <tr><td colSpan={6} className="text-center py-10 text-gray-400">No hay pedidos</td></tr>
+                                <tr><td colSpan={7} className="text-center py-10 text-gray-400">No hay pedidos</td></tr>
                             ) : pedidos.map(p => (
                                 <tr
                                     key={p.id}
@@ -139,6 +140,22 @@ export default function PedidosPage() {
                                     </td>
                                     <td className="px-4 py-3 text-right font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.total)}</td>
                                     <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(p.created_at)}</td>
+                                    <td className="px-2 py-3">
+                                        <button
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (!confirm(`¿Eliminar definitivamente ${p.numero_pedido}?`)) return;
+                                                await supabase.from("pedido_items").delete().eq("pedido_id", p.id);
+                                                await supabase.from("pedidos").delete().eq("id", p.id);
+                                                if (selectedPedido?.id === p.id) setSelectedPedido(null);
+                                                fetchPedidos();
+                                            }}
+                                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Eliminar pedido"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

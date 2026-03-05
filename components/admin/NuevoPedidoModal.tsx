@@ -397,10 +397,24 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const { error: iError } = await supabase.from("pedido_items").insert(items);
                 if (iError) throw iError;
             } else {
-                // CREATE new order
-                const numRandom = Math.floor(1000 + Math.random() * 9000);
+                // CREATE new order - daily sequential numbering
+                const todayStr = new Date().toISOString().split('T')[0];
+                const { data: lastP } = await supabase
+                    .from("pedidos")
+                    .select("numero_pedido")
+                    .gte("created_at", `${todayStr}T00:00:00`)
+                    .lte("created_at", `${todayStr}T23:59:59`)
+                    .like("numero_pedido", "MMM-%")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                let nextSeq = 1;
+                if (lastP?.numero_pedido) {
+                    const lastNum = parseInt(lastP.numero_pedido.replace("MMM-", ""), 10);
+                    if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+                }
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                    numero_pedido: `MMM-${numRandom}`,
+                    numero_pedido: `MMM-${nextSeq}`,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",

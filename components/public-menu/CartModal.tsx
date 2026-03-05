@@ -214,22 +214,24 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 .eq("sucursal_id", sucursal.id)
                 .single();
 
-            // 2b. Generar número de pedido correcto desde el cliente (bypass del trigger bugueado)
-            const yearPart = new Date().getFullYear().toString().slice(-2);
+            // 2b. Generar número de pedido diario (empieza en 1 cada día)
+            const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
             const { data: lastPedido } = await supabase
                 .from("pedidos")
                 .select("numero_pedido")
-                .like("numero_pedido", `PED-${yearPart}%`)
-                .order("numero_pedido", { ascending: false })
+                .gte("created_at", `${todayStr}T00:00:00`)
+                .lte("created_at", `${todayStr}T23:59:59`)
+                .like("numero_pedido", "MMM-%")
+                .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();
 
             let nextSeq = 1;
             if (lastPedido?.numero_pedido) {
-                const lastNum = parseInt(lastPedido.numero_pedido.slice(-6), 10);
+                const lastNum = parseInt(lastPedido.numero_pedido.replace("MMM-", ""), 10);
                 if (!isNaN(lastNum)) nextSeq = lastNum + 1;
             }
-            const numeroPedido = `PED-${yearPart}${String(nextSeq).padStart(6, "0")}`;
+            const numeroPedido = `MMM-${nextSeq}`;
 
             // 3. Crear el Pedido en la base de datos
             const { data: pedido, error: pedidoError } = await supabase

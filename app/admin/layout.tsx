@@ -14,7 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <AiAssistantBar />
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
-        <div className="fixed bottom-2 right-3 text-[10px] font-mono text-gray-400/60 select-none pointer-events-none z-50">
+        <div className="fixed bottom-2 left-3 text-[10px] font-mono text-gray-400/60 select-none pointer-events-none z-50">
           Ver. {versionData.version}
         </div>
       </div>

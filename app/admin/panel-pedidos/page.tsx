@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
 import { printComanda, printCocina } from "@/lib/printUtils";
@@ -44,8 +44,8 @@ type Pedido = {
 };
 
 const ESTADOS_3_COLUMNAS = [
-  { key: "nuevos", label: "Nuevos", color: "bg-blue-500", icon: Clock, states: ["pendiente"] },
-  { key: "preparacion", label: "En preparación", color: "bg-orange-500", icon: ChefHat, states: ["confirmado", "preparando"] },
+  { key: "nuevos", label: "Nuevos", color: "bg-blue-500", icon: Clock, states: ["pendiente", "confirmado"] },
+  { key: "preparacion", label: "En Cocina", color: "bg-orange-500", icon: ChefHat, states: ["preparando"] },
   { key: "listos", label: "Listos", color: "bg-green-500", icon: Bike, states: ["listo", "en_camino"] },
 ];
 
@@ -257,9 +257,13 @@ export default function PanelPedidosPage() {
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
     await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
 
-    // Auto WhatsApp on listo
-    if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
+    // Send WhatsApp notification at each transition
+    if (nuevoEstado === "preparando") {
+      sendWhatsAppNotification(pedido, 'confirmado');
+    } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
       sendWhatsAppNotification(pedido, 'listo');
+    } else if (nuevoEstado === "entregado") {
+      sendWhatsAppNotification(pedido, 'entregado');
     }
 
     fetchPedidos();
@@ -278,7 +282,7 @@ export default function PanelPedidosPage() {
     const pedido = confirmTimePedido;
 
     await supabase.from("pedidos").update({
-      estado: "confirmado", // Changed to confirmado instead of preparing immediately
+      estado: "preparando",
       tiempo_preparacion_minutos: minutes
     }).eq("id", pedido.id);
 
@@ -594,9 +598,14 @@ export default function PanelPedidosPage() {
                     </div>
                     {selectedPedido.cliente_telefono && (
                       <div className="flex items-center justify-between px-4 py-3">
-                        <span className="text-sm">
-                          WhatsApp: <span className="text-purple-600 font-medium">{selectedPedido.cliente_telefono}</span>
-                        </span>
+                        <a
+                          href={`https://wa.me/${selectedPedido.cliente_telefono.replace(/\D/g, "").replace(/^(?!54)/, "54")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-purple-600 font-medium hover:underline cursor-pointer"
+                        >
+                          WhatsApp: {selectedPedido.cliente_telefono}
+                        </a>
                         <button
                           onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_telefono)}
                           className="text-gray-300 hover:text-gray-500 transition-colors"
@@ -608,14 +617,37 @@ export default function PanelPedidosPage() {
                     )}
                     {selectedPedido.cliente_direccion && (
                       <div className="flex items-center justify-between px-4 py-3">
-                        <span className="text-sm text-purple-600 font-medium truncate max-w-[240px]">{selectedPedido.cliente_direccion}</span>
-                        <button
-                          onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_direccion)}
-                          className="text-gray-300 hover:text-gray-500 transition-colors shrink-0"
-                          title="Copiar"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                        </button>
+                        <span className="text-sm text-purple-600 font-medium truncate max-w-[180px]">{selectedPedido.cliente_direccion}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {(selectedPedido.cliente_lat && selectedPedido.cliente_lng) ? (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPedido.cliente_lat},${selectedPedido.cliente_lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                              title="Abrir en Google Maps"
+                            >
+                              <ExternalLink size={12} /> Maps
+                            </a>
+                          ) : (
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPedido.cliente_direccion)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg text-[10px] font-bold hover:bg-blue-100 transition-colors"
+                              title="Buscar en Google Maps"
+                            >
+                              <ExternalLink size={12} /> Maps
+                            </a>
+                          )}
+                          <button
+                            onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_direccion)}
+                            className="text-gray-300 hover:text-gray-500 transition-colors"
+                            title="Copiar"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
