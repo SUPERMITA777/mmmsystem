@@ -271,6 +271,43 @@ export default function MenuPage() {
 
   const productoActual = productosCompletos.find((p) => p.id === productoSeleccionado) || null;
 
+  async function handleDuplicateProducto(id: string) {
+    try {
+      setLoading(true);
+      const { data: original } = await supabase.from("productos").select("*").eq("id", id).single();
+      if (!original) return;
+      const { id: _, created_at, updated_at, ...prodData } = original;
+      const { data: existing } = await supabase.from("productos").select("orden").eq("categoria_id", prodData.categoria_id).order("orden", { ascending: false }).limit(1);
+      const maxOrden = existing?.[0]?.orden || 0;
+      const { error } = await supabase.from("productos").insert([{ ...prodData, nombre: `${original.nombre} (copia)`, orden: maxOrden + 1 }]);
+      if (error) throw error;
+      if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
+      alert("Producto duplicado");
+    } catch (error) {
+      console.error(error);
+      alert("Error al duplicar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteProducto(id: string) {
+    if (!confirm("¿Eliminar este producto?")) return;
+    try {
+      setLoading(true);
+      await supabase.from("producto_grupos_adicionales").delete().eq("producto_id", id);
+      const { error } = await supabase.from("productos").delete().eq("id", id);
+      if (error) throw error;
+      if (productoSeleccionado === id) setProductoSeleccionado(null);
+      if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
+    } catch (error) {
+      console.error(error);
+      alert("Error al eliminar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -360,6 +397,8 @@ export default function MenuPage() {
               setProductoSeleccionado(null);
             }}
             onOpenSort={() => setIsProductosSortOpen(true)}
+            onDuplicateProducto={handleDuplicateProducto}
+            onDeleteProducto={handleDeleteProducto}
           />
         </div>
 
