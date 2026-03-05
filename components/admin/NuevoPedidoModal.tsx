@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
+import { getProductDiscount } from "@/lib/discountUtils";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -129,16 +130,18 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setDescuentos(descs || []);
     }
 
-    function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number } {
-        const prodDisc = descuentos.find(d => d.aplicar_a === 'producto' && d.producto_id === producto.id);
-        const catDisc = descuentos.find(d => d.aplicar_a === 'categoria' && d.categoria_id === producto.categoria_id);
-        const genDisc = descuentos.find(d => d.aplicar_a === 'general');
-        const disc = prodDisc || catDisc || genDisc;
-        if (!disc) return { original: producto.precio, final: producto.precio, porcentaje: 0 };
-        if (disc.tipo === 'porcentaje') {
-            return { original: producto.precio, final: Math.round(producto.precio * (1 - disc.valor / 100)), porcentaje: disc.valor };
-        }
-        return { original: producto.precio, final: Math.max(0, producto.precio - disc.valor), porcentaje: 0 };
+    function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number, id?: string, no_acumulable?: boolean, has_discount: boolean } {
+        const disc = getProductDiscount(producto.id, producto.categoria_id || "", descuentos);
+        if (!disc) return { original: Math.round(producto.precio), final: Math.round(producto.precio), porcentaje: 0, has_discount: false };
+
+        return {
+            original: Math.round(producto.precio),
+            final: Math.round(disc.precioFinal(producto.precio)),
+            porcentaje: disc.porcentaje,
+            id: disc.id,
+            no_acumulable: disc.no_acumulable,
+            has_discount: true
+        };
     }
 
     async function validarDireccion(address: string) {
@@ -256,15 +259,32 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     function addToCart(p: any, qty: number, nota: string, ads: { nombre: string; precio: number; cantidad: number }[]) {
         const adTotal = ads.reduce((s, a) => s + a.precio * a.cantidad, 0);
-        const item: CartItem = {
+        const discInfo = getDiscountedPrice(p);
+
+        if (discInfo.has_discount) {
+            const hasNonStackableCartItem = carrito.some((i: any) => i.no_acumulable);
+            const hasAnyDiscountCartItem = carrito.some((i: any) => i.has_discount);
+            if (discInfo.no_acumulable && hasAnyDiscountCartItem) {
+                alert("Este producto tiene un descuento NO ACUMULABLE y ya tenés productos con descuento en el carrito. Por favor, realizá pagos separados.");
+                return;
+            }
+            if (!discInfo.no_acumulable && hasNonStackableCartItem) {
+                alert("Ya tenés un descuento NO ACUMULABLE en el carrito. Por favor, realizá pagos separados.");
+                return;
+            }
+        }
+
+        const item: any = {
             id: `${p.id}-${Date.now()}`,
             nombre: p.nombre,
-            precio: getDiscountedPrice(p).final + adTotal,
-            precioOverride: getDiscountedPrice(p).final + adTotal,
+            precio: discInfo.final + adTotal,
+            precioOverride: discInfo.final + adTotal,
             cantidad: qty,
             imagen_url: p.imagen_url,
             nota,
-            adicionales: ads.filter(a => a.cantidad > 0)
+            adicionales: ads.filter(a => a.cantidad > 0),
+            no_acumulable: discInfo.no_acumulable,
+            has_discount: discInfo.has_discount
         };
         setCarrito(prev => [...prev, item]);
         setView("catalog");
@@ -273,15 +293,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     function updateCartItem(idx: number, p: any, qty: number, nota: string, ads: { nombre: string; precio: number; cantidad: number }[]) {
         const adTotal = ads.reduce((s, a) => s + a.precio * a.cantidad, 0);
+        const discInfo = getDiscountedPrice(p);
+
         setCarrito(prev => prev.map((item, i) => {
             if (i !== idx) return item;
             return {
                 ...item,
-                precio: getDiscountedPrice(p).final + adTotal,
-                precioOverride: getDiscountedPrice(p).final + adTotal,
+                precio: discInfo.final + adTotal,
+                precioOverride: discInfo.final + adTotal,
                 cantidad: qty,
                 nota,
-                adicionales: ads.filter(a => a.cantidad > 0)
+                adicionales: ads.filter(a => a.cantidad > 0),
+                no_acumulable: discInfo.no_acumulable,
+                has_discount: discInfo.has_discount
             };
         }));
         setView("catalog");

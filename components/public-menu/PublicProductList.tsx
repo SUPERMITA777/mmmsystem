@@ -21,15 +21,7 @@ interface CategoryWithProducts {
     productos: Product[];
 }
 
-interface Descuento {
-    id: string;
-    tipo: string;
-    valor: number;
-    activo: boolean;
-    aplicar_a: string;
-    producto_id?: string | null;
-    categoria_id?: string | null;
-}
+import { getProductDiscount, Descuento } from "@/lib/discountUtils";
 
 interface PublicProductListProps {
     categorias: CategoryWithProducts[];
@@ -37,27 +29,7 @@ interface PublicProductListProps {
     descuentos?: Descuento[];
 }
 
-function getProductDiscount(productId: string, categoryId: string, descuentos: Descuento[]): { porcentaje: number; precioFinal: (precio: number) => number } | null {
-    // Priority: product-specific > category > general
-    const prodDisc = descuentos.find(d => d.aplicar_a === "producto" && d.producto_id === productId);
-    const catDisc = descuentos.find(d => d.aplicar_a === "categoria" && d.categoria_id === categoryId);
-    const genDisc = descuentos.find(d => d.aplicar_a === "general");
-
-    const disc = prodDisc || catDisc || genDisc;
-    if (!disc) return null;
-
-    if (disc.tipo === "porcentaje") {
-        return {
-            porcentaje: disc.valor,
-            precioFinal: (precio: number) => Math.round(precio * (1 - disc.valor / 100)),
-        };
-    }
-    // fijo
-    return {
-        porcentaje: 0,
-        precioFinal: (precio: number) => Math.max(0, precio - disc.valor),
-    };
-}
+// Logic moved to lib/discountUtils.ts
 
 export default function PublicProductList({ categorias, onProductClick, descuentos = [] }: PublicProductListProps) {
     return (

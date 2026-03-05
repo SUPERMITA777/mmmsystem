@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ArrowLeft, Star, Minus, Plus } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { getProductDiscount } from "@/lib/discountUtils";
 
 type Producto = {
     id: string;
@@ -47,7 +48,7 @@ export default function ProductDetailModal({
     // Estado de selección: Guardamos un array de IDs de adicionales por cada grupo (un ID puede repetirse si se selecciona varias veces)
     const [seleccion, setSeleccion] = useState<Record<string, string[]>>({});
     const [notas, setNotas] = useState("");
-    const { addItem } = useCart();
+    const { addItem, items } = useCart();
 
     useEffect(() => {
         loadAdicionales();
@@ -121,6 +122,21 @@ export default function ProductDetailModal({
     function handleAgregar() {
         if (!isCartValid) return;
 
+        // Validar no acumulable
+        if (discount) {
+            const hasNonStackableCartItem = items.some((i: any) => i.descuentoInfo?.no_acumulable);
+            const hasAnyDiscountCartItem = items.some((i: any) => !!i.descuentoInfo);
+
+            if (discount.no_acumulable && hasAnyDiscountCartItem) {
+                alert("Este producto tiene un descuento NO ACUMULABLE y ya tenés productos con descuento en el carrito. Por favor, realizá pagos separados.");
+                return;
+            }
+            if (!discount.no_acumulable && hasNonStackableCartItem) {
+                alert("Ya tenés un descuento NO ACUMULABLE en el carrito. Por favor, realizá pagos separados si querés aprovechar este descuento.");
+                return;
+            }
+        }
+
         // Calculate additional info for the cart
         const adicionalesSeleccionados: any[] = [];
         grupos.forEach(g => {
@@ -152,6 +168,12 @@ export default function ProductDetailModal({
             imagen_url: producto.imagen_url,
             adicionales: adicionalesSeleccionados,
             notas: notas.trim() || undefined,
+            descuentoInfo: discount ? {
+                id: discount.id,
+                porcentaje: discount.porcentaje,
+                no_acumulable: discount.no_acumulable,
+                nombre: discount.nombre
+            } : null,
         });
         onClose();
     }
@@ -166,18 +188,8 @@ export default function ProductDetailModal({
     }, 0);
 
     // Compute discounted price
-    const discount = (() => {
-        const prodDisc = descuentos.find(d => d.aplicar_a === 'producto' && d.producto_id === producto.id);
-        const catDisc = descuentos.find(d => d.aplicar_a === 'categoria' && d.categoria_id === producto.categoria_id);
-        const genDisc = descuentos.find(d => d.aplicar_a === 'general');
-        return prodDisc || catDisc || genDisc || null;
-    })();
-
-    const precioBase = discount && discount.tipo === 'porcentaje'
-        ? Math.round(producto.precio * (1 - discount.valor / 100))
-        : discount && discount.tipo === 'fijo'
-            ? Math.max(0, producto.precio - discount.valor)
-            : producto.precio;
+    const discount = getProductDiscount(producto.id, producto.categoria_id || "", descuentos);
+    const precioBase = discount ? discount.precioFinal(producto.precio) : producto.precio;
 
     const totalLinea = (precioBase + calculoAdicionales) * cantidad;
 
@@ -236,7 +248,7 @@ export default function ProductDetailModal({
 
                         {/* Price */}
                         <div className="mb-6 border-b border-slate-800 pb-6">
-                            {discount && discount.tipo === 'porcentaje' ? (
+                            {discount && discount.porcentaje > 0 ? (
                                 <div className="flex items-center gap-3">
                                     <span className="text-lg font-bold text-slate-500 line-through">
                                         $ {new Intl.NumberFormat("es-AR").format(producto.precio)}
@@ -245,7 +257,19 @@ export default function ProductDetailModal({
                                         $ {new Intl.NumberFormat("es-AR").format(precioBase)}
                                     </span>
                                     <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg uppercase">
-                                        {discount.valor}% OFF
+                                        {discount.porcentaje}% OFF
+                                    </span>
+                                </div>
+                            ) : discount && precioBase < producto.precio ? (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-lg font-bold text-slate-500 line-through">
+                                        $ {new Intl.NumberFormat("es-AR").format(producto.precio)}
+                                    </span>
+                                    <span className="text-2xl font-black text-green-400">
+                                        $ {new Intl.NumberFormat("es-AR").format(precioBase)}
+                                    </span>
+                                    <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg uppercase">
+                                        $ {new Intl.NumberFormat("es-AR").format(producto.precio - precioBase)} OFF
                                     </span>
                                 </div>
                             ) : (

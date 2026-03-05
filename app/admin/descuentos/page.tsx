@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, Trash2, Tag, Search, X } from "lucide-react";
+import { Plus, Trash2, Tag, Search, X, Edit3 } from "lucide-react";
 
 type Descuento = {
     id: string;
@@ -11,24 +11,36 @@ type Descuento = {
     tipo: string;
     valor: number;
     minimo_compra: number;
-    fecha_inicio: string;
-    fecha_fin: string;
     activo: boolean;
-    uso_limite: number;
+    uso_limite: number | null;
     uso_actual: number;
     aplicar_a: string; // 'general' | 'producto' | 'categoria'
     producto_id: string | null;
     categoria_id: string | null;
+    no_acumulable: boolean;
+    fecha_desde: string | null;
+    fecha_hasta: string | null;
+    hora_desde: string | null;
+    hora_hasta: string | null;
+    productos_ids: string[] | null;
+    categorias_ids: string[] | null;
 };
 
 export default function DescuentosPage() {
     const [descuentos, setDescuentos] = useState<Descuento[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+
     const [form, setForm] = useState({
         nombre: "", codigo: "", tipo: "porcentaje", valor: "",
         minimo_compra: "", uso_limite: "",
-        aplicar_a: "general", producto_id: "", categoria_id: ""
+        aplicar_a: "general",
+        productos_ids: [] as string[],
+        categorias_ids: [] as string[],
+        no_acumulable: false,
+        fecha_desde: "", fecha_hasta: "",
+        hora_desde: "", hora_hasta: ""
     });
 
     // Lookups
@@ -52,11 +64,46 @@ export default function DescuentosPage() {
         setCategorias(cats || []);
     }
 
-    async function handleCreate() {
+    function resetForm() {
+        setForm({
+            nombre: "", codigo: "", tipo: "porcentaje", valor: "", minimo_compra: "", uso_limite: "",
+            aplicar_a: "general", productos_ids: [], categorias_ids: [], no_acumulable: false,
+            fecha_desde: "", fecha_hasta: "", hora_desde: "", hora_hasta: ""
+        });
+        setEditingId(null);
+        setShowForm(false);
+    }
+
+    function handleEdit(d: Descuento) {
+        // Collect old single id if array is empty
+        const initialProductos = d.productos_ids || (d.producto_id ? [d.producto_id] : []);
+        const initialCategorias = d.categorias_ids || (d.categoria_id ? [d.categoria_id] : []);
+
+        setForm({
+            nombre: d.nombre,
+            codigo: d.codigo || "",
+            tipo: d.tipo,
+            valor: String(d.valor),
+            minimo_compra: d.minimo_compra ? String(d.minimo_compra) : "",
+            uso_limite: d.uso_limite ? String(d.uso_limite) : "",
+            aplicar_a: d.aplicar_a,
+            productos_ids: initialProductos,
+            categorias_ids: initialCategorias,
+            no_acumulable: !!d.no_acumulable,
+            fecha_desde: d.fecha_desde || "",
+            fecha_hasta: d.fecha_hasta || "",
+            hora_desde: d.hora_desde ? d.hora_desde.substring(0, 5) : "",
+            hora_hasta: d.hora_hasta ? d.hora_hasta.substring(0, 5) : ""
+        });
+        setEditingId(d.id);
+        setShowForm(true);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function handleSave() {
         if (!form.nombre || !form.valor) return;
-        const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-        await supabase.from("descuentos").insert({
-            sucursal_id: suc?.id,
+
+        const payload = {
             nombre: form.nombre,
             codigo: form.codigo || null,
             tipo: form.tipo,
@@ -64,11 +111,26 @@ export default function DescuentosPage() {
             minimo_compra: form.minimo_compra ? Number(form.minimo_compra) : null,
             uso_limite: form.uso_limite ? Number(form.uso_limite) : null,
             aplicar_a: form.aplicar_a,
-            producto_id: form.aplicar_a === "producto" ? form.producto_id || null : null,
-            categoria_id: form.aplicar_a === "categoria" ? form.categoria_id || null : null,
-        });
-        setForm({ nombre: "", codigo: "", tipo: "porcentaje", valor: "", minimo_compra: "", uso_limite: "", aplicar_a: "general", producto_id: "", categoria_id: "" });
-        setShowForm(false);
+            no_acumulable: form.no_acumulable,
+            fecha_desde: form.fecha_desde || null,
+            fecha_hasta: form.fecha_hasta || null,
+            hora_desde: form.hora_desde ? form.hora_desde + ":00" : null,
+            hora_hasta: form.hora_hasta ? form.hora_hasta + ":00" : null,
+            productos_ids: form.aplicar_a === "producto" && form.productos_ids.length > 0 ? form.productos_ids : null,
+            categorias_ids: form.aplicar_a === "categoria" && form.categorias_ids.length > 0 ? form.categorias_ids : null,
+            // Keep legacy fields null on new edits to prioritize arrays
+            producto_id: null,
+            categoria_id: null
+        };
+
+        if (editingId) {
+            await supabase.from("descuentos").update(payload).eq("id", editingId);
+        } else {
+            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
+            await supabase.from("descuentos").insert({ ...payload, sucursal_id: suc?.id });
+        }
+
+        resetForm();
         fetchDescuentos();
     }
 
@@ -83,34 +145,21 @@ export default function DescuentosPage() {
         fetchDescuentos();
     }
 
-    const selectedProduct = productos.find(p => p.id === form.producto_id);
-    const filteredProds = productos.filter(p => p.nombre.toLowerCase().includes(searchProd.toLowerCase()));
-
-    function getTargetLabel(d: Descuento) {
-        if (d.aplicar_a === "producto") {
-            const p = productos.find(x => x.id === d.producto_id);
-            return p ? `Producto: ${p.nombre}` : "Producto";
-        }
-        if (d.aplicar_a === "categoria") {
-            const c = categorias.find(x => x.id === d.categoria_id);
-            return c ? `Categoría: ${c.nombre}` : "Categoría";
-        }
-        return "General";
-    }
+    const filteredProds = productos.filter(p => p.nombre.toLowerCase().includes(searchProd.toLowerCase()) && !form.productos_ids.includes(p.id));
 
     return (
         <section className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Descuentos</h2>
-                <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
+                <button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
                     <Plus size={14} /> Nuevo descuento
                 </button>
             </div>
 
             {showForm && (
-                <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <fieldset className="border border-gray-300 rounded-lg px-3 py-2">
+                <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-6 space-y-4 shadow-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <fieldset className="border border-gray-300 rounded-lg px-3 py-2 col-span-1 md:col-span-2">
                             <legend className="text-xs text-gray-500 px-1">Nombre</legend>
                             <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} className="w-full bg-transparent outline-none text-sm text-gray-900" placeholder="Ej: 20% OFF Pizzas" />
                         </fieldset>
@@ -118,6 +167,13 @@ export default function DescuentosPage() {
                             <legend className="text-xs text-gray-500 px-1">Código (opcional)</legend>
                             <input type="text" value={form.codigo} onChange={e => setForm({ ...form, codigo: e.target.value.toUpperCase() })} className="w-full bg-transparent outline-none text-sm text-gray-900 font-mono" placeholder="PROMO20" />
                         </fieldset>
+                        <div className="flex items-center border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 gap-2 cursor-pointer" onClick={() => setForm({ ...form, no_acumulable: !form.no_acumulable })}>
+                            <input type="checkbox" checked={form.no_acumulable} onChange={e => setForm({ ...form, no_acumulable: e.target.checked })} className="w-4 h-4 text-purple-600 rounded" />
+                            <span className="text-sm font-bold text-gray-700 select-none">No acumulable</span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <fieldset className="border border-gray-300 rounded-lg px-3 py-2">
                             <legend className="text-xs text-gray-500 px-1">Tipo</legend>
                             <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} className="w-full bg-transparent outline-none text-sm text-gray-900">
@@ -139,69 +195,110 @@ export default function DescuentosPage() {
                         </fieldset>
                     </div>
 
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                        <fieldset className="border border-blue-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-blue-400 text-sm">
+                            <legend className="text-xs text-blue-600 px-1">Fecha de inicio</legend>
+                            <input type="date" value={form.fecha_desde} onChange={e => setForm({ ...form, fecha_desde: e.target.value })} className="w-full bg-transparent outline-none text-gray-700" />
+                        </fieldset>
+                        <fieldset className="border border-blue-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-blue-400 text-sm">
+                            <legend className="text-xs text-blue-600 px-1">Fecha de fin</legend>
+                            <input type="date" value={form.fecha_hasta} onChange={e => setForm({ ...form, fecha_hasta: e.target.value })} className="w-full bg-transparent outline-none text-gray-700" />
+                        </fieldset>
+                        <fieldset className="border border-blue-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-blue-400 text-sm">
+                            <legend className="text-xs text-blue-600 px-1">Hora desde</legend>
+                            <input type="time" value={form.hora_desde} onChange={e => setForm({ ...form, hora_desde: e.target.value })} className="w-full bg-transparent outline-none text-gray-700" />
+                        </fieldset>
+                        <fieldset className="border border-blue-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-blue-400 text-sm">
+                            <legend className="text-xs text-blue-600 px-1">Hora hasta</legend>
+                            <input type="time" value={form.hora_hasta} onChange={e => setForm({ ...form, hora_hasta: e.target.value })} className="w-full bg-transparent outline-none text-gray-700" />
+                        </fieldset>
+                    </div>
+
                     {/* ── Aplicar a ── */}
                     <div className="space-y-3 pt-2 border-t border-gray-100">
                         <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Aplicar a</label>
                         <div className="flex gap-2">
                             {(["general", "producto", "categoria"] as const).map(opt => (
-                                <button key={opt} onClick={() => setForm({ ...form, aplicar_a: opt, producto_id: "", categoria_id: "" })}
+                                <button key={opt} onClick={() => setForm({ ...form, aplicar_a: opt, productos_ids: [], categorias_ids: [] })}
                                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors capitalize ${form.aplicar_a === opt ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                                    {opt === "general" ? "General" : opt === "producto" ? "Producto" : "Categoría"}
+                                    {opt === "general" ? "General" : opt === "producto" ? "Productos Específicos" : "Categorías Específicas"}
                                 </button>
                             ))}
                         </div>
 
                         {form.aplicar_a === "producto" && (
-                            <div className="relative">
-                                {selectedProduct ? (
-                                    <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                                        <div className="text-sm">
-                                            <p className="font-bold text-gray-900">{selectedProduct.nombre}</p>
-                                            <p className="text-gray-500">$ {selectedProduct.precio}</p>
-                                        </div>
-                                        <button onClick={() => setForm({ ...form, producto_id: "" })} className="text-gray-400 hover:text-red-500">
-                                            <X size={18} />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="relative">
-                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                            <input type="text" value={searchProd} onChange={e => { setSearchProd(e.target.value); setShowProdSearch(true); }}
-                                                onFocus={() => setShowProdSearch(true)}
-                                                className="w-full border border-gray-200 rounded-xl py-2.5 pl-9 pr-3 text-sm outline-none focus:border-gray-400"
-                                                placeholder="Buscar producto..." />
-                                        </div>
-                                        {showProdSearch && (
-                                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
-                                                {filteredProds.map(p => (
-                                                    <button key={p.id} onClick={() => { setForm({ ...form, producto_id: p.id }); setShowProdSearch(false); setSearchProd(""); }}
-                                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex justify-between border-b border-gray-50 last:border-0">
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                                <div className="relative">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input type="text" value={searchProd} onChange={e => { setSearchProd(e.target.value); setShowProdSearch(true); }}
+                                        onFocus={() => setShowProdSearch(true)}
+                                        className="w-full border border-gray-200 bg-white rounded-xl py-2.5 pl-9 pr-3 text-sm outline-none focus:border-purple-400 transition-colors"
+                                        placeholder="Buscar producto para aplicar descuento..." />
+
+                                    {showProdSearch && searchProd && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
+                                            {filteredProds.length === 0 ? (
+                                                <div className="px-4 py-3 text-sm text-gray-500 text-center">No se encontraron productos o ya están seleccionados</div>
+                                            ) : (
+                                                filteredProds.map(p => (
+                                                    <button key={p.id} onClick={() => {
+                                                        setForm({ ...form, productos_ids: [...form.productos_ids, p.id] });
+                                                        setShowProdSearch(false);
+                                                        setSearchProd("");
+                                                    }}
+                                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 flex justify-between border-b border-gray-100 last:border-0">
                                                         <span className="font-medium text-gray-900">{p.nombre}</span>
-                                                        <span className="text-gray-400 text-xs">$ {p.precio}</span>
+                                                        <span className="text-purple-600 font-bold text-xs">$ {p.precio}</span>
                                                     </button>
-                                                ))}
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {form.productos_ids.map(id => {
+                                        const p = productos.find(x => x.id === id);
+                                        if (!p) return null;
+                                        return (
+                                            <div key={id} className="flex items-center gap-1.5 bg-purple-100 text-purple-800 px-3 py-1.5 rounded-lg text-sm border border-purple-200">
+                                                <span className="font-medium">{p.nombre}</span>
+                                                <button onClick={() => setForm({ ...form, productos_ids: form.productos_ids.filter(x => x !== id) })} className="hover:text-red-500 bg-white rounded-full p-0.5"><X size={12} /></button>
                                             </div>
-                                        )}
-                                    </>
-                                )}
+                                        )
+                                    })}
+                                    {form.productos_ids.length === 0 && <p className="text-xs text-gray-500 italic">Buscá y seleccioná los productos a los que se aplicará este descuento.</p>}
+                                </div>
                             </div>
                         )}
 
                         {form.aplicar_a === "categoria" && (
-                            <select value={form.categoria_id} onChange={e => setForm({ ...form, categoria_id: e.target.value })}
-                                className="w-full border border-gray-200 rounded-xl py-2.5 px-3 text-sm outline-none focus:border-gray-400">
-                                <option value="">Seleccionar categoría...</option>
-                                {categorias.map(c => (
-                                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                                ))}
-                            </select>
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <p className="text-xs text-gray-500 mb-3">Marcá las categorías a las que se aplicará este descuento:</p>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                    {categorias.map(c => {
+                                        const isSelected = form.categorias_ids.includes(c.id);
+                                        return (
+                                            <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors border ${isSelected ? 'bg-purple-50 border-purple-200 text-purple-900' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-100'}`}>
+                                                <input type="checkbox" checked={isSelected}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) setForm({ ...form, categorias_ids: [...form.categorias_ids, c.id] });
+                                                        else setForm({ ...form, categorias_ids: form.categorias_ids.filter(x => x !== c.id) });
+                                                    }} className="w-4 h-4 text-purple-600 rounded" />
+                                                <span className="text-sm font-medium">{c.nombre}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {form.categorias_ids.length === 0 && <p className="text-xs text-red-500 mt-2 font-medium">⚠ Debés seleccionar al menos una categoría.</p>}
+                            </div>
                         )}
                     </div>
 
-                    <div className="flex gap-2 pt-2">
-                        <button onClick={handleCreate} className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-500">Guardar</button>
-                        <button onClick={() => setShowForm(false)} className="text-gray-500 px-4 py-2 rounded-lg text-sm hover:text-gray-700">Cancelar</button>
+                    <div className="flex gap-2 pt-2 border-t border-gray-100">
+                        <button onClick={handleSave} className="bg-purple-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-purple-500 shadow-sm transition-colors">
+                            {editingId ? "Actualizar descuento" : "Guardar descuento"}
+                        </button>
+                        <button onClick={resetForm} className="text-gray-500 px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">Cancelar</button>
                     </div>
                 </div>
             )}
@@ -213,29 +310,56 @@ export default function DescuentosPage() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {descuentos.map(d => (
-                        <div key={d.id} className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between">
-                            <div>
-                                <h3 className="font-bold text-gray-900 text-sm">{d.nombre}</h3>
-                                <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
-                                    {d.codigo && <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">{d.codigo}</span>}
-                                    <span className="font-bold text-purple-600">{d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`}</span>
-                                    <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold">{getTargetLabel(d)}</span>
-                                    {d.minimo_compra > 0 && <span>Mín: ${d.minimo_compra}</span>}
-                                    {d.uso_limite && <span>Usos: {d.uso_actual}/{d.uso_limite}</span>}
+                    {descuentos.map(d => {
+                        const cantProductos = (d.productos_ids?.length || 0) + (d.producto_id ? 1 : 0);
+                        const cantCategorias = (d.categorias_ids?.length || 0) + (d.categoria_id ? 1 : 0);
+                        return (
+                            <div key={d.id} className={`bg-white rounded-2xl border p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${!d.activo ? 'opacity-60 border-gray-200' : 'border-gray-300 shadow-sm'}`}>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-bold text-gray-900 text-base">{d.nombre}</h3>
+                                        {!d.activo && <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Inactivo</span>}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-xs text-gray-600">
+                                        {d.codigo && <span className="font-mono bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded shadow-sm">{d.codigo}</span>}
+                                        <span className="font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded shadow-sm">{d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`}</span>
+                                        <span className="bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 rounded font-bold shadow-sm">
+                                            {d.aplicar_a === 'general' ? 'General' :
+                                                d.aplicar_a === 'producto' ? `Productos (${cantProductos})` : `Categorías (${cantCategorias})`}
+                                        </span>
+                                        {d.no_acumulable && <span className="bg-red-50 border border-red-200 text-red-700 px-2 py-0.5 rounded font-bold shadow-sm">No Acumulable</span>}
+
+                                        {(d.fecha_desde || d.fecha_hasta || d.hora_desde || d.hora_hasta) && (
+                                            <span className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded font-medium shadow-sm ml-1">
+                                                ⏱️ {d.fecha_desde ? new Date(d.fecha_desde).toLocaleDateString() : 'Siempre'} {d.fecha_hasta ? `al ${new Date(d.fecha_hasta).toLocaleDateString()}` : ''}
+                                                {(d.hora_desde || d.hora_hasta) && ` (${d.hora_desde ? d.hora_desde.substring(0, 5) : '00:00'} - ${d.hora_hasta ? d.hora_hasta.substring(0, 5) : '23:59'})`}
+                                            </span>
+                                        )}
+
+                                        {d.minimo_compra > 0 && <span className="ml-1">Mínimo: ${d.minimo_compra}</span>}
+                                        {d.uso_limite && <span className="ml-1 opacity-70">Usos: {d.uso_actual}/{d.uso_limite}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                                    <button
+                                        onClick={() => handleEdit(d)}
+                                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                        title="Editar"
+                                    >
+                                        <Edit3 size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => toggleActivo(d)}
+                                        title={d.activo ? "Desactivar" : "Activar"}
+                                        className={`w-11 h-6 rounded-full relative transition-colors ${d.activo ? "bg-green-500" : "bg-gray-300"}`}
+                                    >
+                                        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${d.activo ? "left-5.5" : "left-0.5"}`} />
+                                    </button>
+                                    <button onClick={() => handleDelete(d.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={18} /></button>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => toggleActivo(d)}
-                                    className={`w-10 h-5 rounded-full relative transition-colors ${d.activo ? "bg-green-500" : "bg-gray-300"}`}
-                                >
-                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${d.activo ? "left-5" : "left-0.5"}`} />
-                                </button>
-                                <button onClick={() => handleDelete(d.id)} className="text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </section>
