@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 
 export default function LoginPage() {
     const router = useRouter();
+    const params = useParams();
+    const tenantSlug = params?.tenant as string || "mmm";
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export default function LoginPage() {
                 return;
             }
 
-            router.push("/admin");
+            router.push(`/${tenantSlug}/admin`);
             router.refresh();
         } catch {
             setError("Error de conexión. Intenta de nuevo.");

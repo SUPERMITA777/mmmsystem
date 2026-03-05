@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
+import { useTenant } from "@/context/TenantContext";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -60,11 +61,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [zonas, setZonas] = useState<any[]>([]);
     const [configSucursal, setConfigSucursal] = useState<any>(null);
     const [validacionDelivery, setValidacionDelivery] = useState<{ valid: boolean; zona?: string; costo: number; loading: boolean; error?: string }>({ valid: false, costo: 0, loading: false });
+    const { sucursalId } = useTenant();
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
     const [alternativas, setAlternativas] = useState<any[]>([]);
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && sucursalId) {
             fetchAll();
             setView("catalog");
             if (editPedido) {
@@ -97,7 +99,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setSeAbona("");
             }
         }
-    }, [isOpen]);
+    }, [isOpen, sucursalId]);
 
     useEffect(() => {
         // Reset validation when address changes
@@ -109,24 +111,25 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }, [cliente.direccion, tipo]);
 
     async function fetchAll() {
-        const { data: prods } = await supabase.from("productos").select("*").order("nombre");
+        if (!sucursalId) return;
+        const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
         setProductos(prods || []);
-        const { data: cats } = await supabase.from("categorias").select("*").order("orden");
+        const { data: cats } = await supabase.from("categorias").select("*").eq("sucursal_id", sucursalId).order("orden");
         setCategorias(cats || []);
-        const { data: mps } = await supabase.from("metodos_pago").select("*").eq("activo", true);
+        const { data: mps } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
         setMetodosPago(mps || []);
         if (mps?.length) setMetodoPagoId(mps[0].id);
-        const { data: szonas } = await supabase.from("zonas_entrega").select("*").eq("activo", true);
+        const { data: szonas } = await supabase.from("zonas_entrega").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
         setZonas(szonas || []);
-        const { data: cfg } = await supabase.from("config_sucursal").select("*").limit(1).maybeSingle();
+        const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
         setConfigSucursal(cfg);
-        const { data: grps } = await supabase.from("grupos_adicionales").select("*");
+        const { data: grps } = await supabase.from("grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
         setGruposAdicionales(grps || []);
-        const { data: ads } = await supabase.from("adicionales").select("*");
+        const { data: ads } = await supabase.from("adicionales").select("*").eq("sucursal_id", sucursalId);
         setAdicionales(ads || []);
-        const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*");
+        const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
         setProductoGrupos(pg || []);
-        const { data: descs } = await supabase.from("descuentos").select("*").eq("activo", true);
+        const { data: descs } = await supabase.from("descuentos").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
         setDescuentos(descs || []);
     }
 
@@ -182,8 +185,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setDireccionGeocoded(clientePt);
 
         // 2. Obtener sucursal_id y cargar zonas frescas
-        const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-        if (!suc) {
+        if (!sucursalId) {
             setValidacionDelivery({ valid: false, costo: 0, loading: false, error: "Error interno." });
             return;
         }
@@ -191,14 +193,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         const { data: zonasDB } = await supabase
             .from("zonas_entrega")
             .select("*")
-            .eq("sucursal_id", suc.id)
+            .eq("sucursal_id", sucursalId)
             .eq("activo", true);
 
         // 3. Cargar config del local
         const { data: cfg } = await supabase
             .from("config_sucursal")
             .select("local_lat, local_lng")
-            .eq("sucursal_id", suc.id)
+            .eq("sucursal_id", sucursalId)
             .limit(1)
             .maybeSingle();
 
@@ -426,6 +428,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const { data: lastP } = await supabase
                     .from("pedidos")
                     .select("numero_pedido, created_at")
+                    .eq("sucursal_id", sucursalId)
                     .gte("created_at", `${todayStr}T00:00:00`)
                     .lte("created_at", `${todayStr}T23:59:59`)
                     .order("created_at", { ascending: false })
@@ -438,6 +441,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }
                 const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
+                    sucursal_id: sucursalId,
                     numero_pedido: `${tipoPrefix}-${nextSeq}`,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
@@ -670,7 +674,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             </div>
 
                             {/* Adicionales groups */}
-                            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                            <div className="flex-1 overflow-x-auto p-5 flex items-start gap-8 bg-slate-50/30">
                                 {gruposAdicionales.map(grp => {
                                     const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
                                     if (!isAllowed) return null;
@@ -678,17 +682,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
                                     if (grpAds.length === 0) return null;
                                     return (
-                                        <div key={grp.id}>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <h4 className="text-sm font-bold text-gray-900">{grp.titulo}</h4>
-                                                {grp.seleccion_obligatoria && (
-                                                    <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">[Obligatorio]</span>
-                                                )}
-                                                <span className="text-[10px] text-gray-400 font-medium">
-                                                    Máx. {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| Mín. ${grp.seleccion_minima}`}
-                                                </span>
+                                        <div key={grp.id} className="flex-shrink-0 w-[280px] flex flex-col">
+                                            <div className="flex flex-col gap-0.5 mb-2 px-1">
+                                                <h4 className="text-[13px] font-black text-gray-900 uppercase tracking-tight">{grp.titulo}</h4>
+                                                <div className="flex items-center gap-2">
+                                                    {grp.seleccion_obligatoria && (
+                                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">OBLIGATORIO</span>
+                                                    )}
+                                                    <span className="text-[9px] text-gray-400 font-bold">
+                                                        MÁX {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| MÍN ${grp.seleccion_minima}`}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
+                                            <div className="space-y-0.5 bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm">
                                                 {grpAds.map(ad => {
                                                     const qty = customAdicionales[ad.id] || 0;
                                                     // Calculate total selected in this group
@@ -697,29 +703,31 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                     const atMaxItem = ad.seleccion_maxima > 0 && qty >= ad.seleccion_maxima;
                                                     const disabledPlus = atMaxGroup || atMaxItem;
                                                     return (
-                                                        <div key={ad.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors">
-                                                            <div>
-                                                                <span className="text-sm text-gray-700 font-medium">{ad.nombre}</span>
-                                                                {ad.precio_venta > 0 && (
-                                                                    <span className="text-xs text-gray-400 ml-2">+$ {fmt(ad.precio_venta)}</span>
-                                                                )}
-                                                                {ad.seleccion_maxima > 0 && (
-                                                                    <span className="text-[10px] text-gray-400 block mt-0.5">Máx. {ad.seleccion_maxima}</span>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-2 py-1">
+                                                        <div key={ad.id} className="flex items-center gap-2 py-1.5 px-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                                                            <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-0.5 border border-gray-100">
                                                                 <button
                                                                     onClick={() => setCustomAdicionales({ ...customAdicionales, [ad.id]: Math.max(0, qty - 1) })}
-                                                                    className="text-gray-400 hover:text-gray-900"
+                                                                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-white rounded-md transition-all shadow-sm active:scale-95"
                                                                 ><Minus size={12} /></button>
-                                                                <span className="text-xs font-bold w-4 text-center">{qty}</span>
+                                                                <span className="text-[11px] font-black w-4 text-center text-gray-900">{qty}</span>
                                                                 <button
                                                                     onClick={() => {
                                                                         if (!disabledPlus) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
                                                                     }}
-                                                                    className={`transition-colors ${disabledPlus ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                                                    className={`w-6 h-6 flex items-center justify-center transition-all rounded-md shadow-sm active:scale-95 ${disabledPlus ? 'text-gray-200 cursor-not-allowed bg-transparent' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
                                                                     disabled={disabledPlus}
                                                                 ><Plus size={12} /></button>
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-[11px] text-gray-700 font-bold truncate pr-1">{ad.nombre}</span>
+                                                                    {ad.precio_venta > 0 && (
+                                                                        <span className="text-[10px] text-green-600 font-black shrink-0">+$ {fmt(ad.precio_venta)}</span>
+                                                                    )}
+                                                                </div>
+                                                                {ad.seleccion_maxima > 0 && (
+                                                                    <span className="text-[9px] text-gray-400 font-medium block -mt-0.5">Límite {ad.seleccion_maxima}</span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -730,14 +738,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 })}
 
                                 {/* Nota al producto */}
-                                <div>
-                                    <label className="text-xs font-bold text-gray-500 block mb-2">Nota al producto</label>
-                                    <input
-                                        type="text"
+                                <div className="flex-shrink-0 w-[280px]">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-2 px-1">Nota al producto</label>
+                                    <textarea
+                                        rows={4}
                                         value={customNota}
                                         onChange={e => setCustomNota(e.target.value)}
                                         placeholder="Ej: Sin cebolla, bien cocido..."
-                                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-gray-900"
+                                        className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:border-gray-900 bg-white shadow-sm transition-all"
                                     />
                                 </div>
                             </div>

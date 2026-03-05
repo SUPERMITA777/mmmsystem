@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 
 export async function GET(req: NextRequest) {
-    const accessToken = req.cookies.get('sb-access-token')?.value;
+    const response = NextResponse.next();
 
-    if (!accessToken) {
-        return NextResponse.json({ user: null }, { status: 401 });
-    }
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                getAll() {
+                    return req.cookies.getAll().map((cookie) => ({
+                        name: cookie.name,
+                        value: cookie.value,
+                    }));
+                },
+                setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value, options }) =>
+                        req.cookies.set(name, value)
+                    );
+                },
+            },
+        }
+    );
 
     try {
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-
-        const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+        const { data: { user }, error } = await supabase.auth.getUser();
 
         if (error || !user) {
             return NextResponse.json({ user: null }, { status: 401 });

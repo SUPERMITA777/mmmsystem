@@ -105,6 +105,7 @@ function PublicMenuContent() {
       const { data: config } = await supabase
         .from("config_sucursal")
         .select("cerrado_temporalmente")
+        .eq("sucursal_id", sucursalId)
         .limit(1)
         .maybeSingle();
 
@@ -122,6 +123,7 @@ function PublicMenuContent() {
       const { data: horario } = await supabase
         .from("horarios_sucursal")
         .select("cerrado, apertura1, cierre1, apertura2, cierre2")
+        .eq("sucursal_id", sucursalId)
         .eq("dia", sysDow)
         .maybeSingle();
 
@@ -186,6 +188,7 @@ function PublicMenuContent() {
             orden
           )
         `)
+        .eq("sucursal_id", sucursalId)
         .eq("activo", true)
         .order("orden", { ascending: true })
         .order("orden", { ascending: true, referencedTable: "productos" });
@@ -212,6 +215,7 @@ function PublicMenuContent() {
       const { data: descs } = await supabase
         .from("descuentos")
         .select("*")
+        .eq("sucursal_id", sucursalId)
         .eq("activo", true);
       setDescuentos(descs || []);
     } catch (error) {

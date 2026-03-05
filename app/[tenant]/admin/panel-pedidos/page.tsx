@@ -171,7 +171,7 @@ export default function PanelPedidosPage() {
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [sucursalId]);
 
   // When selectedPedido changes, reset to detalle tab
   useEffect(() => {
@@ -220,7 +220,11 @@ export default function PanelPedidosPage() {
   }
 
   async function fetchRepartidores() {
-    const { data } = await supabase.from("repartidores").select("*").eq("activo", true);
+    if (!sucursalId) return;
+    const { data } = await supabase.from("repartidores")
+      .select("*")
+      .eq("sucursal_id", sucursalId)
+      .eq("activo", true);
     setRepartidores(data || []);
   }
 
