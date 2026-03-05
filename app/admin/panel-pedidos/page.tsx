@@ -136,6 +136,8 @@ export default function PanelPedidosPage() {
   const [printConfig, setPrintConfig] = useState<any>(null);
   const [sucursalConfig, setSucursalConfig] = useState<any>(null);
   const [editingPedido, setEditingPedido] = useState<any>(null);
+  const [fechaDesde, setFechaDesde] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaHasta, setFechaHasta] = useState(() => new Date().toISOString().split('T')[0]);
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -173,12 +175,15 @@ export default function PanelPedidosPage() {
   }, [selectedPedido?.id]);
 
   async function fetchPedidos(fromRealtime = false) {
-    const { data } = await supabase
+    let query = supabase
       .from("pedidos")
       .select("*, pedido_items(*)")
-      .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
+      .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino", "entregado", "cancelado"])
+      .gte("created_at", `${fechaDesde}T00:00:00`)
+      .lte("created_at", `${fechaHasta}T23:59:59`)
       .order("created_at", { ascending: false });
 
+    const { data } = await query;
     const rows = (data || []) as Pedido[];
 
     // Bell on new pedido
@@ -344,6 +349,28 @@ export default function PanelPedidosPage() {
               onChange={e => setBusqueda(e.target.value)}
               className="bg-transparent outline-none text-sm text-gray-900 w-full"
             />
+          </div>
+
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={e => { setFechaDesde(e.target.value); }}
+              className="text-xs font-bold text-gray-700 outline-none bg-transparent"
+            />
+            <span className="text-gray-300">—</span>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={e => { setFechaHasta(e.target.value); }}
+              className="text-xs font-bold text-gray-700 outline-none bg-transparent"
+            />
+            <button
+              onClick={() => fetchPedidos()}
+              className="ml-1 px-2 py-1 bg-purple-600 text-white text-[10px] font-bold rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Filtrar
+            </button>
           </div>
 
           <div className="ml-auto flex items-center gap-3">
