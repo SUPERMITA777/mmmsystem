@@ -29,7 +29,7 @@ export function AdminTopBar() {
           <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 text-xs font-bold border border-gray-200">
             M
           </div>
-          MMM Pizza
+          MMM Pizza Artesanal
           <ChevronDown size={14} className="text-gray-400" />
         </button>
         <button className="text-gray-400 hover:text-gray-600 transition-colors text-lg">⋮</button>

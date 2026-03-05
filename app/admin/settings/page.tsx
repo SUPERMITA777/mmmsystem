@@ -31,7 +31,7 @@ export default function SettingsPage() {
     <section className="p-8">
       {/* Sucursal header */}
       <div className="text-center mb-6">
-        <h2 className="text-xl font-bold text-gray-900">MMM Pizza</h2>
+        <h2 className="text-xl font-bold text-gray-900">MMM Pizza Artesanal</h2>
         <div className="flex items-center justify-center gap-4 mt-1">
           <button className="text-sm text-purple-600 hover:underline font-medium">Editar</button>
           <button className="text-sm text-purple-600 hover:underline font-medium">Obtener QR</button>

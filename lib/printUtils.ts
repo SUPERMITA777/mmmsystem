@@ -152,7 +152,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <div class="center" style="font-size:${c.fuente_titulo}px;${bw(c, 'fuente_titulo')}margin-bottom:2px">
     ${tipoLabel} N°${numCorto}
   </div>
-  <div class="center" style="font-size:${c.fuente_subtitulo}px;${bw(c, 'fuente_subtitulo')}margin-bottom:6px">MMM Pizza</div>
+  <div class="center" style="font-size:${c.fuente_subtitulo}px;${bw(c, 'fuente_subtitulo')}margin-bottom:6px">MMM Pizza Artesanal</div>
 
   <!-- FECHA Y HORA -->
   ${c.mostrar_fecha_hora ? `
