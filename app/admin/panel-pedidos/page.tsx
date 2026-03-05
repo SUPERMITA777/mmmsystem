@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
 import { printComanda, printCocina } from "@/lib/printUtils";
@@ -495,6 +495,19 @@ export default function PanelPedidosPage() {
                     ))}
                   </select>
                 </div>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`¿Eliminar definitivamente el pedido N°${selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}? Esta acción no se puede deshacer.`)) return;
+                    await supabase.from("pedido_items").delete().eq("pedido_id", selectedPedido.id);
+                    await supabase.from("pedidos").delete().eq("id", selectedPedido.id);
+                    setSelectedPedido(null);
+                    fetchPedidos();
+                  }}
+                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Eliminar pedido definitivamente"
+                >
+                  <Trash2 size={18} />
+                </button>
                 <button onClick={() => setSelectedPedido(null)} className="text-gray-400 hover:text-gray-700 p-1 transition-colors">
                   <X size={22} />
                 </button>
