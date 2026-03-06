@@ -690,77 +690,80 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 </div>
                             </div>
 
-                            {/* Adicionales groups */}
-                            <div className="flex-1 overflow-auto p-5 flex items-start gap-8 bg-slate-50/30">
-                                {gruposAdicionales.map(grp => {
-                                    const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
-                                    if (!isAllowed) return null;
+                            {/* Adicionales & Notas */}
+                            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-6 bg-slate-50/30">
+                                {/* Adicionales groups */}
+                                <div className="flex flex-wrap items-start gap-6">
+                                    {gruposAdicionales.map(grp => {
+                                        const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
+                                        if (!isAllowed) return null;
 
-                                    const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
-                                    if (grpAds.length === 0) return null;
-                                    return (
-                                        <div key={grp.id} className="flex-shrink-0 w-[280px] flex flex-col">
-                                            <div className="flex flex-col gap-0.5 mb-2 px-1">
-                                                <h4 className="text-[13px] font-black text-gray-900 uppercase tracking-tight">{grp.titulo}</h4>
-                                                <div className="flex items-center gap-2">
-                                                    {grp.seleccion_obligatoria && (
-                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${!isGroupValid(grp) ? "bg-red-500 text-white animate-pulse" : "bg-green-100 text-green-700"}`}>
-                                                            {!isGroupValid(grp) ? "SELECCIÓN OBLIGATORIA" : "¡LISTO!"}
+                                        const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
+                                        if (grpAds.length === 0) return null;
+                                        return (
+                                            <div key={grp.id} className="w-full sm:w-[280px] flex flex-col shrink-0">
+                                                <div className="flex flex-col gap-0.5 mb-2 px-1">
+                                                    <h4 className="text-[13px] font-black text-gray-900 uppercase tracking-tight">{grp.titulo}</h4>
+                                                    <div className="flex items-center gap-2">
+                                                        {grp.seleccion_obligatoria && (
+                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${!isGroupValid(grp) ? "bg-red-500 text-white animate-pulse" : "bg-green-100 text-green-700"}`}>
+                                                                {!isGroupValid(grp) ? "SELECCIÓN OBLIGATORIA" : "¡LISTO!"}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[9px] text-gray-400 font-bold">
+                                                            MÁX {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| MÍN ${grp.seleccion_minima}`}
                                                         </span>
-                                                    )}
-                                                    <span className="text-[9px] text-gray-400 font-bold">
-                                                        MÁX {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| MÍN ${grp.seleccion_minima}`}
-                                                    </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="space-y-0.5 bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm">
-                                                {grpAds.map(ad => {
-                                                    const qty = customAdicionales[ad.id] || 0;
-                                                    // Calculate total selected in this group
-                                                    const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
-                                                    const atMaxGroup = grp.seleccion_maxima > 0 && totalInGroup >= grp.seleccion_maxima;
-                                                    const atMaxItem = ad.seleccion_maxima > 0 && qty >= ad.seleccion_maxima;
-                                                    const disabledPlus = atMaxGroup || atMaxItem;
-                                                    return (
-                                                        <div key={ad.id} className="flex items-center gap-1.5 py-1 px-1.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
-                                                            <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-0.5 border border-gray-100">
-                                                                <button
-                                                                    onClick={() => setCustomAdicionales({ ...customAdicionales, [ad.id]: Math.max(0, qty - 1) })}
-                                                                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-white rounded-md transition-all shadow-sm active:scale-95"
-                                                                ><Minus size={12} /></button>
-                                                                <span className="text-[11px] font-black w-4 text-center text-gray-900">{qty}</span>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (!disabledPlus) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
-                                                                    }}
-                                                                    className={`w-6 h-6 flex items-center justify-center transition-all rounded-md shadow-sm active:scale-95 ${disabledPlus ? 'text-gray-200 cursor-not-allowed bg-transparent' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-                                                                    disabled={disabledPlus}
-                                                                ><Plus size={12} /></button>
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-[11px] text-gray-700 font-bold truncate pr-1">{ad.nombre}</span>
-                                                                    {ad.precio_venta > 0 && (
-                                                                        <span className="text-[10px] text-green-600 font-black shrink-0">+$ {fmt(ad.precio_venta)}</span>
+                                                <div className="space-y-0.5 bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm">
+                                                    {grpAds.map(ad => {
+                                                        const qty = customAdicionales[ad.id] || 0;
+                                                        // Calculate total selected in this group
+                                                        const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
+                                                        const atMaxGroup = grp.seleccion_maxima > 0 && totalInGroup >= grp.seleccion_maxima;
+                                                        const atMaxItem = ad.seleccion_maxima > 0 && qty >= ad.seleccion_maxima;
+                                                        const disabledPlus = atMaxGroup || atMaxItem;
+                                                        return (
+                                                            <div key={ad.id} className="flex items-center gap-1.5 py-1 px-1.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                                                                <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-0.5 border border-gray-100">
+                                                                    <button
+                                                                        onClick={() => setCustomAdicionales({ ...customAdicionales, [ad.id]: Math.max(0, qty - 1) })}
+                                                                        className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:bg-white rounded-md transition-all shadow-sm active:scale-95"
+                                                                    ><Minus size={12} /></button>
+                                                                    <span className="text-[11px] font-black w-4 text-center text-gray-900">{qty}</span>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (!disabledPlus) setCustomAdicionales({ ...customAdicionales, [ad.id]: qty + 1 });
+                                                                        }}
+                                                                        className={`w-6 h-6 flex items-center justify-center transition-all rounded-md shadow-sm active:scale-95 ${disabledPlus ? 'text-gray-200 cursor-not-allowed bg-transparent' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
+                                                                        disabled={disabledPlus}
+                                                                    ><Plus size={12} /></button>
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-[11px] text-gray-700 font-bold truncate pr-1">{ad.nombre}</span>
+                                                                        {ad.precio_venta > 0 && (
+                                                                            <span className="text-[10px] text-green-600 font-black shrink-0">+$ {fmt(ad.precio_venta)}</span>
+                                                                        )}
+                                                                    </div>
+                                                                    {ad.seleccion_maxima > 0 && (
+                                                                        <span className="text-[9px] text-gray-400 font-medium block -mt-0.5">Límite {ad.seleccion_maxima}</span>
                                                                     )}
                                                                 </div>
-                                                                {ad.seleccion_maxima > 0 && (
-                                                                    <span className="text-[9px] text-gray-400 font-medium block -mt-0.5">Límite {ad.seleccion_maxima}</span>
-                                                                )}
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </div>
 
                                 {/* Nota al producto */}
-                                <div className="flex-shrink-0 w-[280px]">
+                                <div className="w-full sm:w-[400px] shrink-0 mt-2">
                                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-2 px-1">Nota al producto</label>
                                     <textarea
-                                        rows={4}
+                                        rows={3}
                                         value={customNota}
                                         onChange={e => setCustomNota(e.target.value)}
                                         placeholder="Ej: Sin cebolla, bien cocido..."
