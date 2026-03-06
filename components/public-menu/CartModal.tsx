@@ -215,13 +215,16 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 .single();
 
             // 2b. Generar número de pedido diario (empieza en 1 cada día)
-            const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+            const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
             const tipoPrefix = tipoEntrega === "delivery" ? "DELIVERY" : "TAKE AWAY";
 
             const { data: lastPedido } = await supabase
                 .from("pedidos")
                 .select("numero_pedido, created_at")
-                .like("numero_pedido", `${tipoPrefix}-%`)
+                .eq("sucursal_id", sucursal.id)
+                .like("numero_pedido", `${tipoPrefix}-${datePart}-%`)
                 .gte("created_at", `${todayStr}T00:00:00`)
                 .lte("created_at", `${todayStr}T23:59:59`)
                 .order("created_at", { ascending: false })
@@ -233,7 +236,7 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 const match = lastPedido.numero_pedido.match(/(\d+)$/);
                 if (match) nextSeq = parseInt(match[1], 10) + 1;
             }
-            const numeroPedido = `${tipoPrefix}-${nextSeq}`;
+            const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
 
             // 3. Crear el Pedido en la base de datos
             const { data: pedido, error: pedidoError } = await supabase

@@ -441,14 +441,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (iError) throw iError;
             } else {
                 // CREATE new order - daily sequential numbering
-                const todayStr = new Date().toISOString().split('T')[0];
+                const now = new Date();
+                const todayStr = now.toISOString().split('T')[0];
+                const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
                 const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
 
                 const { data: lastP } = await supabase
                     .from("pedidos")
                     .select("numero_pedido, created_at")
                     .eq("sucursal_id", sucursalId)
-                    .like("numero_pedido", `${tipoPrefix}-%`)
+                    .like("numero_pedido", `${tipoPrefix}-${datePart}-%`)
                     .gte("created_at", `${todayStr}T00:00:00`)
                     .lte("created_at", `${todayStr}T23:59:59`)
                     .order("created_at", { ascending: false })
@@ -461,7 +463,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
                     sucursal_id: sucursalId,
-                    numero_pedido: `${tipoPrefix}-${nextSeq}`,
+                    numero_pedido: `${tipoPrefix}-${datePart}-${nextSeq}`,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
