@@ -77,7 +77,7 @@ export default function ProductDetailModal({
                 .select("*")
                 .eq("grupo_id", g.id)
                 .eq("visible", true)
-                .order("created_at", { ascending: true });
+                .order("nombre", { ascending: true });
             return { ...g, adicionales: options || [] };
         }));
 

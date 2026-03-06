@@ -698,7 +698,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
                                         if (!isAllowed) return null;
 
-                                        const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
+                                        const grpAds = adicionales.filter(a => a.grupo_id === grp.id).sort((a, b) => a.nombre.localeCompare(b.nombre));
                                         if (grpAds.length === 0) return null;
                                         return (
                                             <div key={grp.id} className="w-full flex flex-col shrink-0">
