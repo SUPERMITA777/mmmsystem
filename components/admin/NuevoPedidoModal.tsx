@@ -415,6 +415,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         if (!omitirCliente && !cliente.nombre) { alert("Ingresá el nombre del cliente"); return; }
         setLoading(true);
         try {
+            const mPago = metodosPago.find(m => m.id === metodoPagoId);
+            const metodoPagoNombre = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
+
             if (editPedido) {
                 // UPDATE existing order
                 const { error: uError } = await supabase.from("pedidos").update({
@@ -423,6 +426,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
                     tipo, subtotal, costo_envio: costoEnvio, total,
                     metodo_pago_id: metodoPagoId,
+                    metodo_pago_nombre: metodoPagoNombre,
                     notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
                     cliente_lat: direccionGeocoded?.lat,
                     cliente_lng: direccionGeocoded?.lng
@@ -471,6 +475,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
                     tipo, subtotal, costo_envio: costoEnvio, total,
                     metodo_pago_id: metodoPagoId,
+                    metodo_pago_nombre: metodoPagoNombre,
                     estado: "pendiente",
                     notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
                     cliente_lat: direccionGeocoded?.lat,
