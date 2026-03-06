@@ -44,12 +44,14 @@ export default function PedidosPage() {
     const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
     const [filtroEstado, setFiltroEstado] = useState("");
     const [filtroTipo, setFiltroTipo] = useState("");
-    const [filtroFecha, setFiltroFecha] = useState<"todos" | "hoy" | "ayer">("todos");
+    const [filtroFecha, setFiltroFecha] = useState<"todos" | "hoy" | "ayer" | "rango">("todos");
+    const [fechaDesde, setFechaDesde] = useState("");
+    const [fechaHasta, setFechaHasta] = useState("");
     const { sucursalId } = useTenant();
 
     useEffect(() => {
         if (sucursalId) fetchPedidos();
-    }, [page, perPage, filtroEstado, filtroTipo, filtroFecha, sucursalId]);
+    }, [page, perPage, filtroEstado, filtroTipo, filtroFecha, fechaDesde, fechaHasta, sucursalId]);
 
     async function fetchPedidos() {
         if (!sucursalId) return;
@@ -75,6 +77,17 @@ export default function PedidosPage() {
             const hoy = new Date();
             hoy.setHours(0, 0, 0, 0);
             query = query.gte("created_at", ayer.toISOString()).lt("created_at", hoy.toISOString());
+        } else if (filtroFecha === "rango") {
+            if (fechaDesde) {
+                const d = new Date(fechaDesde);
+                d.setHours(0, 0, 0, 0);
+                query = query.gte("created_at", d.toISOString());
+            }
+            if (fechaHasta) {
+                const h = new Date(fechaHasta);
+                h.setHours(23, 59, 59, 999);
+                query = query.lte("created_at", h.toISOString());
+            }
         }
 
         const { data, count } = await query;
@@ -119,8 +132,37 @@ export default function PedidosPage() {
                         >
                             Ayer
                         </button>
+                        <button
+                            onClick={() => { setFiltroFecha("rango"); setPage(1); }}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${filtroFecha === "rango" ? "bg-[#7B1FA2] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+                        >
+                            Rango
+                        </button>
                     </div>
                 </fieldset>
+
+                {filtroFecha === "rango" && (
+                    <div className="flex gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                        <fieldset className="border border-gray-300 rounded-lg px-2 py-1 bg-white">
+                            <legend className="text-[10px] text-gray-500 px-1 font-semibold tracking-wide uppercase">Desde</legend>
+                            <input
+                                type="date"
+                                value={fechaDesde}
+                                onChange={e => { setFechaDesde(e.target.value); setPage(1); }}
+                                className="bg-transparent outline-none text-xs font-bold text-gray-900"
+                            />
+                        </fieldset>
+                        <fieldset className="border border-gray-300 rounded-lg px-2 py-1 bg-white">
+                            <legend className="text-[10px] text-gray-500 px-1 font-semibold tracking-wide uppercase">Hasta</legend>
+                            <input
+                                type="date"
+                                value={fechaHasta}
+                                onChange={e => { setFechaHasta(e.target.value); setPage(1); }}
+                                className="bg-transparent outline-none text-xs font-bold text-gray-900"
+                            />
+                        </fieldset>
+                    </div>
+                )}
                 <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white">
                     <legend className="text-[10px] text-gray-500 px-1">Estado</legend>
                     <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
