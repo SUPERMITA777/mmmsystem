@@ -20,7 +20,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Failed to fetch from Nominatim' }, { status: 502 });
         }
     } else if (q) {
-        let localityStr = "";
+        let localityStr = "Florencio Varela";
         if (localidades) {
             const locs = localidades.split(',').map(l => l.trim()).filter(Boolean);
             if (locs.length > 0) localityStr = locs[0];
@@ -28,18 +28,26 @@ export async function GET(request: Request) {
 
         let queriesToTry: string[] = [];
 
-        // 1. Try Exact query
+        // 1. Try Exact query with Locality appended
         let exactQuery = q;
-        if (localityStr && !q.toLowerCase().includes(localityStr.toLowerCase())) {
+        if (!q.toLowerCase().includes(localityStr.toLowerCase())) {
             exactQuery = `${q}, ${localityStr}`;
         }
         queriesToTry.push(exactQuery);
 
-        // 2. Try Fallback if it's an intersection or has " y ", " e ", " con "
+        // 2. Try without appending locality, just in case user provided a perfectly formatted full address
+        if (exactQuery !== q) {
+            queriesToTry.push(q);
+        }
+
+        // 3. Try Fallback if it's an intersection or has " y ", " e ", " con "
         const intersectionMatch = q.match(/^(.*?)\s+(?:y|e|con)\s+(.*?)$/i);
         if (intersectionMatch) {
             const street1 = intersectionMatch[1].trim();
-            queriesToTry.push(localityStr ? `${street1}, ${localityStr}` : street1);
+            const fallbackQuery = !street1.toLowerCase().includes(localityStr.toLowerCase())
+                ? `${street1}, ${localityStr}`
+                : street1;
+            queriesToTry.push(fallbackQuery);
         }
 
         for (const query of queriesToTry) {
