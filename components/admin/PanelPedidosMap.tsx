@@ -29,7 +29,7 @@ export default function PanelPedidosMap({
     selectedPedidoId: string | null;
     onSelectPedido?: (id: string) => void;
 }) {
-    const { MapContainer, TileLayer, Marker, Popup, Polygon } = require("react-leaflet");
+    const { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } = require("react-leaflet");
     const L = require("leaflet");
 
     const [storePos, setStorePos] = useState<{ lat: number; lng: number } | null>(null);
@@ -94,12 +94,21 @@ export default function PanelPedidosMap({
 
     const ZONA_COLORS = ["#8b5cf6", "#ef4444", "#f59e0b", "#10b981", "#3b82f6"];
 
+    function MapUpdater({ center }: { center: [number, number] }) {
+        const map = useMap();
+        useEffect(() => {
+            map.setView(center, map.getZoom());
+        }, [center, map]);
+        return null;
+    }
+
     return (
         <MapContainer
             center={defaultCenter}
             zoom={13}
             style={{ width: "100%", height: "100%", zIndex: 0 }}
         >
+            <MapUpdater center={defaultCenter} />
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
                 url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"

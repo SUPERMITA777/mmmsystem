@@ -442,10 +442,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             } else {
                 // CREATE new order - daily sequential numbering
                 const todayStr = new Date().toISOString().split('T')[0];
+                const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
+
                 const { data: lastP } = await supabase
                     .from("pedidos")
                     .select("numero_pedido, created_at")
                     .eq("sucursal_id", sucursalId)
+                    .like("numero_pedido", `${tipoPrefix}-%`)
                     .gte("created_at", `${todayStr}T00:00:00`)
                     .lte("created_at", `${todayStr}T23:59:59`)
                     .order("created_at", { ascending: false })
@@ -456,7 +459,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     const match = lastP.numero_pedido.match(/(\d+)$/);
                     if (match) nextSeq = parseInt(match[1], 10) + 1;
                 }
-                const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
                     sucursal_id: sucursalId,
                     numero_pedido: `${tipoPrefix}-${nextSeq}`,

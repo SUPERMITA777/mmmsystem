@@ -21,7 +21,7 @@ export function AdminTopBar() {
       {/* Right: buttons */}
       <div className="flex items-center gap-3">
         <Link
-          href={`/${tenantSlug}`}
+          href={`https://mmmsystem.vercel.app/`}
           target="_blank"
           className="rounded-full bg-[#7B1FA2] px-5 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition-all shadow-sm"
         >
