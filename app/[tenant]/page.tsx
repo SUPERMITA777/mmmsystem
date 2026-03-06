@@ -168,7 +168,7 @@ function PublicMenuContent() {
         }
       }
 
-      const { data: catsData } = await supabase
+      const { data: catsData, error: catsError } = await supabase
         .from("categorias")
         .select(`
           id,
@@ -192,6 +192,10 @@ function PublicMenuContent() {
         .eq("activo", true)
         .order("orden", { ascending: true })
         .order("orden", { ascending: true, referencedTable: "productos" });
+
+      if (catsError) {
+        console.error("Error fetching menu data (Check if sucursal_id exists in all related tables):", catsError);
+      }
 
       if (catsData) {
         // 1. Deduplicate Categories by ID

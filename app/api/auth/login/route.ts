@@ -1,7 +1,28 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
+                },
+                set(name: string, value: string, options: any) {
+                    cookieStore.set({ name, value, ...options });
+                },
+                remove(name: string, options: any) {
+                    cookieStore.delete({ name, ...options });
+                },
+            },
+        }
+    );
+
     try {
         const { email, password } = await req.json();
 
@@ -11,11 +32,6 @@ export async function POST(req: Request) {
                 { status: 400 }
             );
         }
-
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
 
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -29,33 +45,15 @@ export async function POST(req: Request) {
             );
         }
 
-        const response = NextResponse.json({
+        return NextResponse.json({
             success: true,
             user: {
                 id: data.user.id,
                 email: data.user.email,
             },
         });
-
-        // Set auth cookies for middleware
-        response.cookies.set('sb-access-token', data.session.access_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24 * 7, // 7 days
-        });
-
-        response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 60 * 60 * 24 * 30, // 30 days
-        });
-
-        return response;
     } catch (err: any) {
+        console.error('Login error:', err);
         return NextResponse.json(
             { error: 'Error interno del servidor' },
             { status: 500 }
