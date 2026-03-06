@@ -584,7 +584,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 </div>
 
                 {/* ═══ CENTER PANEL: Catalog / Customization ═══ */}
-                <div className="flex-1 flex flex-col bg-white">
+                <div className="flex-1 flex flex-col bg-white min-h-0">
                     {view === "catalog" ? (
                         <>
                             {/* Search */}
@@ -657,7 +657,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         </>
                     ) : (
                         /* ═══ CUSTOMIZATION VIEW ═══ */
-                        <div className="flex-1 flex flex-col">
+                        <div className="flex-1 flex flex-col min-h-0">
                             {/* Header */}
                             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -701,7 +701,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
                                         if (grpAds.length === 0) return null;
                                         return (
-                                            <div key={grp.id} className="w-full sm:w-[280px] flex flex-col shrink-0">
+                                            <div key={grp.id} className="w-full flex flex-col shrink-0">
                                                 <div className="flex flex-col gap-0.5 mb-2 px-1">
                                                     <h4 className="text-[13px] font-black text-gray-900 uppercase tracking-tight">{grp.titulo}</h4>
                                                     <div className="flex items-center gap-2">
@@ -715,7 +715,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div className="space-y-0.5 bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 md:gap-2 bg-white rounded-2xl border border-gray-100 p-1.5 shadow-sm">
                                                     {grpAds.map(ad => {
                                                         const qty = customAdicionales[ad.id] || 0;
                                                         // Calculate total selected in this group

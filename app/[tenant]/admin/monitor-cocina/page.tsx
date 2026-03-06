@@ -156,9 +156,14 @@ export default function MonitorCocinaPage() {
                                                         {/* Adicionales */}
                                                         {item.adicionales && item.adicionales.length > 0 && (
                                                             <div className="flex flex-wrap gap-1 mt-1">
-                                                                {item.adicionales.map((ad, idx) => (
+                                                                {Object.entries(
+                                                                    item.adicionales.reduce((acc: Record<string, number>, ad) => {
+                                                                        acc[ad.nombre] = (acc[ad.nombre] || 0) + ((ad as any).cantidad || 1);
+                                                                        return acc;
+                                                                    }, {})
+                                                                ).map(([nombre, qty], idx) => (
                                                                     <span key={idx} className="text-[10px] bg-purple-500/15 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20 font-medium">
-                                                                        + {ad.nombre}
+                                                                        + {qty > 1 ? `${nombre} X ${qty}` : nombre}
                                                                     </span>
                                                                 ))}
                                                             </div>
@@ -201,9 +206,14 @@ export default function MonitorCocinaPage() {
                                                                 <p className="text-sm font-black text-white">{item.cantidad}x {item.nombre_producto}</p>
                                                                 {item.adicionales && item.adicionales.length > 0 && (
                                                                     <div className="flex flex-wrap gap-1 mt-1">
-                                                                        {item.adicionales.map((ad, idx) => (
+                                                                        {Object.entries(
+                                                                            item.adicionales.reduce((acc: Record<string, number>, ad) => {
+                                                                                acc[ad.nombre] = (acc[ad.nombre] || 0) + ((ad as any).cantidad || 1);
+                                                                                return acc;
+                                                                            }, {})
+                                                                        ).map(([nombre, qty], idx) => (
                                                                             <span key={idx} className="text-[10px] bg-purple-500/15 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20 font-medium">
-                                                                                + {ad.nombre}
+                                                                                + {qty > 1 ? `${nombre} X ${qty}` : nombre}
                                                                             </span>
                                                                         ))}
                                                                     </div>

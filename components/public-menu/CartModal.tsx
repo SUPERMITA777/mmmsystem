@@ -287,7 +287,13 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
             // 5. Armamos el mensaje de WhatsApp
             const itemsTexto = items.map(i => {
-                const ads = i.adicionales?.map(a => `  + ${a.nombre} (+$${a.precio})`).join("\n") || "";
+                const groupedAds = (i.adicionales || []).reduce((acc: Record<string, { precio: number, qty: number }>, a) => {
+                    if (!acc[a.nombre]) acc[a.nombre] = { precio: 0, qty: 0 };
+                    acc[a.nombre].qty += 1;
+                    acc[a.nombre].precio += a.precio;
+                    return acc;
+                }, {});
+                const ads = Object.entries(groupedAds).map(([nombre, data]) => `  + ${data.qty > 1 ? `${nombre} x ${data.qty}` : nombre} (+$${data.precio})`).join("\n");
                 const notaTexto = i.notas ? `\n  ⚠️ NOTA: ${i.notas}` : "";
                 return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}${notaTexto}`;
             }).join("\n");
@@ -393,9 +399,14 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                                         )}
                                         {item.adicionales && item.adicionales.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-0.5">
-                                                {item.adicionales.map((a, idx) => (
+                                                {Object.entries(
+                                                    item.adicionales.reduce((acc, a) => {
+                                                        acc[a.nombre] = (acc[a.nombre] || 0) + 1;
+                                                        return acc;
+                                                    }, {} as Record<string, number>)
+                                                ).map(([nombre, qty], idx) => (
                                                     <span key={idx} className="text-[9px] text-slate-400 leading-none bg-white/5 px-1 py-0.5 rounded border border-white/5">
-                                                        + {a.nombre}
+                                                        + {qty > 1 ? `${nombre} X ${qty}` : nombre}
                                                     </span>
                                                 ))}
                                             </div>
