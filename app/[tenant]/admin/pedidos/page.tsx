@@ -44,11 +44,12 @@ export default function PedidosPage() {
     const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
     const [filtroEstado, setFiltroEstado] = useState("");
     const [filtroTipo, setFiltroTipo] = useState("");
+    const [filtroFecha, setFiltroFecha] = useState<"todos" | "hoy" | "ayer">("todos");
     const { sucursalId } = useTenant();
 
     useEffect(() => {
         if (sucursalId) fetchPedidos();
-    }, [page, perPage, filtroEstado, filtroTipo, sucursalId]);
+    }, [page, perPage, filtroEstado, filtroTipo, filtroFecha, sucursalId]);
 
     async function fetchPedidos() {
         if (!sucursalId) return;
@@ -62,6 +63,19 @@ export default function PedidosPage() {
 
         if (filtroEstado) query = query.eq("estado", filtroEstado);
         if (filtroTipo) query = query.eq("tipo", filtroTipo);
+
+        if (filtroFecha === "hoy") {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            query = query.gte("created_at", today.toISOString());
+        } else if (filtroFecha === "ayer") {
+            const ayer = new Date();
+            ayer.setDate(ayer.getDate() - 1);
+            ayer.setHours(0, 0, 0, 0);
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+            query = query.gte("created_at", ayer.toISOString()).lt("created_at", hoy.toISOString());
+        }
 
         const { data, count } = await query;
         setPedidos(data || []);
@@ -83,7 +97,30 @@ export default function PedidosPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex gap-3 mb-4 flex-wrap">
+            <div className="flex gap-3 mb-4 flex-wrap items-end">
+                <fieldset className="border border-gray-300 rounded-lg px-2 py-1 bg-white">
+                    <legend className="text-[10px] text-gray-500 px-1 font-semibold tracking-wide">Fecha</legend>
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => { setFiltroFecha("todos"); setPage(1); }}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${filtroFecha === "todos" ? "bg-[#7B1FA2] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+                        >
+                            Todos
+                        </button>
+                        <button
+                            onClick={() => { setFiltroFecha("hoy"); setPage(1); }}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${filtroFecha === "hoy" ? "bg-[#7B1FA2] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+                        >
+                            Hoy
+                        </button>
+                        <button
+                            onClick={() => { setFiltroFecha("ayer"); setPage(1); }}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-all ${filtroFecha === "ayer" ? "bg-[#7B1FA2] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}
+                        >
+                            Ayer
+                        </button>
+                    </div>
+                </fieldset>
                 <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white">
                     <legend className="text-[10px] text-gray-500 px-1">Estado</legend>
                     <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
