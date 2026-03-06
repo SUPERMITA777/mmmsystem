@@ -184,7 +184,7 @@ export default function PanelPedidosPage() {
       .from("pedidos")
       .select("*, pedido_items(*)")
       .eq("sucursal_id", sucursalId)
-      .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino", "entregado", "cancelado"])
+      .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .gte("created_at", `${fechaDesde}T00:00:00`)
       .lte("created_at", `${fechaHasta}T23:59:59`)
       .order("created_at", { ascending: false });

@@ -376,14 +376,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
     const total = subtotal + costoEnvio;
 
-    const isCustomValid = productoCustom ? gruposAdicionales.every((grp: any) => {
+    const isGroupValid = (grp: any) => {
+        if (!productoCustom) return true;
         const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom.id && pg.grupo_id === grp.id);
-        if (!isAllowed || !grp.seleccion_obligatoria) return true;
+        if (!isAllowed) return true;
+        if (!grp.seleccion_obligatoria && (grp.seleccion_minima || 0) <= 0) return true;
 
         const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
         const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
-        return totalInGroup >= (grp.seleccion_minima || 1);
-    }) : true;
+        const minReq = Math.max(grp.seleccion_obligatoria ? 1 : 0, grp.seleccion_minima || 0);
+        return totalInGroup >= minReq;
+    };
+
+    const isCustomValid = productoCustom ? gruposAdicionales.every(grp => isGroupValid(grp)) : true;
 
     const productosFiltrados = productos.filter(p => {
         if (busqueda && !p.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
@@ -687,7 +692,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                 <h4 className="text-[13px] font-black text-gray-900 uppercase tracking-tight">{grp.titulo}</h4>
                                                 <div className="flex items-center gap-2">
                                                     {grp.seleccion_obligatoria && (
-                                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">OBLIGATORIO</span>
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${!isGroupValid(grp) ? "bg-red-500 text-white animate-pulse" : "bg-green-100 text-green-700"}`}>
+                                                            {!isGroupValid(grp) ? "SELECCIÓN OBLIGATORIA" : "¡LISTO!"}
+                                                        </span>
                                                     )}
                                                     <span className="text-[9px] text-gray-400 font-bold">
                                                         MÁX {grp.seleccion_maxima} {grp.seleccion_minima > 0 && `| MÍN ${grp.seleccion_minima}`}
