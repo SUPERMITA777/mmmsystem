@@ -183,7 +183,7 @@ export default function PanelPedidosPage() {
     if (!sucursalId) return;
     let query = supabase
       .from("pedidos")
-      .select("*, pedido_items(*)")
+      .select("*, pedido_items(*, productos(categorias(nombre)))")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .gte("created_at", `${fechaDesde}T00:00:00`)
@@ -447,7 +447,7 @@ export default function PanelPedidosPage() {
                         const elapsed = getElapsedMinutes(pedido.created_at);
                         const isLate = elapsed > 60;
                         const isWarning = elapsed > 40 && elapsed <= 60;
-                        const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
+                        const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
                         return (
                           <div
                             key={pedido.id}
@@ -501,7 +501,7 @@ export default function PanelPedidosPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <h3 className="text-xl font-bold text-gray-900">
-                  {tipoLabel(selectedPedido.tipo)} N°{selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}
+                  {tipoLabel(selectedPedido.tipo)} N°{selectedPedido.numero_pedido?.split("-").pop() ?? selectedPedido.numero_pedido}
                 </h3>
                 <span className="bg-green-100 text-green-700 text-[10px] font-black px-2.5 py-1 rounded-md uppercase">POS</span>
               </div>
@@ -521,7 +521,7 @@ export default function PanelPedidosPage() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (!confirm(`¿Eliminar definitivamente el pedido N°${selectedPedido.numero_pedido?.split("-")[1] ?? selectedPedido.numero_pedido}? Esta acción no se puede deshacer.`)) return;
+                    if (!confirm(`¿Eliminar definitivamente el pedido N°${selectedPedido.numero_pedido?.split("-").pop() ?? selectedPedido.numero_pedido}? Esta acción no se puede deshacer.`)) return;
                     await supabase.from("pedido_items").delete().eq("pedido_id", selectedPedido.id);
                     await supabase.from("pedidos").delete().eq("id", selectedPedido.id);
                     setSelectedPedido(null);

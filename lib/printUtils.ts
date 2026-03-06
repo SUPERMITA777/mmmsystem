@@ -101,7 +101,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
       : pedido.tipo === "takeaway" ? "Take Away"
         : "Salón";
 
-  const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
+  const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
 
   const createdAt = new Date(pedido.created_at);
   const fechaLarga = createdAt.toLocaleDateString("es-AR", {
@@ -109,20 +109,36 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   });
   const horaCreado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 
-  const itemsRows = (pedido.pedido_items ?? []).map((item: any) => {
-    const subtotal = item.precio_unitario * item.cantidad;
-    const aggregated = aggregateAdicionales(item.adicionales ?? []);
-    const ads = aggregated.map((a: any) =>
-      `<tr>
-              <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+ ${a.nombre}</td>
-              <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
-            </tr>`
-    ).join("");
-    return `
-            <tr>
-              <td style="padding:3px 0;font-size:${c.fuente_items}px">${item.cantidad} ${item.nombre_producto}</td>
-              <td style="text-align:right;padding:3px 0;font-size:${c.fuente_items}px;white-space:nowrap">${fmtARS(subtotal)}</td>
-            </tr>${ads}`;
+  // Agrupar items por categoría
+  const groupedItems: Record<string, any[]> = {};
+  (pedido.pedido_items ?? []).forEach((item: any) => {
+    let catName = "PRODUCTOS";
+    if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
+      catName = item.productos.categorias.nombre.toUpperCase();
+    }
+    if (!groupedItems[catName]) groupedItems[catName] = [];
+    groupedItems[catName].push(item);
+  });
+
+  const itemsRows = Object.keys(groupedItems).map(catName => {
+    const headerRow = `<tr><td colspan="2" style="font-size:${c.fuente_direccion}px;font-weight:bold;padding-top:6px;padding-bottom:2px">${catName}</td></tr>`;
+
+    const catItemsRows = groupedItems[catName].map(item => {
+      const subtotal = item.precio_unitario * item.cantidad;
+      const aggregated = aggregateAdicionales(item.adicionales ?? []);
+      const ads = aggregated.map((a: any) =>
+        `<tr>
+                  <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+ ${a.nombre}</td>
+                  <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
+                </tr>`
+      ).join("");
+      return `
+                <tr>
+                  <td style="padding:3px 0;font-size:${c.fuente_items}px">${item.cantidad} ${item.nombre_producto}</td>
+                  <td style="text-align:right;padding:3px 0;font-size:${c.fuente_items}px;white-space:nowrap">${fmtARS(subtotal)}</td>
+                </tr>${ads}`;
+    }).join("");
+    return headerRow + catItemsRows;
   }).join("");
 
   const metodoPago = pedido.metodo_pago_nombre || "Efectivo";
@@ -178,7 +194,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <hr class="sep">
 
   <!-- PRODUCTOS -->
-  <div style="font-size:${c.fuente_direccion}px;font-weight:bold;margin-bottom:4px">PROMOS</div>
+  <!-- PRODUCTOS -->
   <table>${itemsRows}</table>
 
   <hr class="sep">
@@ -232,19 +248,35 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
       : pedido.tipo === "takeaway" ? "Take Away"
         : "Salón";
 
-  const numCorto = pedido.numero_pedido?.split("-")[1] ?? pedido.numero_pedido;
+  const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
 
-  const itemsHtml = (pedido.pedido_items ?? []).map((item: any) => `
-        <div style="font-weight:bold;font-size:${c.fuente_cliente_nombre}px;margin:5px 0;line-height:1.3">
-            ${item.cantidad} ${item.nombre_producto.toUpperCase()}
-        </div>
-        ${(item.adicionales ?? []).length
-      ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
-      : ""}
-        ${item.notas
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`
-      : ""}`
-  ).join("");
+  // Agrupar items por categoría para la cocina
+  const groupedItemsCoc: Record<string, any[]> = {};
+  (pedido.pedido_items ?? []).forEach((item: any) => {
+    let catName = "PRODUCTOS";
+    if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
+      catName = item.productos.categorias.nombre.toUpperCase();
+    }
+    if (!groupedItemsCoc[catName]) groupedItemsCoc[catName] = [];
+    groupedItemsCoc[catName].push(item);
+  });
+
+  const itemsHtml = Object.keys(groupedItemsCoc).map(catName => {
+    const header = `<div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-top:6px;margin-bottom:4px">${catName}</div>`;
+
+    const catItemsHtml = groupedItemsCoc[catName].map(item => `
+          <div style="font-weight:bold;font-size:${c.fuente_cliente_nombre}px;margin:5px 0;line-height:1.3">
+              ${item.cantidad} ${item.nombre_producto.toUpperCase()}
+          </div>
+          ${(item.adicionales ?? []).length
+        ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+        : ""}
+          ${item.notas
+        ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`
+        : ""}`
+    ).join("");
+    return header + catItemsHtml;
+  }).join("");
 
   const html = `<!DOCTYPE html>
 <html><head>
@@ -273,7 +305,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
   <hr class="sep">
 
   <!-- PRODUCTOS -->
-  <div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-bottom:6px">PROMOS</div>
+  <!-- PRODUCTOS -->
   ${itemsHtml}
 
 </body></html>`;
