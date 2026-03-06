@@ -1,24 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-export async function GET(req: NextRequest) {
-    const response = NextResponse.next();
+export async function GET() {
+    const cookieStore = await cookies();
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
-                getAll() {
-                    return req.cookies.getAll().map((cookie) => ({
-                        name: cookie.name,
-                        value: cookie.value,
-                    }));
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
                 },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        req.cookies.set(name, value)
-                    );
+                set(name: string, value: string, options: any) {
+                    cookieStore.set({ name, value, ...options });
+                },
+                remove(name: string, options: any) {
+                    cookieStore.delete({ name, ...options });
                 },
             },
         }
@@ -37,7 +36,8 @@ export async function GET(req: NextRequest) {
                 email: user.email,
             },
         });
-    } catch {
+    } catch (err) {
+        console.error('Auth check error:', err);
         return NextResponse.json({ user: null }, { status: 401 });
     }
 }

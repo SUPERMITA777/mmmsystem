@@ -194,15 +194,33 @@ function PublicMenuContent() {
         .order("orden", { ascending: true, referencedTable: "productos" });
 
       if (catsData) {
-        const filteredCats = catsData
-          .map((cat: any) => ({
-            ...cat,
-            productos: (cat.productos || [])
-              .filter((p: any) =>
-                p.activo && p.visible_en_menu && !p.producto_oculto
-              )
-              .sort((a: any, b: any) => (a.orden ?? 999) - (b.orden ?? 999)),
-          }))
+        // 1. Deduplicate Categories by ID
+        const uniqueCats = catsData.reduce((acc: any[], current: any) => {
+          if (!acc.some(cat => cat.id === current.id)) {
+            acc.push(current);
+          }
+          return acc;
+        }, []);
+
+        const filteredCats = uniqueCats
+          .map((cat: any) => {
+            // 2. Deduplicate Products by ID within Category
+            const uniqueProds = (cat.productos || []).reduce((acc: any[], current: any) => {
+              if (!acc.some(p => p.id === current.id)) {
+                acc.push(current);
+              }
+              return acc;
+            }, []);
+
+            return {
+              ...cat,
+              productos: uniqueProds
+                .filter((p: any) =>
+                  p.activo && p.visible_en_menu && !p.producto_oculto
+                )
+                .sort((a: any, b: any) => (a.orden ?? 999) - (b.orden ?? 999)),
+            };
+          })
           .filter((cat: any) => cat.productos.length > 0);
 
         setCategorias(filteredCats);
