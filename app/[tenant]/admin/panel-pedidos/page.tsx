@@ -9,6 +9,7 @@ import { printComanda, printCocina } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 import { useTenant } from "@/context/TenantContext";
+import { descontarStockDePedido } from "@/lib/stockUtils";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
@@ -273,6 +274,7 @@ export default function PanelPedidosPage() {
     // Send WhatsApp notification at each transition
     if (nuevoEstado === "preparando") {
       sendWhatsAppNotification(pedido, 'confirmado');
+      if (sucursalId) descontarStockDePedido(pedido.id, sucursalId);
     } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
       sendWhatsAppNotification(pedido, 'listo');
     } else if (nuevoEstado === "entregado") {
@@ -301,6 +303,11 @@ export default function PanelPedidosPage() {
 
     // Enviar WhatsApp de confirmación
     sendWhatsAppNotification(pedido, 'confirmado');
+
+    // Descontar stock
+    if (sucursalId) {
+      descontarStockDePedido(pedido.id, sucursalId);
+    }
 
     setConfirmTimePedido(null);
     fetchPedidos();
