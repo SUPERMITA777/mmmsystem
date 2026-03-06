@@ -16,6 +16,7 @@ interface NuevoPedidoModalProps {
 
 type CartItem = {
     id: string;
+    producto_id?: string;
     nombre: string;
     precio: number;
     precioOverride: number;
@@ -290,6 +291,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
         const item: any = {
             id: `${p.id}-${Date.now()}`,
+            producto_id: p.id,
             nombre: p.nombre,
             precio: discInfo.final + adTotal,
             precioOverride: discInfo.final + adTotal,
@@ -478,6 +480,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
                 const items = carrito.map(item => ({
                     pedido_id: pedido.id,
+                    producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
                     precio_unitario: item.precioOverride,
