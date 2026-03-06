@@ -113,7 +113,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     async function fetchAll() {
         if (!sucursalId) return;
         const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
-        setProductos(prods || []);
+        // Deduplicate products by name, preferring those with a category assigned
+        const uniqueProds = (prods || []).reduce((acc: any[], current: any) => {
+            const existing = acc.find(p => p.nombre.toLowerCase().trim() === current.nombre.toLowerCase().trim());
+            if (!existing) {
+                acc.push(current);
+            } else if (!existing.categoria_id && current.categoria_id) {
+                // Replace if we found one with a category
+                acc = acc.map(p => p.id === existing.id ? current : p);
+            }
+            return acc;
+        }, []);
+        setProductos(uniqueProds);
+
         const { data: cats } = await supabase.from("categorias").select("*").eq("sucursal_id", sucursalId).order("orden");
         setCategorias(cats || []);
         const { data: mps } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
@@ -679,7 +691,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             </div>
 
                             {/* Adicionales groups */}
-                            <div className="flex-1 overflow-x-auto p-5 flex items-start gap-8 bg-slate-50/30">
+                            <div className="flex-1 overflow-auto p-5 flex items-start gap-8 bg-slate-50/30">
                                 {gruposAdicionales.map(grp => {
                                     const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom?.id && pg.grupo_id === grp.id);
                                     if (!isAllowed) return null;
@@ -710,7 +722,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                     const atMaxItem = ad.seleccion_maxima > 0 && qty >= ad.seleccion_maxima;
                                                     const disabledPlus = atMaxGroup || atMaxItem;
                                                     return (
-                                                        <div key={ad.id} className="flex items-center gap-2 py-1.5 px-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+                                                        <div key={ad.id} className="flex items-center gap-1.5 py-1 px-1.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
                                                             <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-0.5 border border-gray-100">
                                                                 <button
                                                                     onClick={() => setCustomAdicionales({ ...customAdicionales, [ad.id]: Math.max(0, qty - 1) })}
