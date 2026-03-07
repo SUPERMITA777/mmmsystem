@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, PolygonF } from "@react-google-maps/api";
 
 type PedidoMapCoords = {
     id: string;
@@ -20,6 +21,13 @@ type ZonaData = {
     polygon_coords: { lat: number; lng: number }[] | null;
 };
 
+const mapContainerStyle = {
+    width: "100%",
+    height: "100%",
+};
+
+const ZONA_COLORS = ["#8b5cf6", "#ef4444", "#f59e0b", "#10b981", "#3b82f6"];
+
 export default function PanelPedidosMap({
     pedidos,
     selectedPedidoId,
@@ -29,11 +37,16 @@ export default function PanelPedidosMap({
     selectedPedidoId: string | null;
     onSelectPedido?: (id: string) => void;
 }) {
-    const { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } = require("react-leaflet");
-    const L = require("leaflet");
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || "",
+        language: 'es',
+        region: 'ar'
+    });
 
     const [storePos, setStorePos] = useState<{ lat: number; lng: number } | null>(null);
     const [zonas, setZonas] = useState<ZonaData[]>([]);
+    const [activeInfoWindow, setActiveInfoWindow] = useState<string | null>(null);
 
     useEffect(() => {
         async function fetchStoreData() {
@@ -58,74 +71,77 @@ export default function PanelPedidosMap({
         fetchStoreData();
     }, []);
 
-    const customIcon = L.icon({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-    });
+    const validPedidos = useMemo(() =>
+        pedidos.filter(p => p.cliente_lat != null && p.cliente_lng != null),
+        [pedidos]);
 
-    const purpleIcon = L.icon({
-        iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png",
-        shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41]
-    });
+    const defaultCenter = useMemo(() => {
+        if (storePos) return storePos;
+        if (validPedidos.length > 0) {
+            return {
+                lat: validPedidos[0].cliente_lat as number,
+                lng: validPedidos[0].cliente_lng as number
+            };
+        }
+        return { lat: -34.6037, lng: -58.3816 }; // Buenos Aires
+    }, [storePos, validPedidos]);
 
-    const storeIcon = L.divIcon({
-        html: `<div style="background:#7B1FA2;width:32px;height:32px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z"/></svg>
-        </div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        className: "",
-    });
+    const [map, setMap] = useState<google.maps.Map | null>(null);
 
-    const validPedidos = pedidos.filter(p => p.cliente_lat != null && p.cliente_lng != null);
+    const onLoad = useCallback(function callback(map: google.maps.Map) {
+        setMap(map);
+    }, []);
 
-    const defaultCenter: [number, number] = storePos
-        ? [storePos.lat, storePos.lng]
-        : validPedidos.length > 0
-            ? [validPedidos[0].cliente_lat as number, validPedidos[0].cliente_lng as number]
-            : [-34.6037, -58.3816];
+    const onUnmount = useCallback(function callback(map: google.maps.Map) {
+        setMap(null);
+    }, []);
 
-    const ZONA_COLORS = ["#8b5cf6", "#ef4444", "#f59e0b", "#10b981", "#3b82f6"];
+    useEffect(() => {
+        if (map && selectedPedidoId) {
+            const pedido = validPedidos.find(p => p.id === selectedPedidoId);
+            if (pedido?.cliente_lat && pedido?.cliente_lng) {
+                map.panTo({ lat: pedido.cliente_lat, lng: pedido.cliente_lng });
+                setActiveInfoWindow(pedido.id);
+            }
+        }
+    }, [selectedPedidoId, map, validPedidos]);
 
-    function MapUpdater({ center }: { center: [number, number] }) {
-        const map = useMap();
-        useEffect(() => {
-            map.setView(center, map.getZoom());
-        }, [center, map]);
-        return null;
-    }
+    if (!isLoaded) return <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-sm">Cargando Google Maps...</div>;
 
     return (
-        <MapContainer
+        <GoogleMap
+            mapContainerStyle={mapContainerStyle}
             center={defaultCenter}
             zoom={13}
-            style={{ width: "100%", height: "100%", zIndex: 0 }}
+            onLoad={onLoad}
+            onUnmount={onUnmount}
+            options={{
+                disableDefaultUI: false,
+                clickableIcons: false,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: true,
+                styles: [
+                    {
+                        featureType: "poi",
+                        elementType: "labels",
+                        stylers: [{ visibility: "off" }]
+                    }
+                ]
+            }}
         >
-            <MapUpdater center={defaultCenter} />
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            />
-
             {/* Active delivery zones */}
             {zonas.map((zona, idx) =>
                 zona.polygon_coords && zona.polygon_coords.length >= 3 ? (
-                    <Polygon
+                    <PolygonF
                         key={zona.id}
-                        positions={zona.polygon_coords.map((p: any) => [p.lat, p.lng])}
-                        pathOptions={{
-                            color: ZONA_COLORS[idx % ZONA_COLORS.length],
+                        paths={zona.polygon_coords}
+                        options={{
                             fillColor: ZONA_COLORS[idx % ZONA_COLORS.length],
                             fillOpacity: 0.1,
-                            weight: 2,
-                            dashArray: "6 4",
+                            strokeColor: ZONA_COLORS[idx % ZONA_COLORS.length],
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
                         }}
                     />
                 ) : null
@@ -133,35 +149,46 @@ export default function PanelPedidosMap({
 
             {/* Store marker */}
             {storePos && (
-                <Marker position={[storePos.lat, storePos.lng]} icon={storeIcon}>
-                    <Popup>
-                        <div className="text-center font-bold text-gray-900">🏪 MMM Pizza Artesanal</div>
-                    </Popup>
-                </Marker>
+                <MarkerF
+                    position={storePos}
+                    label={{
+                        text: "🏪",
+                        fontSize: "20px"
+                    }}
+                    title="MMM Pizza Artesanal"
+                />
             )}
 
             {/* Order markers */}
-            {validPedidos.map((p: any) => (
-                <Marker
+            {validPedidos.map((p) => (
+                <MarkerF
                     key={p.id}
-                    position={[p.cliente_lat, p.cliente_lng]}
-                    icon={selectedPedidoId === p.id ? purpleIcon : customIcon}
-                    eventHandlers={{
-                        click: () => onSelectPedido && onSelectPedido(p.id)
+                    position={{ lat: p.cliente_lat as number, lng: p.cliente_lng as number }}
+                    onClick={() => {
+                        onSelectPedido?.(p.id);
+                        setActiveInfoWindow(p.id);
                     }}
+                    icon={selectedPedidoId === p.id ? {
+                        url: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png"
+                    } : undefined}
                 >
-                    <Popup>
-                        <div className="text-center min-w-[120px]">
-                            <p className="font-bold text-gray-900 border-b pb-1 mb-1 m-0">{p.numero_pedido}</p>
-                            <p className="text-sm m-0 leading-tight">{p.cliente_nombre}</p>
-                            <p className="text-xs text-gray-500 font-bold m-0 mt-1 uppercase">
-                                ${new Intl.NumberFormat("es-AR").format(p.total)} • {p.estado}
-                            </p>
-                        </div>
-                    </Popup>
-                </Marker>
+                    {(activeInfoWindow === p.id || selectedPedidoId === p.id) && (
+                        <InfoWindowF
+                            onCloseClick={() => setActiveInfoWindow(null)}
+                            position={{ lat: p.cliente_lat as number, lng: p.cliente_lng as number }}
+                        >
+                            <div className="text-center min-w-[120px] p-1">
+                                <p className="font-bold text-gray-900 border-b pb-1 mb-1 m-0">N° {p.numero_pedido.split('-').pop()}</p>
+                                <p className="text-sm m-0 leading-tight font-medium text-gray-700">{p.cliente_nombre}</p>
+                                <p className="text-xs text-gray-500 font-bold m-0 mt-1 uppercase">
+                                    ${new Intl.NumberFormat("es-AR").format(p.total)} • {p.estado}
+                                </p>
+                            </div>
+                        </InfoWindowF>
+                    )}
+                </MarkerF>
             ))}
-        </MapContainer>
+        </GoogleMap>
     );
 }
 

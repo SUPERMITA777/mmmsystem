@@ -1,70 +1,87 @@
 import { NextResponse } from 'next/server';
 
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+function parseGoogleAddress(components: any[]) {
+    let road = '';
+    let house_number = '';
+    let city = '';
+    let town = '';
+
+    for (const component of components) {
+        if (component.types.includes('route')) road = component.long_name;
+        if (component.types.includes('street_number')) house_number = component.long_name;
+        if (component.types.includes('locality')) city = component.long_name;
+        if (component.types.includes('sublocality')) town = component.long_name;
+        if (component.types.includes('administrative_area_level_2') && !city) city = component.long_name;
+    }
+
+    return { road, house_number, city, town };
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q');
     const lat = searchParams.get('lat');
     const lon = searchParams.get('lon');
-    const format = searchParams.get('format') || 'jsonv2';
-    const limit = searchParams.get('limit') || '1';
-    const localidades = searchParams.get('localidades'); // comma-separated locality names
+    const localidades = searchParams.get('localidades');
+
+    if (!GOOGLE_MAPS_API_KEY) {
+        console.error('Missing GOOGLE_MAPS_API_KEY environment variable');
+        return NextResponse.json({ error: 'Configuración incompleta: falta API Key de Google Maps' }, { status: 500 });
+    }
 
     if (lat && lon) {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=${format}&lat=${lat}&lon=${lon}`;
+        // Reverse Geocoding
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}&language=es`;
         try {
-            const response = await fetch(url, { headers: { 'User-Agent': 'MMMSystem/1.0', 'Accept-Language': 'es' } });
+            const response = await fetch(url);
             const data = await response.json();
-            return NextResponse.json(data);
+
+            if (data.status === 'OK' && data.results.length > 0) {
+                const result = data.results[0];
+                return NextResponse.json({
+                    lat: result.geometry.location.lat.toString(),
+                    lon: result.geometry.location.lng.toString(),
+                    display_name: result.formatted_address,
+                    address: parseGoogleAddress(result.address_components)
+                });
+            }
+            return NextResponse.json({ error: 'No results found' }, { status: 404 });
         } catch (error) {
-            console.error('Geocode API Error:', error);
-            return NextResponse.json({ error: 'Failed to fetch from Nominatim' }, { status: 502 });
+            console.error('Google Geocode API Error:', error);
+            return NextResponse.json({ error: 'Failed to fetch from Google Maps' }, { status: 502 });
         }
     } else if (q) {
-        let localityStr = "Florencio Varela";
+        // Search Geocoding
+        let localityStr = "Florencio Varela, Argentina";
         if (localidades) {
             const locs = localidades.split(',').map(l => l.trim()).filter(Boolean);
-            if (locs.length > 0) localityStr = locs[0];
+            if (locs.length > 0) localityStr = `${locs[0]}, Argentina`;
         }
 
-        let queriesToTry: string[] = [];
+        // Google is much better at intersections, we just append the locality and country for precision
+        const fullQuery = q.toLowerCase().includes('argentina') ? q : `${q}, ${localityStr}`;
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullQuery)}&key=${GOOGLE_MAPS_API_KEY}&language=es&region=ar`;
 
-        // 1. Try Exact query with Locality appended
-        let exactQuery = q;
-        if (!q.toLowerCase().includes(localityStr.toLowerCase())) {
-            exactQuery = `${q}, ${localityStr}`;
-        }
-        queriesToTry.push(exactQuery);
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
 
-        // 2. Try without appending locality, just in case user provided a perfectly formatted full address
-        if (exactQuery !== q) {
-            queriesToTry.push(q);
-        }
-
-        // 3. Try Fallback if it's an intersection or has " y ", " e ", " con "
-        const intersectionMatch = q.match(/^(.*?)\s+(?:y|e|con)\s+(.*?)$/i);
-        if (intersectionMatch) {
-            const street1 = intersectionMatch[1].trim();
-            const fallbackQuery = !street1.toLowerCase().includes(localityStr.toLowerCase())
-                ? `${street1}, ${localityStr}`
-                : street1;
-            queriesToTry.push(fallbackQuery);
-        }
-
-        for (const query of queriesToTry) {
-            const url = `https://nominatim.openstreetmap.org/search?format=${format}&q=${encodeURIComponent(query)}&limit=${limit}&addressdetails=1&countrycodes=ar`;
-            try {
-                const response = await fetch(url, { headers: { 'User-Agent': 'MMMSystem/1.0', 'Accept-Language': 'es' } });
-                const data = await response.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    return NextResponse.json(data);
-                }
-            } catch (error) {
-                console.error('Geocode API Error on try:', query, error);
+            if (data.status === 'OK') {
+                const results = data.results.map((result: any) => ({
+                    lat: result.geometry.location.lat.toString(),
+                    lon: result.geometry.location.lng.toString(),
+                    display_name: result.formatted_address,
+                    address: parseGoogleAddress(result.address_components)
+                }));
+                return NextResponse.json(results);
             }
+            return NextResponse.json([]);
+        } catch (error) {
+            console.error('Google Geocode API Error on query:', q, error);
+            return NextResponse.json({ error: 'Failed to fetch from Google Maps' }, { status: 502 });
         }
-
-        // If all fail, return empty array to signify not found gracefully
-        return NextResponse.json([]);
     } else {
         return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
