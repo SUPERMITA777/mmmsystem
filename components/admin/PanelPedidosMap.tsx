@@ -28,6 +28,9 @@ const mapContainerStyle = {
 
 const ZONA_COLORS = ["#8b5cf6", "#ef4444", "#f59e0b", "#10b981", "#3b82f6"];
 
+// Definimos las librerías necesarias fuera del componente para evitar re-cargas innecesarias
+const libraries: ("places" | "marker" | "drawing" | "geometry")[] = ["marker", "geometry"];
+
 export default function PanelPedidosMap({
     pedidos,
     selectedPedidoId,
@@ -37,11 +40,12 @@ export default function PanelPedidosMap({
     selectedPedidoId: string | null;
     onSelectPedido?: (id: string) => void;
 }) {
-    const { isLoaded } = useJsApiLoader({
+    const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY || "",
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
         language: 'es',
-        region: 'ar'
+        region: 'ar',
+        libraries
     });
 
     const [storePos, setStorePos] = useState<{ lat: number; lng: number } | null>(null);
@@ -106,6 +110,7 @@ export default function PanelPedidosMap({
         }
     }, [selectedPedidoId, map, validPedidos]);
 
+    if (loadError) return <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-500 text-sm">Error al cargar Google Maps: {loadError.message}</div>;
     if (!isLoaded) return <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-sm">Cargando Google Maps...</div>;
 
     return (
@@ -121,6 +126,8 @@ export default function PanelPedidosMap({
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: true,
+                // ID de mapa opcional si usas Advanced Markers con estilos personalizados en la consola
+                // mapId: "YOUR_MAP_ID",
                 styles: [
                     {
                         featureType: "poi",
