@@ -518,7 +518,7 @@ export function ZonasEntregaTab() {
             </div>
 
             {/* === Mapa === */}
-            <div className="rounded-xl overflow-hidden border border-gray-200 relative">
+            <div className="rounded-xl overflow-hidden border border-gray-200 relative h-[400px]">
                 {drawingZonaId && (
                     <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-black/80 text-white text-xs px-4 py-2 rounded-full flex items-center gap-3">
                         <span>✏️ Hacé clic en el mapa para dibujar la zona ({tempPoints.length} puntos)</span>
