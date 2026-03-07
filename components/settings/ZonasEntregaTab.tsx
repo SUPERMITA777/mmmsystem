@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Plus, Trash2, Edit3, Check, X, Navigation } from "lucide-react";
-import dynamic from "next/dynamic";
+import { GoogleMap, useJsApiLoader, MarkerF, PolygonF, PolylineF } from "@react-google-maps/api";
 import { LatLng, pointInPolygon } from "@/lib/geoutils";
 import { useTenant } from "@/context/TenantContext";
 
@@ -36,6 +36,16 @@ const ZONA_COLORS = [
 // =====================
 // Componente del mapa (solo client-side)
 // =====================
+// =====================
+// Componente del mapa (solo client-side)
+// =====================
+const mapContainerStyle = {
+    height: "100%",
+    width: "100%",
+};
+
+const libraries: ("places" | "marker" | "drawing" | "geometry")[] = ["geometry", "marker"];
+
 function MapaZonas({
     zonas,
     localPos,
@@ -55,58 +65,52 @@ function MapaZonas({
     editingVerticesZonaId: string | null;
     onVertexDrag: (zonaId: string, index: number, latlng: LatLng) => void;
 }) {
-    const { MapContainer, TileLayer, Polygon, Marker, useMapEvents, Polyline } = require("react-leaflet");
-    const L = require("leaflet");
-
-    const defaultCenter: [number, number] = localPos
-        ? [localPos.lat, localPos.lng]
-        : [-34.6037, -58.3816]; // Buenos Aires por defecto
-
-    // Icono del marcador del local
-    const localIcon = L.divIcon({
-        html: `<div style="background:#111;width:28px;height:28px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.4)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-        </div>`,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-        className: "",
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+        language: 'es',
+        region: 'ar',
+        libraries
     });
 
-    function MapClickHandler() {
-        useMapEvents({
-            click(e: any) {
-                if (drawingZonaId) {
-                    onMapClick({ lat: e.latlng.lat, lng: e.latlng.lng });
-                }
-            },
-        });
-        return null;
-    }
+    const defaultCenter = useMemo(() => {
+        return localPos ? { lat: localPos.lat, lng: localPos.lng } : { lat: -34.6037, lng: -58.3816 };
+    }, [localPos]);
+
+    if (!isLoaded) return <div className="h-[400px] w-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">Cargando Google Maps...</div>;
 
     return (
-        <MapContainer
+        <GoogleMap
+            mapContainerStyle={mapContainerStyle}
             center={defaultCenter}
             zoom={13}
-            style={{ height: "400px", width: "100%", borderRadius: "12px" }}
-            className={drawingZonaId ? "cursor-crosshair" : ""}
+            onClick={(e) => {
+                if (drawingZonaId && e.latLng) {
+                    onMapClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+                }
+            }}
+            options={{
+                disableDefaultUI: false,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: true,
+                draggableCursor: drawingZonaId ? "crosshair" : "grab",
+                draggingCursor: "grabbing"
+            }}
         >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <MapClickHandler />
-
             {/* Marcador del local */}
             {localPos && (
-                <Marker
-                    position={[localPos.lat, localPos.lng]}
-                    icon={localIcon}
+                <MarkerF
+                    position={{ lat: localPos.lat, lng: localPos.lng }}
                     draggable={true}
-                    eventHandlers={{
-                        dragend: (e: any) => {
-                            const pos = e.target.getLatLng();
-                            onLocalDrag({ lat: pos.lat, lng: pos.lng });
-                        },
+                    onDragEnd={(e) => {
+                        if (e.latLng) {
+                            onLocalDrag({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+                        }
+                    }}
+                    label={{
+                        text: "🏠",
+                        fontSize: "18px"
                     }}
                 />
             )}
@@ -114,15 +118,15 @@ function MapaZonas({
             {/* Polígonos de zonas guardadas */}
             {zonas.map((zona, idx) =>
                 zona.polygon_coords && zona.polygon_coords.length >= 3 ? (
-                    <Polygon
+                    <PolygonF
                         key={zona.id}
-                        positions={zona.polygon_coords.map(p => [p.lat, p.lng])}
-                        pathOptions={{
-                            color: ZONA_COLORS[idx % ZONA_COLORS.length],
+                        paths={zona.polygon_coords}
+                        options={{
                             fillColor: ZONA_COLORS[idx % ZONA_COLORS.length],
                             fillOpacity: zona.activo ? 0.2 : 0.05,
-                            weight: 2,
-                            dashArray: zona.activo ? undefined : "6 4",
+                            strokeColor: ZONA_COLORS[idx % ZONA_COLORS.length],
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
                         }}
                     />
                 ) : null
@@ -131,49 +135,57 @@ function MapaZonas({
             {/* Dibujo en curso */}
             {tempPoints.length > 0 && (
                 <>
-                    <Polyline
-                        positions={[...tempPoints.map(p => [p.lat, p.lng] as [number, number]),
-                        ...(tempPoints.length > 1 ? [[tempPoints[0].lat, tempPoints[0].lng] as [number, number]] : [])]}
-                        pathOptions={{ color: "#8b5cf6", dashArray: "8 4", weight: 2 }}
+                    <PolylineF
+                        path={tempPoints}
+                        options={{
+                            strokeColor: "#8b5cf6",
+                            strokeOpacity: 0.8,
+                            strokeWeight: 2,
+                        }}
                     />
                     {tempPoints.map((p, i) => (
-                        <Marker
-                            key={i}
-                            position={[p.lat, p.lng]}
-                            icon={L.divIcon({
-                                html: `<div style="background:#8b5cf6;width:10px;height:10px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>`,
-                                iconSize: [10, 10],
-                                iconAnchor: [5, 5],
-                                className: "",
-                            })}
+                        <MarkerF
+                            key={`temp-${i}`}
+                            position={p}
+                            icon={{
+                                path: google.maps.SymbolPath.CIRCLE,
+                                fillColor: "#8b5cf6",
+                                fillOpacity: 1,
+                                strokeColor: "#ffffff",
+                                strokeWeight: 2,
+                                scale: 5
+                            }}
                         />
                     ))}
                 </>
             )}
 
-            {/* Draggable vertices for editing existing polygon */}
+            {/* Vértices editables para polígono existente */}
             {editingVerticesZonaId && zonas.filter(z => z.id === editingVerticesZonaId).map(zona =>
                 zona.polygon_coords?.map((p, i) => (
-                    <Marker
+                    <MarkerF
                         key={`vertex-${zona.id}-${i}`}
-                        position={[p.lat, p.lng]}
+                        position={p}
                         draggable={true}
-                        icon={L.divIcon({
-                            html: `<div style="background:#ef4444;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:grab"></div>`,
-                            iconSize: [14, 14],
-                            iconAnchor: [7, 7],
-                            className: "",
-                        })}
-                        eventHandlers={{
-                            dragend: (e: any) => {
-                                const pos = e.target.getLatLng();
-                                onVertexDrag(zona.id, i, { lat: pos.lat, lng: pos.lng });
-                            },
+                        onDragEnd={(e) => {
+                            if (e.latLng) {
+                                onVertexDrag(zona.id, i, { lat: e.latLng.lat(), lng: e.latLng.lng() });
+                            }
                         }}
+                        icon={{
+                            path: google.maps.SymbolPath.CIRCLE,
+                            fillColor: "#10b981", // Verde brillante Pedisy
+                            fillOpacity: 1,
+                            strokeColor: "#ffffff",
+                            strokeWeight: 3,
+                            scale: 8 // Más grande y destacado como pidió el usuario
+                        }}
+                        // @ts-ignore - Soporte para cambiar cursor en hover
+                        onMouseOver={(e: any) => e.target?.setOptions({ cursor: 'pointer' })}
                     />
                 ))
             )}
-        </MapContainer>
+        </GoogleMap>
     );
 }
 
@@ -236,19 +248,24 @@ export function ZonasEntregaTab() {
         if (!localSearch.trim()) return;
         setSearching(true);
         try {
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(localSearch)}&limit=1`,
-                { headers: { "Accept-Language": "es" } }
-            );
+            const res = await fetch(`/api/geocode?q=${encodeURIComponent(localSearch)}`);
             const data = await res.json();
-            if (data[0]) {
-                const lat = parseFloat(data[0].lat);
-                const lng = parseFloat(data[0].lon);
-                setConfig(prev => ({ ...prev, local_lat: lat, local_lng: lng, local_direccion: localSearch }));
+
+            if (data.status === 'OK' && data.results?.[0]) {
+                const { lat, lng } = data.results[0].geometry.location;
+                setConfig(prev => ({
+                    ...prev,
+                    local_lat: lat,
+                    local_lng: lng,
+                    local_direccion: data.results[0].formatted_address || localSearch
+                }));
+                // Si la dirección formateada de Google es mejor, la actualizamos en el buscador
+                setLocalSearch(data.results[0].formatted_address || localSearch);
             } else {
                 alert("No se encontró la dirección. Intentá ser más específico.");
             }
-        } catch {
+        } catch (error) {
+            console.error("Geocode error:", error);
             alert("Error al buscar la dirección.");
         }
         setSearching(false);
