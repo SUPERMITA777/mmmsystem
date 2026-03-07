@@ -144,7 +144,8 @@ export default function MenuPage() {
       if (grupos_adicionales && grupos_adicionales.length > 0 && newProd) {
         const asignaciones = grupos_adicionales.map(gid => ({
           producto_id: newProd.id,
-          grupo_id: gid
+          grupo_id: gid,
+          sucursal_id: sucursalId
         }));
         await supabase.from("producto_grupos_adicionales").insert(asignaciones);
       }
@@ -183,7 +184,8 @@ export default function MenuPage() {
         if (grupos_adicionales.length > 0) {
           const newAsignaciones = grupos_adicionales.map(gid => ({
             producto_id: pData.id,
-            grupo_id: gid
+            grupo_id: gid,
+            sucursal_id: sucursalId
           }));
           await supabase.from("producto_grupos_adicionales").insert(newAsignaciones);
         }

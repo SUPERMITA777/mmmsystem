@@ -91,7 +91,7 @@ export default function AdicionalesManagerModal({
         if (ads?.length) {
             const na = ads.map(a => {
                 const { id: __, created_at: ___, updated_at: ____, stock, restaurar, vender_sin_stock, ...ad } = a as any;
-                return { ...ad, grupo_id: ng.id };
+                return { ...ad, grupo_id: ng.id, sucursal_id: sucursalId };
             });
             await supabase.from("adicionales").insert(na);
         }
@@ -155,11 +155,11 @@ export default function AdicionalesManagerModal({
             for (const ad of adicionales) {
                 if (ad.id.startsWith("temp-")) {
                     const { id, stock, restaurar, vender_sin_stock, ...d } = ad as any;
-                    const { error } = await supabase.from("adicionales").insert({ ...d, grupo_id: gid });
+                    const { error } = await supabase.from("adicionales").insert({ ...d, grupo_id: gid, sucursal_id: sucursalId });
                     if (error) throw error;
                 } else {
                     const { id, stock, restaurar, vender_sin_stock, created_at, updated_at, ...d } = ad as any;
-                    const { error } = await supabase.from("adicionales").update(d).eq("id", ad.id);
+                    const { error } = await supabase.from("adicionales").update({ ...d, sucursal_id: sucursalId }).eq("id", ad.id);
                     if (error) throw error;
                 }
             }
