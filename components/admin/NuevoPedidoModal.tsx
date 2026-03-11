@@ -114,8 +114,26 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     async function fetchAll() {
         if (!sucursalId) return;
         const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
+
+        // Also fetch products via category relationship to catch any products
+        // linked to a category but missing sucursal_id on the product row itself
+        const { data: catsWithProds } = await supabase
+            .from("categorias")
+            .select("productos(*)")
+            .eq("sucursal_id", sucursalId);
+
+        const prodsFromCats = (catsWithProds || []).flatMap((c: any) => c.productos || []);
+
+        // Merge both sources, deduplicating by id
+        const allProds = [...(prods || [])];
+        prodsFromCats.forEach((p: any) => {
+            if (!allProds.some(existing => existing.id === p.id)) {
+                allProds.push(p);
+            }
+        });
+
         // Deduplicate products by id, preferring those with a category assigned
-        const uniqueProds = (prods || []).reduce((acc: any[], current: any) => {
+        const uniqueProds = allProds.reduce((acc: any[], current: any) => {
             const existing = acc.find(p => p.id === current.id);
             if (!existing) {
                 acc.push(current);

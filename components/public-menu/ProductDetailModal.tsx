@@ -203,9 +203,7 @@ export default function ProductDetailModal({
 
     return (
         <div className={`fixed inset-0 z-[60] bg-[#0d0d0d] flex justify-center ${
-            isClosing 
-            ? 'animate-out slide-out-to-right-full duration-300 ease-in' 
-            : 'animate-in slide-in-from-right-full duration-300 ease-out'
+            isClosing ? 'slide-panel-exit' : 'slide-panel-enter'
         }`}>
             <div className="w-full h-full max-w-3xl flex flex-col relative bg-[#111] shadow-2xl">
                 {/* Header Flotante Premium */}
