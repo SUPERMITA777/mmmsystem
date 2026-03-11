@@ -176,6 +176,7 @@ export default function ProductDetailModal({
             } : null,
         });
         window.location.hash = "#carrito";
+        handleClose();
     }
 
     const calculoAdicionales = grupos.reduce((acc, g) => {
@@ -193,13 +194,24 @@ export default function ProductDetailModal({
 
     const totalLinea = (precioBase + calculoAdicionales) * cantidad;
 
+    const [isClosing, setIsClosing] = useState(false);
+
+    function handleClose() {
+        setIsClosing(true);
+        setTimeout(onClose, 300); // Wait for the animation to finish before unmounting
+    }
+
     return (
-        <div className="fixed inset-0 z-50 bg-[#0d0d0d] md:bg-black/60 md:backdrop-blur-sm flex items-center justify-center">
-            <div className="w-full h-full md:w-[480px] md:max-h-[90vh] md:rounded-2xl md:overflow-hidden bg-[#0d0d0d] flex flex-col relative">
+        <div className={`fixed inset-0 z-[60] bg-[#0d0d0d] flex justify-center ${
+            isClosing 
+            ? 'animate-out slide-out-to-right-full duration-300 ease-in' 
+            : 'animate-in slide-in-from-right-full duration-300 ease-out'
+        }`}>
+            <div className="w-full h-full max-w-3xl flex flex-col relative bg-[#111] shadow-2xl">
                 {/* Header Flotante Premium */}
                 <div className="absolute top-0 left-0 right-0 z-50 p-4 flex items-center justify-between pointer-events-none">
                     <button
-                        onClick={onClose}
+                        onClick={handleClose}
                         className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/60 transition-all pointer-events-auto active:scale-90"
                     >
                         <ArrowLeft size={24} />
