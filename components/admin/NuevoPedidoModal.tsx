@@ -114,9 +114,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     async function fetchAll() {
         if (!sucursalId) return;
         const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
-        // Deduplicate products by name, preferring those with a category assigned
+        // Deduplicate products by id, preferring those with a category assigned
         const uniqueProds = (prods || []).reduce((acc: any[], current: any) => {
-            const existing = acc.find(p => p.nombre.toLowerCase().trim() === current.nombre.toLowerCase().trim());
+            const existing = acc.find(p => p.id === current.id);
             if (!existing) {
                 acc.push(current);
             } else if (!existing.categoria_id && current.categoria_id) {
@@ -448,7 +448,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             } else {
                 // CREATE new order - daily sequential numbering
                 const now = new Date();
-                const todayStr = now.toISOString().split('T')[0];
+                
+                // Formateador para zona horaria de Buenos Aires
+                const formatter = new Intl.DateTimeFormat('en-CA', { 
+                    timeZone: 'America/Argentina/Buenos_Aires', 
+                    year: 'numeric', 
+                    month: '2-digit', 
+                    day: '2-digit' 
+                });
+                const todayStr = formatter.format(now); // Formato YYYY-MM-DD
+                
                 const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
                 const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
 
@@ -456,9 +465,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     .from("pedidos")
                     .select("numero_pedido, created_at")
                     .eq("sucursal_id", sucursalId)
-                    .like("numero_pedido", `${tipoPrefix}-${datePart}-%`)
-                    .gte("created_at", `${todayStr}T00:00:00`)
-                    .lte("created_at", `${todayStr}T23:59:59`)
+                    .like("numero_pedido", `%-${datePart}-%`)
+                    .gte("created_at", `${todayStr}T00:00:00-03:00`)
+                    .lte("created_at", `${todayStr}T23:59:59-03:00`)
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .maybeSingle();

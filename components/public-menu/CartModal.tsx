@@ -216,7 +216,16 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
             // 2b. Generar número de pedido diario (empieza en 1 cada día)
             const now = new Date();
-            const todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+            
+            // Formateador para zona horaria de Buenos Aires
+            const formatter = new Intl.DateTimeFormat('en-CA', { 
+                timeZone: 'America/Argentina/Buenos_Aires', 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+            });
+            const todayStr = formatter.format(now); // Formato YYYY-MM-DD
+            
             const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
             const tipoPrefix = tipoEntrega === "delivery" ? "DELIVERY" : "TAKE AWAY";
 
@@ -224,9 +233,9 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 .from("pedidos")
                 .select("numero_pedido, created_at")
                 .eq("sucursal_id", sucursal.id)
-                .like("numero_pedido", `${tipoPrefix}-${datePart}-%`)
-                .gte("created_at", `${todayStr}T00:00:00`)
-                .lte("created_at", `${todayStr}T23:59:59`)
+                .like("numero_pedido", `%-${datePart}-%`)
+                .gte("created_at", `${todayStr}T00:00:00-03:00`)
+                .lte("created_at", `${todayStr}T23:59:59-03:00`)
                 .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();

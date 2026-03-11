@@ -175,7 +175,7 @@ export default function ProductDetailModal({
                 nombre: discount.nombre
             } : null,
         });
-        onClose();
+        window.location.hash = "#carrito";
     }
 
     const calculoAdicionales = grupos.reduce((acc, g) => {

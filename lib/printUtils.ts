@@ -128,8 +128,8 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
       const aggregated = aggregateAdicionales(item.adicionales ?? []);
       const ads = aggregated.map((a: any) =>
         `<tr>
-                  <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+ ${a.nombre}</td>
-                  <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#555;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
+                  <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px;${bw(c, 'fuente_adicionales')}">+ ${a.nombre}</td>
+                  <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
                 </tr>`
       ).join("");
       return `
@@ -269,10 +269,10 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
               ${item.cantidad} ${item.nombre_producto.toUpperCase()}
           </div>
           ${(item.adicionales ?? []).length
-        ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;color:#333;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+        ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
         : ""}
           ${item.notas
-        ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#555">${item.notas}</div>`
+        ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#333">${item.notas}</div>`
         : ""}`
     ).join("");
     return header + catItemsHtml;
