@@ -125,15 +125,33 @@ export function ProductoEditor({
 
         <div className="px-6 pb-4 space-y-4">
           {/* Categoría */}
-          <fieldset className="border border-gray-300 rounded-lg px-3 pt-0.5 pb-2 focus-within:border-purple-500 transition-colors">
-            <legend className="text-xs text-gray-500 px-1">Categoría</legend>
+          <fieldset className={`border rounded-lg px-3 pt-0.5 pb-2 transition-colors ${
+            (!formData.categoria_id || formData.categoria_id === "sin-categoria") 
+              ? "border-orange-500 bg-orange-50" 
+              : "border-gray-300 focus-within:border-purple-500"
+          }`}>
+            <legend className={`text-xs px-1 ${
+              (!formData.categoria_id || formData.categoria_id === "sin-categoria") ? "text-orange-600 font-medium" : "text-gray-500"
+            }`}>
+              {(!formData.categoria_id || formData.categoria_id === "sin-categoria") 
+                ? "⚠ Categoría requerida" 
+                : "Categoría"}
+            </legend>
             <select
               value={formData.categoria_id || ""}
               onChange={(e) => handleChange("categoria_id", e.target.value)}
               className="w-full bg-transparent text-gray-900 text-sm outline-none py-0.5 cursor-pointer"
             >
+              <option value="" disabled>Seleccionar categoría...</option>
               {categorias?.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                <option 
+                  key={cat.id} 
+                  value={cat.id}
+                  disabled={cat.id === "sin-categoria"}
+                  className={cat.id === "sin-categoria" ? "text-orange-500" : ""}
+                >
+                  {cat.id === "sin-categoria" ? "⚠ Sin Categoría asignada" : cat.nombre}
+                </option>
               ))}
             </select>
           </fieldset>

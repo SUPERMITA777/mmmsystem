@@ -51,17 +51,23 @@ export function CategoriasList({
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
-        {categorias.map((categoria) => (
+        {categorias.map((categoria) => {
+          const isVirtual = categoria.id === "sin-categoria";
+          return (
           <div
             key={categoria.id}
             className={`group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${categoriaSeleccionada === categoria.id
                 ? "bg-gray-900 text-white"
+                : isVirtual
+                ? "bg-orange-50 text-orange-900 hover:bg-orange-100"
                 : "text-gray-800 hover:bg-gray-50"
               }`}
             onClick={() => onSelectCategoria(categoria.id)}
           >
             <div
-              className={`w-2 h-2 rounded-full shrink-0 ${categoria.activo ? "bg-green-500" : "bg-red-500"
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                isVirtual ? "bg-orange-500" :
+                categoria.activo ? "bg-green-500" : "bg-red-500"
                 }`}
             />
             <span className="flex-1 text-sm font-medium truncate">
@@ -69,40 +75,42 @@ export function CategoriasList({
             </span>
 
             {/* Action Icons - Visible on Hover */}
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={(e) => { e.stopPropagation(); onDuplicateCategoria(categoria.id); }}
-                className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
-                    ? "text-gray-300 hover:text-white hover:bg-white/10"
-                    : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
-                  }`}
-                title="Duplicar"
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onEditCategoria(categoria); }}
-                className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
-                    ? "text-gray-300 hover:text-white hover:bg-white/10"
-                    : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
-                  }`}
-                title="Editar"
-              >
-                <Edit2 size={14} />
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDeleteCategoria(categoria.id); }}
-                className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
-                    ? "text-red-300 hover:text-red-200 hover:bg-white/10"
-                    : "text-red-400 hover:text-red-600 hover:bg-red-50"
-                  }`}
-                title="Eliminar"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
+            {!isVirtual && (
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDuplicateCategoria(categoria.id); }}
+                  className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
+                      ? "text-gray-300 hover:text-white hover:bg-white/10"
+                      : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                  title="Duplicar"
+                >
+                  <Copy size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEditCategoria(categoria); }}
+                  className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
+                      ? "text-gray-300 hover:text-white hover:bg-white/10"
+                      : "text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                    }`}
+                  title="Editar"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDeleteCategoria(categoria.id); }}
+                  className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
+                      ? "text-red-300 hover:text-red-200 hover:bg-white/10"
+                      : "text-red-400 hover:text-red-600 hover:bg-red-50"
+                    }`}
+                  title="Eliminar"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
           </div>
-        ))}
+        )})}
       </div>
     </div>
   );

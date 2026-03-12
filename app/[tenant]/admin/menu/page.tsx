@@ -79,9 +79,24 @@ export default function MenuPage() {
         .order("orden");
 
       if (data) {
-        setCategorias(data);
-        if (data.length > 0) {
-          if (!categoriaSeleccionada) setCategoriaSeleccionada(data[0].id);
+        // Verificar huérfanos
+        const { count } = await supabase
+          .from("productos")
+          .select("id", { count: "exact", head: true })
+          .is("categoria_id", null)
+          .eq("sucursal_id", sucursalId);
+
+        let finalCategorias = data;
+        if (count && count > 0) {
+          finalCategorias = [
+            ...data,
+            { id: "sin-categoria", nombre: "Sin Categoría (Huérfanos)", activo: true, orden: 9999 }
+          ];
+        }
+
+        setCategorias(finalCategorias);
+        if (finalCategorias.length > 0) {
+          if (!categoriaSeleccionada) setCategoriaSeleccionada(finalCategorias[0].id);
         }
       }
     } catch (error) {
@@ -93,11 +108,14 @@ export default function MenuPage() {
 
   async function loadProductos(categoriaId: string) {
     try {
-      const { data, error } = await supabase
-        .from("productos")
-        .select("*")
-        .eq("categoria_id", categoriaId)
-        .order("orden");
+      let query = supabase.from("productos").select("*").order("orden");
+      if (categoriaId === "sin-categoria") {
+        query = query.is("categoria_id", null).eq("sucursal_id", sucursalId!);
+      } else {
+        query = query.eq("categoria_id", categoriaId);
+      }
+
+      const { data, error } = await query;
 
       if (data) {
         setProductosCompletos(data);
@@ -121,6 +139,12 @@ export default function MenuPage() {
     try {
       setLoading(true);
       const { grupos_adicionales, ...pData } = producto;
+
+      if (!pData.categoria_id || pData.categoria_id === "sin-categoria") {
+        alert("Por favor, selecciona una categoría válida antes de crear el producto.");
+        setLoading(false);
+        return;
+      }
 
       // Get max orden for this category
       const { data: existing } = await supabase
@@ -166,6 +190,12 @@ export default function MenuPage() {
     try {
       setLoading(true);
       const { grupos_adicionales, ...pData } = producto;
+
+      if (!pData.categoria_id || pData.categoria_id === "sin-categoria") {
+        alert("Por favor, selecciona una categoría válida antes de guardar.");
+        setLoading(false);
+        return;
+      }
 
       // 1. Actualizar tabla productos
       const { error: pError } = await supabase
@@ -284,6 +314,13 @@ export default function MenuPage() {
       const { id: _, created_at, updated_at, ...prodData } = original;
       const { data: existing } = await supabase.from("productos").select("orden").eq("categoria_id", prodData.categoria_id).order("orden", { ascending: false }).limit(1);
       const maxOrden = existing?.[0]?.orden || 0;
+      
+      if (!prodData.categoria_id) {
+        alert("No podés duplicar un producto huérfano. Asígnale una categoría válida primero.");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("productos").insert([{ ...prodData, nombre: `${original.nombre} (copia)`, orden: maxOrden + 1 }]);
       if (error) throw error;
       if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
