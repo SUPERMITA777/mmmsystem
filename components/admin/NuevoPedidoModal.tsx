@@ -436,9 +436,36 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const mPago = metodosPago.find(m => m.id === metodoPagoId);
             const metodoPagoNombre = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
 
+            let resolvedClienteId = null;
+            if (!omitirCliente && cliente.telefono) {
+                const { data: existingClient } = await supabase
+                    .from("clientes")
+                    .select("id")
+                    .eq("sucursal_id", sucursalId)
+                    .eq("telefono", cliente.telefono)
+                    .maybeSingle();
+
+                if (existingClient) {
+                    resolvedClienteId = existingClient.id;
+                    await supabase.from("clientes").update({
+                        nombre: cliente.nombre,
+                        direccion: tipo === "delivery" && cliente.direccion ? cliente.direccion : undefined
+                    }).eq("id", resolvedClienteId);
+                } else {
+                    const { data: newClient } = await supabase.from("clientes").insert({
+                        sucursal_id: sucursalId,
+                        telefono: cliente.telefono,
+                        nombre: cliente.nombre,
+                        direccion: tipo === "delivery" ? cliente.direccion : null
+                    }).select("id").single();
+                    if (newClient) resolvedClienteId = newClient.id;
+                }
+            }
+
             if (editPedido) {
                 // UPDATE existing order
                 const { error: uError } = await supabase.from("pedidos").update({
+                    cliente_id: resolvedClienteId,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
@@ -497,6 +524,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
                     sucursal_id: sucursalId,
                     numero_pedido: `${tipoPrefix}-${datePart}-${nextSeq}`,
+                    cliente_id: resolvedClienteId,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",

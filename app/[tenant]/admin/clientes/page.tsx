@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
+import ClienteDetailModal from "@/components/admin/ClienteDetailModal";
+import HeatmapModal from "@/components/admin/HeatmapModal";
 
 type Cliente = {
     id: string;
@@ -23,6 +25,9 @@ export default function ClientesPage() {
     const [perPage, setPerPage] = useState(10);
     const [total, setTotal] = useState(0);
     const { sucursalId } = useTenant();
+    
+    const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+    const [showHeatmap, setShowHeatmap] = useState(false);
 
     useEffect(() => {
         if (sucursalId) fetchClientes();
@@ -68,7 +73,7 @@ export default function ClientesPage() {
                     <input type="text" readOnly value={`1/1/2026 – ${new Date().toLocaleDateString("es-AR")}`} className="bg-transparent outline-none text-sm text-gray-900 w-40" />
                 </fieldset>
                 <div className="ml-auto flex gap-2">
-                    <button className="flex items-center gap-1 text-purple-600 text-sm font-medium hover:underline">
+                    <button onClick={() => setShowHeatmap(true)} className="flex items-center gap-1 text-purple-600 text-sm font-medium hover:underline">
                         <MapPin size={14} /> Mapa de calor
                     </button>
                     <button className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
@@ -107,7 +112,7 @@ export default function ClientesPage() {
                                 </td>
                                 <td className="px-4 py-3 text-center font-bold text-gray-900">{c.total_pedidos}</td>
                                 <td className="px-4 py-3">
-                                    <button className="text-purple-600 text-xs font-medium hover:underline">Más info</button>
+                                    <button onClick={() => setSelectedCliente(c)} className="text-purple-600 text-xs font-medium hover:underline">Más info</button>
                                 </td>
                             </tr>
                         ))}
@@ -128,6 +133,21 @@ export default function ClientesPage() {
                     </div>
                 </div>
             </div>
+
+            {selectedCliente && sucursalId && (
+                <ClienteDetailModal
+                    cliente={selectedCliente}
+                    sucursalId={sucursalId}
+                    onClose={() => setSelectedCliente(null)}
+                />
+            )}
+
+            {showHeatmap && sucursalId && (
+                <HeatmapModal
+                    sucursalId={sucursalId}
+                    onClose={() => setShowHeatmap(false)}
+                />
+            )}
         </section>
     );
 }

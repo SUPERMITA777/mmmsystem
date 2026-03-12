@@ -5,9 +5,10 @@ import { Clock } from "lucide-react";
 interface PublicHeaderProps {
     sucursal: any;
     isOpen: boolean;
+    statusMessage?: string;
 }
 
-export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
+export default function PublicHeader({ sucursal, isOpen, statusMessage }: PublicHeaderProps) {
     return (
         <header className="relative w-full bg-slate-950">
             {/* Info Container */}
@@ -40,7 +41,7 @@ export default function PublicHeader({ sucursal, isOpen }: PublicHeaderProps) {
                         ? "bg-white/5 text-green-400 border border-green-500/20"
                         : "bg-red-500/10 text-red-500 border border-red-500/20"
                         }`}>
-                        {isOpen ? "Abierto ahora" : "Cerrado"}
+                        {statusMessage || (isOpen ? "Abierto ahora" : "Cerrado")}
                     </div>
 
                     {/* Delivery/Retiro Switch */}

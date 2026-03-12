@@ -41,8 +41,9 @@ function PublicMenuContent() {
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
-  const [flyerOpen, setFlyerOpen] = useState(true);
+  const [flyerOpen, setFlyerOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
   const [descuentos, setDescuentos] = useState<any[]>([]);
 
@@ -111,6 +112,7 @@ function PublicMenuContent() {
 
       if (config?.cerrado_temporalmente) {
         setIsOpen(false);
+        setStatusMessage("Cerrado Temporalmente");
         return;
       }
 
@@ -129,6 +131,7 @@ function PublicMenuContent() {
 
       if (!horario || horario.cerrado) {
         setIsOpen(false);
+        setStatusMessage("Cerrado por hoy");
         return;
       }
 
@@ -137,14 +140,27 @@ function PublicMenuContent() {
         return current >= start && current <= end;
       }
 
-      const openNow =
-        inRange(horario.apertura1, horario.cierre1, currentTime) ||
-        inRange(horario.apertura2, horario.cierre2, currentTime);
+      const open1 = inRange(horario.apertura1, horario.cierre1, currentTime);
+      const open2 = inRange(horario.apertura2, horario.cierre2, currentTime);
 
-      setIsOpen(openNow);
+      if (open1 || open2) {
+        setIsOpen(true);
+        setStatusMessage("Abierto ahora");
+      } else {
+        setIsOpen(false);
+        // Determine if there is a shift coming up exactly today
+        if (horario.apertura1 && currentTime < horario.apertura1) {
+          setStatusMessage(`Abre a las ${horario.apertura1}`);
+        } else if (horario.apertura2 && currentTime < horario.apertura2) {
+          setStatusMessage(`Abre a las ${horario.apertura2}`);
+        } else {
+          setStatusMessage("Cerrado por hoy");
+        }
+      }
     } catch (err) {
       console.error("Error fetching horarios:", err);
       setIsOpen(false);
+      setStatusMessage("");
     }
   }
 
@@ -282,7 +298,7 @@ function PublicMenuContent() {
       } as React.CSSProperties}
     >
       {/* Header — hidden when product detail modal is open */}
-      {!selectedProduct && <PublicHeader sucursal={sucursal} isOpen={isOpen} />}
+      {!selectedProduct && <PublicHeader sucursal={sucursal} isOpen={isOpen} statusMessage={statusMessage} />}
 
       {/* Category Nav — hidden when product detail modal is open */}
       {!selectedProduct && (

@@ -20,36 +20,60 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
+import { useTenant } from "@/context/TenantContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 const items = [
-  { href: "/admin/settings", icon: Settings, label: "Configuraciones" },
-  { href: "/admin/menu", icon: UtensilsCrossed, label: "Menú" },
-  { href: "/admin/panel-pedidos", icon: ClipboardList, label: "Panel de pedidos" },
-  { href: "/admin/cajas", icon: CreditCard, label: "Cajas" },
-  { href: "/admin/pedidos", icon: FileText, label: "Pedidos" },
-  { href: "/admin/repartidores", icon: Truck, label: "Repartidores" },
-  { href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
-  { href: "/admin/stock", icon: Package, label: "Stock" },
-  { href: "/admin/clientes", icon: Users, label: "Clientes" },
-  { href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
-  { href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
-  { href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
-  { href: "/admin/permisos", icon: Shield, label: "Permisos" },
-  { href: "/admin/monitor-cocina", icon: MonitorPlay, label: "Monitor cocina" },
+  { id: "settings", href: "/admin/settings", icon: Settings, label: "Configuraciones" },
+  { id: "menu", href: "/admin/menu", icon: UtensilsCrossed, label: "Menú" },
+  { id: "panel-pedidos", href: "/admin/panel-pedidos", icon: ClipboardList, label: "Panel de pedidos" },
+  { id: "cajas", href: "/admin/cajas", icon: CreditCard, label: "Cajas" },
+  { id: "pedidos", href: "/admin/pedidos", icon: FileText, label: "Pedidos" },
+  { id: "repartidores", href: "/admin/repartidores", icon: Truck, label: "Repartidores" },
+  { id: "reportes", href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
+  { id: "stock", href: "/admin/stock", icon: Package, label: "Stock" },
+  { id: "clientes", href: "/admin/clientes", icon: Users, label: "Clientes" },
+  { id: "descuentos", href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
+  { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
+  { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
+  { id: "permisos", href: "/admin/permisos", icon: Shield, label: "Permisos" },
+  { id: "monitor-cocina", href: "/admin/monitor-cocina", icon: MonitorPlay, label: "Monitor cocina" },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const params = useParams();
+  const { sucursalId } = useTenant();
+  const [modulosOcultos, setModulosOcultos] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (sucursalId) {
+      const fetchSettings = async () => {
+        const { data } = await supabase
+          .from("config_sucursal")
+          .select("panel_settings")
+          .eq("sucursal_id", sucursalId)
+          .maybeSingle();
+        
+        if (data?.panel_settings?.modulos_ocultos) {
+          setModulosOcultos(data.panel_settings.modulos_ocultos);
+        }
+      };
+      fetchSettings();
+    }
+  }, [sucursalId]);
 
   // Extract tenant from params or pathname fallback
   const tenant = params?.tenant || pathname.split('/')[1] || "demo";
 
-  // Rebuild items dynamically based on the current tenant
-  const dynamicItems = items.map(item => ({
-    ...item,
-    href: `/${tenant}${item.href}`
-  }));
+  // Rebuild items dynamically based on the current tenant and visibility settings
+  const dynamicItems = items
+    .filter(item => !modulosOcultos.includes(item.id))
+    .map(item => ({
+      ...item,
+      href: `/${tenant}${item.href}`
+    }));
 
   return (
     <aside className="w-56 bg-white flex flex-col border-r border-gray-200 shrink-0">

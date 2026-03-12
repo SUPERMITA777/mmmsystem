@@ -247,12 +247,40 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             }
             const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
 
+            // 2c. Buscar o crear cliente
+            let resolvedClienteId = null;
+            if (telefono) {
+                const { data: existingClient } = await supabase
+                    .from("clientes")
+                    .select("id")
+                    .eq("sucursal_id", sucursal.id)
+                    .eq("telefono", telefono)
+                    .maybeSingle();
+
+                if (existingClient) {
+                    resolvedClienteId = existingClient.id;
+                    await supabase.from("clientes").update({
+                        nombre: nombre,
+                        direccion: tipoEntrega === "delivery" && direccion ? direccion : undefined
+                    }).eq("id", resolvedClienteId);
+                } else {
+                    const { data: newClient } = await supabase.from("clientes").insert({
+                        sucursal_id: sucursal.id,
+                        telefono: telefono,
+                        nombre: nombre,
+                        direccion: tipoEntrega === "delivery" ? direccion : null
+                    }).select("id").single();
+                    if (newClient) resolvedClienteId = newClient.id;
+                }
+            }
+
             // 3. Crear el Pedido en la base de datos
             const { data: pedido, error: pedidoError } = await supabase
                 .from("pedidos")
                 .insert([{
                     sucursal_id: sucursal.id,
                     numero_pedido: numeroPedido,
+                    cliente_id: resolvedClienteId,
                     cliente_nombre: nombre,
                     cliente_telefono: telefono,
                     cliente_direccion: tipoEntrega === "delivery" ? direccion : null,

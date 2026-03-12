@@ -12,8 +12,10 @@ import { RedesSocialesTab } from "@/components/settings/RedesSocialesTab";
 import { MarketingTab } from "@/components/settings/MarketingTab";
 import { ComandasTab } from "@/components/settings/ComandasTab";
 import { LocalidadesTab } from "@/components/settings/LocalidadesTab";
+import { PanelTab } from "@/components/settings/PanelTab";
 
 const TABS = [
+  { id: "panel", label: "Panel" },
   { id: "modalidades", label: "Modalidades" },
   { id: "pedidos", label: "Pedidos" },
   { id: "horarios", label: "Horarios" },
@@ -26,7 +28,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("modalidades");
+  const [activeTab, setActiveTab] = useState("panel");
   const { sucursalData } = useTenant();
 
   return (
@@ -42,6 +44,10 @@ export default function SettingsPage() {
 
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
         <Tabs tabs={TABS} initialId={activeTab} onChange={setActiveTab} />
+
+        <TabPanel id="panel" activeId={activeTab}>
+          <PanelTab />
+        </TabPanel>
 
         <TabPanel id="modalidades" activeId={activeTab}>
           <ModalidadesTab />
