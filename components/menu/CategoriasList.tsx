@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Edit2, Trash2 } from "lucide-react";
+import { Copy, Edit2, Trash2, FileImage } from "lucide-react";
 
 type Categoria = {
   id: string;
@@ -18,6 +18,7 @@ export function CategoriasList({
   onEditCategoria,
   onDuplicateCategoria,
   onDeleteCategoria,
+  onGenerateCartaCategoria,
 }: {
   categorias: Categoria[];
   categoriaSeleccionada: string | null;
@@ -27,6 +28,7 @@ export function CategoriasList({
   onEditCategoria: (cat: Categoria) => void;
   onDuplicateCategoria: (id: string) => void;
   onDeleteCategoria: (id: string) => void;
+  onGenerateCartaCategoria: (id: string) => void;
 }) {
   return (
     <div className="h-full flex flex-col bg-white rounded-l-xl border border-gray-200">
@@ -77,6 +79,16 @@ export function CategoriasList({
             {/* Action Icons - Visible on Hover */}
             {!isVirtual && (
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onGenerateCartaCategoria(categoria.id); }}
+                  className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
+                      ? "text-orange-300 hover:text-orange-200 hover:bg-white/10"
+                      : "text-orange-400 hover:text-orange-600 hover:bg-orange-50"
+                    }`}
+                  title="Generar imagen de categoría"
+                >
+                  <FileImage size={14} />
+                </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); onDuplicateCategoria(categoria.id); }}
                   className={`p-1 rounded transition-colors ${categoriaSeleccionada === categoria.id
