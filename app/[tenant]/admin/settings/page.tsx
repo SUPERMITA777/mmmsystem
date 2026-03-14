@@ -13,6 +13,7 @@ import { MarketingTab } from "@/components/settings/MarketingTab";
 import { ComandasTab } from "@/components/settings/ComandasTab";
 import { LocalidadesTab } from "@/components/settings/LocalidadesTab";
 import { PanelTab } from "@/components/settings/PanelTab";
+import { DatabaseTab } from "@/components/settings/DatabaseTab";
 
 const TABS = [
   { id: "panel", label: "Panel" },
@@ -25,6 +26,7 @@ const TABS = [
   { id: "marketing", label: "Marketing" },
   { id: "comandas", label: "Comandas" },
   { id: "localidades", label: "Localidades" },
+  { id: "database", label: "Base de datos" },
 ];
 
 export default function SettingsPage() {
@@ -81,8 +83,13 @@ export default function SettingsPage() {
           <ComandasTab />
         </TabPanel>
 
+
         <TabPanel id="localidades" activeId={activeTab}>
           <LocalidadesTab />
+        </TabPanel>
+
+        <TabPanel id="database" activeId={activeTab}>
+          <DatabaseTab />
         </TabPanel>
       </div>
     </section>
