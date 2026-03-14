@@ -13,6 +13,7 @@ import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
 import CartaGeneratorButton from "@/components/admin/CartaGeneratorButton";
 import { Download, Upload, DollarSign, Plus, Megaphone } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
+import { ImportarMenuModal } from "@/components/menu/ImportarMenuModal";
 
 type Categoria = {
   id: string;
@@ -50,6 +51,7 @@ export default function MenuPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
   const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const { sucursalId, loading: tenantLoading } = useTenant();
 
@@ -598,7 +600,10 @@ export default function MenuPage() {
             FLYER
           </button>
           <CartaGeneratorButton sucursalId={sucursalId} />
-          <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
+           <button 
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors"
+          >
             <Upload size={15} />
             Importar menú
           </button>
@@ -701,6 +706,16 @@ export default function MenuPage() {
         isOpen={isFlyerModalOpen}
         onClose={() => setIsFlyerModalOpen(false)}
         sucursalId={sucursalId}
+      />
+
+      <ImportarMenuModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        sucursalId={sucursalId}
+        onSuccess={() => {
+          loadCategorias();
+          if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
+        }}
       />
     </div>
   );
