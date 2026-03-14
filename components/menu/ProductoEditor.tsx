@@ -232,9 +232,9 @@ export function ProductoEditor({
             </div>
           </fieldset>
 
-          {/* Control de stock */}
+          {/* Visibilidad y Stock */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">Control de stock del producto</h4>
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">Visibilidad y Estado</h4>
             <div className="space-y-2.5">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -243,82 +243,47 @@ export function ProductoEditor({
                   onChange={(e) => handleChange("visible_en_menu", e.target.checked)}
                   className="w-4 h-4 accent-purple-600 rounded"
                 />
-                <span className="text-sm text-gray-700">Stock</span>
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-700 font-medium">Visible en menú</span>
+                  <span className="text-[11px] text-gray-400">El producto aparece en la página de venta pública</span>
+                </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={!formData.producto_oculto}
-                  onChange={(e) => handleChange("producto_oculto", !e.target.checked)}
+                  checked={formData.producto_oculto}
+                  onChange={(e) => handleChange("producto_oculto", e.target.checked)}
                   className="w-4 h-4 accent-purple-600 rounded"
                 />
-                <span className="text-sm text-gray-700">Restaurar</span>
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-700 font-medium">Producto oculto</span>
+                  <span className="text-[11px] text-gray-400">Ocultar completamente (incluso del panel admin si se filtra)</span>
+                </div>
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={false}
-                  readOnly
+                  checked={formData.producto_sugerido}
+                  onChange={(e) => handleChange("producto_sugerido", e.target.checked)}
                   className="w-4 h-4 accent-purple-600 rounded"
                 />
-                <span className="text-sm text-gray-700">Vender sin stock</span>
+                <span className="text-sm text-gray-700 font-medium">Producto sugerido</span>
               </label>
             </div>
 
             {/* Stock simple */}
-            <div className="mt-3">
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Control de Stock</h4>
               <fieldset className="border border-gray-300 rounded-lg px-3 pt-0.5 pb-2">
-                <legend className="text-xs text-gray-500 px-1">Stock simple (Sin receta)</legend>
+                <legend className="text-xs text-gray-500 px-1">Stock disponible</legend>
                 <input
                   type="number"
                   className="w-full bg-transparent text-gray-900 text-sm outline-none py-0.5"
                   placeholder="Dejar vacío para no limitar"
                 />
               </fieldset>
+              <p className="text-[11px] text-gray-400 mt-1">Si está vacío, el stock es ilimitado.</p>
             </div>
-          </div>
-
-          {/* Tiempo de cocción */}
-          <fieldset className="border border-gray-300 rounded-lg px-3 pt-0.5 pb-2 focus-within:border-purple-500 transition-colors">
-            <legend className="text-xs text-gray-500 px-1">Tiempo de cocción</legend>
-            <input
-              type="number"
-              value={formData.tiempo_coccion || ""}
-              onChange={(e) => handleChange("tiempo_coccion", Number(e.target.value))}
-              className="w-full bg-transparent text-gray-900 text-sm outline-none py-0.5"
-              placeholder="Minutos de cocción"
-            />
-          </fieldset>
-
-          {/* Visibilidad */}
-          <div className="space-y-2.5 pb-2">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.visible_en_menu}
-                onChange={(e) => handleChange("visible_en_menu", e.target.checked)}
-                className="w-4 h-4 accent-purple-600 rounded"
-              />
-              <span className="text-sm text-gray-700">Visible en menú.</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.producto_oculto}
-                onChange={(e) => handleChange("producto_oculto", e.target.checked)}
-                className="w-4 h-4 accent-purple-600 rounded"
-              />
-              <span className="text-sm text-gray-700">Producto oculto.</span>
-            </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.producto_sugerido}
-                onChange={(e) => handleChange("producto_sugerido", e.target.checked)}
-                className="w-4 h-4 accent-purple-600 rounded"
-              />
-              <span className="text-sm text-gray-700">Producto sugerido.</span>
-            </label>
           </div>
 
           {/* Adicionales */}
