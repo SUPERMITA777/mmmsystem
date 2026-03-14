@@ -42,31 +42,25 @@ export function DatabaseTab() {
       const backupData: Record<string, any[]> = {};
 
       for (const table of TABLES_TO_BACKUP) {
-        // Primera opción: Filtrar por sucursal_id
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from(table)
           .select("*")
           .eq("sucursal_id", sucursalId);
 
         if (error) {
-          // Si el error es porque la columna no existe (42703 o msg descriptivo), reintentamos sin filtro
-          const isMissingColumn = error.code === '42703' || error.message?.includes('column "sucursal_id" does not exist');
+          console.warn(`Tabla ${table}: Error con filtro (posiblemente no tiene sucursal_id), reintentando sin filtro...`, error);
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from(table)
+            .select("*");
           
-          if (isMissingColumn) {
-            console.log(`Tabla ${table} no tiene sucursal_id, reintentando sin filtro...`);
-            const { data: fallbackData, error: fallbackError } = await supabase
-              .from(table)
-              .select("*");
-            
-            if (fallbackError) throw fallbackError;
-            backupData[table] = fallbackData || [];
-          } else {
-            // Si es otro tipo de error (ej. permisos), lanzamos
-            throw error;
+          if (fallbackError) {
+            console.error(`Error persistente en tabla ${table}:`, fallbackError);
+            throw new Error(`Error en tabla ${table}: ${fallbackError.message}`);
           }
-        } else {
-          backupData[table] = data || [];
+          data = fallbackData;
         }
+        
+        backupData[table] = data || [];
       }
 
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
