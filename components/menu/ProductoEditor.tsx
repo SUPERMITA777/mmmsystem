@@ -83,10 +83,22 @@ export function ProductoEditor({
   }, [producto, isCreating, defaultCategoriaId]);
 
   async function loadGruposYAsignaciones(productoId: string) {
-    const { data: catData } = await supabase.from("categorias").select("sucursal_id").eq("id", producto?.categoria_id).single();
-    if (catData) {
-      const { data: grupos } = await supabase.from("grupos_adicionales").select("id, titulo").eq("sucursal_id", catData.sucursal_id);
-      setTodosLosGrupos(grupos || []);
+    if (formData?.categoria_id && formData.categoria_id !== 'sin-categoria') {
+      const { data: catData } = await supabase
+        .from("categorias")
+        .select("sucursal_id")
+        .eq("id", formData.categoria_id)
+        .single();
+      
+      if (catData) {
+        const { data: grupos } = await supabase
+          .from("grupos_adicionales")
+          .select("id, titulo")
+          .eq("sucursal_id", catData.sucursal_id);
+        setTodosLosGrupos(grupos || []);
+      }
+    } else {
+      setTodosLosGrupos([]);
     }
     const { data: asignaciones } = await supabase.from("producto_grupos_adicionales").select("grupo_id").eq("producto_id", productoId);
     setGruposAsignados(asignaciones?.map((a: any) => a.grupo_id) || []);

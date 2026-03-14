@@ -111,11 +111,13 @@ export default function CategoriasSortModal({
     async function handleSave() {
         setIsSaving(true);
         try {
-            const updates = items.map((item, index) => ({
-                id: item.id,
-                nombre: item.nombre,
-                orden: index + 1,
-            }));
+            const updates = items
+                .filter(item => item.id !== "sin-categoria")
+                .map((item, index) => ({
+                    id: item.id,
+                    nombre: item.nombre,
+                    orden: index + 1,
+                }));
 
             const { error } = await supabase
                 .from("categorias")
