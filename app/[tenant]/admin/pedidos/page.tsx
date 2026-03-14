@@ -35,6 +35,16 @@ const TIPO_BADGE: Record<string, string> = {
     salon: "bg-amber-100 text-amber-700",
 };
 
+const ESTADO_OPTIONS = [
+    { key: "pendiente", label: "Pendiente" },
+    { key: "confirmado", label: "Confirmado" },
+    { key: "preparando", label: "En preparación" },
+    { key: "listo", label: "Listo" },
+    { key: "en_camino", label: "En camino" },
+    { key: "entregado", label: "Entregado" },
+    { key: "cancelado", label: "Cancelado" },
+];
+
 export default function PedidosPage() {
     const [pedidos, setPedidos] = useState<Pedido[]>([]);
     const [loading, setLoading] = useState(true);
@@ -94,6 +104,29 @@ export default function PedidosPage() {
         setPedidos(data || []);
         setTotal(count || 0);
         setLoading(false);
+
+        // Keep selectedPedido in sync
+        if (selectedPedido) {
+            const updated = (data || []).find(p => p.id === selectedPedido.id);
+            if (updated) setSelectedPedido(updated);
+        }
+    }
+
+    async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
+        try {
+            const { error } = await supabase
+                .from("pedidos")
+                .update({ estado: nuevoEstado })
+                .eq("id", pedido.id);
+
+            if (error) throw error;
+            
+            // Refresh local list
+            fetchPedidos();
+        } catch (error) {
+            console.error("Error al cambiar estado:", error);
+            alert("Error al cambiar el estado del pedido");
+        }
     }
 
     const totalPages = Math.ceil(total / perPage);
@@ -279,6 +312,20 @@ export default function PedidosPage() {
                             {selectedPedido.cliente_telefono && <div className="flex items-center gap-2 text-gray-600"><Phone size={14} className="text-gray-400" /> {selectedPedido.cliente_telefono}</div>}
                             {selectedPedido.cliente_direccion && <div className="flex items-center gap-2 text-gray-600"><MapPin size={14} className="text-gray-400" /> {selectedPedido.cliente_direccion}</div>}
                             <div className="flex items-center gap-2 text-gray-500"><Clock size={14} className="text-gray-400" /> {formatDate(selectedPedido.created_at)}</div>
+                            
+                            {/* Estado Selector */}
+                            <div className="pt-2">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1">Estado del Pedido</label>
+                                <select
+                                    value={selectedPedido.estado}
+                                    onChange={(e) => cambiarEstado(selectedPedido, e.target.value)}
+                                    className={`w-full text-xs font-bold px-3 py-2 rounded-lg border border-gray-200 outline-none focus:ring-2 focus:ring-purple-500 transition-all ${ESTADOS_BADGE[selectedPedido.estado] || "bg-gray-50 text-gray-700"}`}
+                                >
+                                    {ESTADO_OPTIONS.map(opt => (
+                                        <option key={opt.key} value={opt.key}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                         <div className="mt-4 border-t border-gray-100 pt-3 space-y-1">
                             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Productos</h4>
