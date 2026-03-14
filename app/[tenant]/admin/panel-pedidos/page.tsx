@@ -9,6 +9,7 @@ import { printComanda, printCocina } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 import { useTenant } from "@/context/TenantContext";
+import { useNotifications } from "@/context/NotificationContext";
 import { descontarStockDePedido } from "@/lib/stockUtils";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
@@ -88,40 +89,6 @@ function aggregateAds(adicionales: any[]) {
 }
 
 /* ── Bell sound (Web Audio API) ── */
-function playBell() {
-  try {
-    const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-
-    // Si el contexto está suspendido (política de auto-play), intentar resumirlo
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
-    const playTone = (freq: number, start: number, duration: number, vol: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-      osc.frequency.exponentialRampToValueAtTime(freq / 2, ctx.currentTime + start + duration);
-
-      gain.gain.setValueAtTime(vol, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration + 0.1);
-    };
-
-    // Sonido de "doble campanilla"
-    playTone(880, 0, 1.2, 0.4);
-    playTone(1760, 0.05, 0.8, 0.2); // Armónico
-  } catch (e) {
-    console.warn("Audio error:", e);
-  }
-}
 
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -141,9 +108,8 @@ export default function PanelPedidosPage() {
   const [fechaDesde, setFechaDesde] = useState(() => new Date().toISOString().split('T')[0]);
   const [fechaHasta, setFechaHasta] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const knownIdsRef = useRef<Set<string>>(new Set());
-  const firstLoadRef = useRef(true);
   const { sucursalId } = useTenant();
+  const { playNotificationSound, enableAudio } = useNotifications();
 
   useEffect(() => {
     if (!sucursalId) return;
@@ -192,22 +158,6 @@ export default function PanelPedidosPage() {
 
     const { data } = await query;
     const rows = (data || []) as Pedido[];
-
-    // Bell on new pedido
-    if (fromRealtime && !firstLoadRef.current) {
-      rows.forEach(p => {
-        if (!knownIdsRef.current.has(p.id)) {
-          // Check if notification is enabled in settings
-          if (!sucursalConfig?.panel_settings || sucursalConfig.panel_settings.notificacion_sonora !== false) {
-            playBell();
-          }
-        }
-      });
-    }
-
-    // Update known IDs
-    knownIdsRef.current = new Set(rows.map(p => p.id));
-    firstLoadRef.current = false;
 
     setPedidos(rows);
     setLoading(false);
@@ -399,7 +349,7 @@ export default function PanelPedidosPage() {
 
           <div className="ml-auto flex items-center gap-3">
             <button
-              onClick={() => playBell()}
+              onClick={() => { enableAudio(); playNotificationSound(); }}
               className="flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all active:scale-95"
               title="Probar sonido de notificación y habilitar en el navegador"
             >

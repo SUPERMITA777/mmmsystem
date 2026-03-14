@@ -11,6 +11,7 @@ interface PanelSettings {
     ocultar_pedidos_pago_pendiente: boolean;
     sonido_notificacion: string;
     notificacion_sonora: boolean;
+    sonido_notificacion_custom_url?: string;
     whatsapp_templates: {
         confirmado: string;
         listo: string;
@@ -177,20 +178,48 @@ export default function OrderPanelSettingsModal({
                                         onChange={e => setSettings({ ...settings, sonido_notificacion: e.target.value })}
                                         className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
                                     >
-                                        <option value="campana_1">Campana 1</option>
-                                        <option value="campana_2">Alarma 3</option>
-                                        <option value="burbuja">Burbuja</option>
+                                        <option value="campana_1">Campana 1 (Clásica)</option>
+                                        <option value="campana_2">Campana 2 (Doble)</option>
+                                        <option value="burbuja">Burbuja (Moderno)</option>
+                                        <option value="custom">Personalizado (URL)</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] text-gray-400 uppercase font-bold px-1">Repetir</label>
-                                    <select className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none" disabled>
+                                    <select className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none" disabled title="Próximamente">
                                         <option>No repetir</option>
                                         <option>1 vez</option>
                                         <option>Hasta ver el pedido</option>
                                     </select>
                                 </div>
                             </div>
+
+                            {settings.sonido_notificacion === "custom" && (
+                                <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <label className="text-[10px] text-gray-400 uppercase font-bold px-1">URL del Sonido Personalizado (.mp3, .wav)</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={settings.sonido_notificacion_custom_url || ""}
+                                            onChange={e => setSettings({ ...settings, sonido_notificacion_custom_url: e.target.value })}
+                                            placeholder="https://ejemplo.com/sonido.mp3"
+                                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (settings.sonido_notificacion_custom_url) {
+                                                    const audio = new Audio(settings.sonido_notificacion_custom_url);
+                                                    audio.play().catch(e => alert("Error al reproducir el sonido: " + e.message));
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl text-xs font-bold hover:bg-purple-200 transition-colors"
+                                        >
+                                            Probar
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 italic px-1">Asegúrate de que la URL sea pública y accesible.</p>
+                                </div>
+                            )}
                         </div>
                     </section>
 

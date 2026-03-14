@@ -3,13 +3,15 @@ import { AdminTopBar } from "@/components/admin/AdminTopBar";
 import { AiAssistantBar } from "@/components/admin/AiAssistantBar";
 import { AuthProvider } from "@/components/admin/AuthProvider";
 import { TenantProvider } from "@/context/TenantContext";
+import { NotificationProvider } from "@/context/NotificationContext";
 import versionData from "@/version.json";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <TenantProvider>
-      <AuthProvider>
-        <div className="flex min-h-screen bg-[#f0f0f5]">
+      <NotificationProvider>
+        <AuthProvider>
+          <div className="flex min-h-screen bg-[#f0f0f5]">
           <AdminSidebar />
           <div className="flex-1 flex flex-col">
             <AdminTopBar />
@@ -21,6 +23,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </AuthProvider>
-    </TenantProvider>
-  );
+    </NotificationProvider>
+  </TenantProvider>
+);
 }
