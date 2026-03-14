@@ -8,6 +8,8 @@ import { Loader2, Download, Upload, AlertTriangle, CheckCircle2 } from "lucide-r
 const TABLES_TO_BACKUP = [
   "config_sucursal",
   "horarios_sucursal",
+  "usuarios",
+  "permisos",
   "categorias",
   "mesas",
   "metodos_pago",
@@ -22,6 +24,7 @@ const TABLES_TO_BACKUP = [
   "pedido_items",
   "cajas",
   "transacciones_caja",
+  "movimientos_stock",
   "descuentos",
 ];
 
@@ -39,13 +42,31 @@ export function DatabaseTab() {
       const backupData: Record<string, any[]> = {};
 
       for (const table of TABLES_TO_BACKUP) {
+        // Primera opción: Filtrar por sucursal_id
         const { data, error } = await supabase
           .from(table)
           .select("*")
           .eq("sucursal_id", sucursalId);
 
-        if (error) throw error;
-        backupData[table] = data || [];
+        if (error) {
+          // Si el error es porque la columna no existe (42703 o msg descriptivo), reintentamos sin filtro
+          const isMissingColumn = error.code === '42703' || error.message?.includes('column "sucursal_id" does not exist');
+          
+          if (isMissingColumn) {
+            console.log(`Tabla ${table} no tiene sucursal_id, reintentando sin filtro...`);
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from(table)
+              .select("*");
+            
+            if (fallbackError) throw fallbackError;
+            backupData[table] = fallbackData || [];
+          } else {
+            // Si es otro tipo de error (ej. permisos), lanzamos
+            throw error;
+          }
+        } else {
+          backupData[table] = data || [];
+        }
       }
 
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
