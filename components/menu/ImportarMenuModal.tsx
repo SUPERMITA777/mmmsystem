@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabaseClient';
@@ -12,7 +12,7 @@ interface ImportarMenuModalProps {
   onSuccess: () => void;
 }
 
-export function ImportarMenuModal({ isOpen, onClose, sucursalId, onSuccess }: ImportarMenuModalProps) {
+export default function ImportarMenuModal({ isOpen, onClose, sucursalId, onSuccess }: ImportarMenuModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: 'idle' | 'success' | 'error', message: string }>({ type: 'idle', message: '' });

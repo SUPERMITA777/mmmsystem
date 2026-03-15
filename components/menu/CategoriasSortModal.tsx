@@ -87,6 +87,12 @@ export default function CategoriasSortModal({
     const [items, setItems] = useState(initialCategorias);
     const [isSaving, setIsSaving] = useState(false);
 
+    useEffect(() => {
+        if (isOpen) {
+            setItems(initialCategorias);
+        }
+    }, [isOpen, initialCategorias]);
+
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {

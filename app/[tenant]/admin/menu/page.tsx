@@ -11,10 +11,11 @@ import CategoriaEditorModal from "@/components/menu/CategoriaEditorModal";
 import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
 import CartaGeneratorButton from "@/components/admin/CartaGeneratorButton";
-import { Download, Upload, DollarSign, Plus, Megaphone } from "lucide-react";
+import MenuExportButton from "@/components/menu/MenuExportButton";
+import { Upload, DollarSign, Megaphone } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
-import { ImportarMenuModal } from "@/components/menu/ImportarMenuModal";
-import * as XLSX from "xlsx";
+import ImportarMenuModal from "@/components/menu/ImportarMenuModal";
+
 
 type Categoria = {
   id: string;
@@ -539,89 +540,6 @@ export default function MenuPage() {
     }
   }
 
-  async function handleExportMenu() {
-    if (!sucursalId) return;
-    try {
-      setLoading(true);
-      
-      // 1. Fetch categories
-      const { data: cats } = await supabase
-        .from("categorias")
-        .select("id, nombre")
-        .eq("sucursal_id", sucursalId)
-        .order("orden");
-
-      // 2. Fetch products
-      const { data: prods } = await supabase
-        .from("productos")
-        .select("*")
-        .eq("sucursal_id", sucursalId)
-        .order("orden");
-
-      // 3. Fetch adicionales groups
-      const { data: grupos } = await supabase
-        .from("grupos_adicionales")
-        .select("*")
-        .eq("sucursal_id", sucursalId)
-        .order("created_at");
-
-      // 4. Fetch adicionales options
-      const { data: ads } = await supabase
-        .from("adicionales")
-        .select("*")
-        .eq("sucursal_id", sucursalId)
-        .order("created_at");
-
-      // Prepare Products Sheet
-      const productsData = prods?.map(p => {
-        const cat = cats?.find(c => c.id === p.categoria_id);
-        return {
-          "Nombre Producto": p.nombre,
-          "Categoría": cat?.nombre || "Sin Categoría",
-          "Nombre Interno Producto": p.nombre_interno || p.nombre,
-          "Descripción Producto": p.descripcion || "",
-          "Precio Venta": p.precio,
-          "Imagen Producto": p.imagen_url || "",
-          "Es producto sugerido": p.producto_sugerido,
-          "Es producto oculto": p.producto_oculto,
-          "Está activo": p.activo
-        };
-      }) || [];
-
-      // Prepare Adicionales Sheet
-      const adicionalesData = ads?.map(a => {
-        const g = grupos?.find(gr => gr.id === a.grupo_id);
-        return {
-          "Grupo": g?.titulo || g?.nombre || "Sin Grupo",
-          "Opción": a.nombre,
-          "Precio Venta": a.precio_venta,
-          "Precio Costo": a.precio_costo,
-          "Obligatorio": g?.seleccion_obligatoria ? "SI" : "NO",
-          "Mínimo": g?.seleccion_minima || 0,
-          "Máximo": g?.seleccion_maxima || 1,
-          "Visible": a.visible ? "SI" : "NO"
-        };
-      }) || [];
-
-      // Create workbook
-      const wb = XLSX.utils.book_new();
-      const wsProds = XLSX.utils.json_to_sheet(productsData);
-      const wsAds = XLSX.utils.json_to_sheet(adicionalesData);
-
-      XLSX.utils.book_append_sheet(wb, wsProds, "Productos");
-      XLSX.utils.book_append_sheet(wb, wsAds, "Adicionales");
-
-      // Download
-      XLSX.writeFile(wb, `menu_export_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-    } catch (error) {
-      console.error("Error exporting menu:", error);
-      alert("Error al exportar el menú");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function handleDeleteProducto(id: string) {
     if (!confirm("¿Eliminar este producto?")) return;
     try {
@@ -674,13 +592,6 @@ export default function MenuPage() {
           </button>
         </div>
         <div className="flex items-center gap-1">
-          <button 
-            onClick={handleExportMenu}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors"
-          >
-            <Download size={15} />
-            Exportar menú
-          </button>
           <button
             onClick={() => setIsFlyerModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:text-purple-900 text-sm transition-colors font-semibold"
@@ -688,14 +599,17 @@ export default function MenuPage() {
             <Megaphone size={15} />
             FLYER
           </button>
-          <CartaGeneratorButton sucursalId={sucursalId} />
-           <button 
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors"
-          >
-            <Upload size={15} />
-            Importar menú
-          </button>
+          <div className="flex items-center gap-2">
+            <CartaGeneratorButton sucursalId={sucursalId} />
+            <button 
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+            >
+              <Upload size={16} />
+              IMPORTAR MENU
+            </button>
+            <MenuExportButton sucursalId={sucursalId} />
+          </div>
           <button className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 text-sm transition-colors">
             <DollarSign size={15} />
             Precios
