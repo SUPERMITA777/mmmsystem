@@ -125,6 +125,8 @@ export default function MenuPage() {
           id: p.id,
           nombre: p.nombre,
           activo: p.activo,
+          visible_en_menu: p.visible_en_menu,
+          producto_oculto: p.producto_oculto,
           orden: p.orden,
         }));
         setProductosLista(productosFormateados);

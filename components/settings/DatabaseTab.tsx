@@ -17,7 +17,7 @@ const TABLES_TO_BACKUP = [
   "clientes",
   "repartidores",
   "grupos_adicionales",
-  "opciones_adicional",
+  "adicionales",
   "producto_grupos_adicionales",
   "recetas",
   "pedidos",

@@ -6,6 +6,8 @@ export type Producto = {
   id: string;
   nombre: string;
   activo: boolean;
+  visible_en_menu: boolean;
+  producto_oculto: boolean;
   orden?: number;
 };
 
@@ -64,8 +66,11 @@ export function ProductosList({
                 }`}
             >
               <div
-                className={`w-2 h-2 rounded-full shrink-0 ${producto.activo ? "bg-green-500" : "bg-red-500"
-                  }`}
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  (producto.activo && producto.visible_en_menu && !producto.producto_oculto) 
+                    ? "bg-green-500" 
+                    : "bg-red-500"
+                }`}
               />
               <span className="flex-1 text-sm font-medium truncate">{producto.nombre}</span>
 
