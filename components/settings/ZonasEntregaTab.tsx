@@ -95,7 +95,8 @@ function MapaZonas({
                 streetViewControl: false,
                 fullscreenControl: true,
                 draggableCursor: drawingZonaId ? "crosshair" : "grab",
-                draggingCursor: "grabbing"
+                draggingCursor: "grabbing",
+                mapId: "bfda76d97c66cb9"
             }}
         >
             {/* Marcador del local */}

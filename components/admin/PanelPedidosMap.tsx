@@ -127,7 +127,8 @@ export default function PanelPedidosMap({
                 streetViewControl: false,
                 fullscreenControl: true,
                 // ID de mapa opcional si usas Advanced Markers con estilos personalizados en la consola
-                // mapId: "YOUR_MAP_ID",
+                // ID de mapa necesario para Advanced Markers
+                mapId: "bfda76d97c66cb9", // ID de ejemplo o uno real de la consola de Google
                 styles: [
                     {
                         featureType: "poi",

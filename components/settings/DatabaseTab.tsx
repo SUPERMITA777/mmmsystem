@@ -9,7 +9,6 @@ const TABLES_TO_BACKUP = [
   "config_sucursal",
   "horarios_sucursal",
   "usuarios",
-  "permisos",
   "categorias",
   "mesas",
   "metodos_pago",
