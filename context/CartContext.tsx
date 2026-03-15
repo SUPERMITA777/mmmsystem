@@ -12,6 +12,7 @@ export type CartItem = {
     adicionales?: { nombre: string; precio: number; grupo: string }[];
     opciones?: string; // texto de opciones seleccionadas
     notas?: string;
+    categoriaNombre?: string;
     descuentoInfo?: {
         id: string;
         porcentaje: number;

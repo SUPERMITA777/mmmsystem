@@ -54,6 +54,7 @@ export default function PedidosPage() {
     const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
     const [filtroEstado, setFiltroEstado] = useState("");
     const [filtroTipo, setFiltroTipo] = useState("");
+    const [filtroMetodoPago, setFiltroMetodoPago] = useState("");
     const [filtroFecha, setFiltroFecha] = useState<"todos" | "hoy" | "ayer" | "rango">("todos");
     const [fechaDesde, setFechaDesde] = useState("");
     const [fechaHasta, setFechaHasta] = useState("");
@@ -75,6 +76,7 @@ export default function PedidosPage() {
 
         if (filtroEstado) query = query.eq("estado", filtroEstado);
         if (filtroTipo) query = query.eq("tipo", filtroTipo);
+        if (filtroMetodoPago) query = query.eq("metodo_pago_nombre", filtroMetodoPago);
 
         if (filtroFecha === "hoy") {
             const today = new Date();
@@ -216,6 +218,14 @@ export default function PedidosPage() {
                         <option value="salon">Salón</option>
                     </select>
                 </fieldset>
+                <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white">
+                    <legend className="text-[10px] text-gray-500 px-1">Pago</legend>
+                    <select value={filtroMetodoPago} onChange={e => { setFiltroMetodoPago(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
+                        <option value="">Todos</option>
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Transferencia">Transferencia</option>
+                    </select>
+                </fieldset>
             </div>
 
             <div className="flex gap-6">
@@ -228,6 +238,7 @@ export default function PedidosPage() {
                                 <th className="px-4 py-3 text-left font-semibold">Cliente</th>
                                 <th className="px-4 py-3 text-left font-semibold">Tipo</th>
                                 <th className="px-4 py-3 text-left font-semibold">Estado</th>
+                                <th className="px-4 py-3 text-left font-semibold">Pago</th>
                                 <th className="px-4 py-3 text-right font-semibold">Total</th>
                                 <th className="px-4 py-3 text-left font-semibold">Fecha</th>
                                 <th className="px-4 py-3 w-10"></th>
@@ -254,6 +265,11 @@ export default function PedidosPage() {
                                     <td className="px-4 py-3">
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADOS_BADGE[p.estado] || "bg-gray-100"}`}>
                                             {p.estado}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <span className="text-[10px] font-bold text-gray-600 uppercase">
+                                            {p.metodo_pago_nombre || "—"}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-right font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.total)}</td>

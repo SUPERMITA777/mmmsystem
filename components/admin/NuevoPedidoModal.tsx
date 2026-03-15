@@ -63,6 +63,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [configSucursal, setConfigSucursal] = useState<any>(null);
     const [validacionDelivery, setValidacionDelivery] = useState<{ valid: boolean; zona?: string; costo: number; loading: boolean; error?: string }>({ valid: false, costo: 0, loading: false });
     const { sucursalId } = useTenant();
+    
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
+
+    if (!isOpen) return null;
+
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
     const [alternativas, setAlternativas] = useState<any[]>([]);
 

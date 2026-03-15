@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Upload, ImageIcon } from "lucide-react";
 
@@ -36,6 +36,17 @@ export default function ProductoCreatorModal({
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [imagenPreview, setImagenPreview] = useState<string | null>(null);
+    
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                resetForm();
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
 
     if (!isOpen) return null;
 

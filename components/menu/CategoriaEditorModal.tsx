@@ -59,6 +59,16 @@ export default function CategoriaEditorModal({
         }
     }, [categoria, isOpen]);
 
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
+
     if (!isOpen) return null;
 
     async function handleSubmit(e: React.FormEvent) {

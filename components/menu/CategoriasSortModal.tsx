@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     DndContext,
     closestCenter,
@@ -93,6 +93,16 @@ export default function CategoriasSortModal({
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
+    
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
 
     if (!isOpen) return null;
 

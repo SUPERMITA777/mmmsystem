@@ -168,6 +168,7 @@ export default function ProductDetailModal({
             imagen_url: producto.imagen_url,
             adicionales: adicionalesSeleccionados,
             notas: notas.trim() || undefined,
+            categoriaNombre: producto.categoria_nombre,
             descuentoInfo: discount ? {
                 id: discount.id,
                 porcentaje: discount.porcentaje,
@@ -200,6 +201,16 @@ export default function ProductDetailModal({
         setIsClosing(true);
         setTimeout(onClose, 300); // Wait for the animation to finish before unmounting
     }
+
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                handleClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, []);
 
     return (
         <div className={`fixed inset-0 z-[60] bg-[#0d0d0d] flex justify-center ${

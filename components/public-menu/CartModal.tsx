@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -192,6 +192,16 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
         );
     }
 
+    useEffect(() => {
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                onClose();
+            }
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
+
     async function handleRealizarPedido() {
         if (!isOpen) { alert("El local se encuentra cerrado en este momento. No se pueden realizar pedidos."); return; }
         if (!nombre.trim()) { alert("Por favor ingresá tu nombre."); return; }
@@ -328,17 +338,28 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             if (itemsError) throw itemsError;
 
             // 5. Armamos el mensaje de WhatsApp
-            const itemsTexto = items.map(i => {
-                const groupedAds = (i.adicionales || []).reduce((acc: Record<string, { precio: number, qty: number }>, a) => {
-                    if (!acc[a.nombre]) acc[a.nombre] = { precio: 0, qty: 0 };
-                    acc[a.nombre].qty += 1;
-                    acc[a.nombre].precio += a.precio;
-                    return acc;
-                }, {});
-                const ads = Object.entries(groupedAds).map(([nombre, data]) => `  + ${data.qty > 1 ? `${nombre} x ${data.qty}` : nombre} (+$${data.precio})`).join("\n");
-                const notaTexto = i.notas ? `\n  ⚠️ NOTA: ${i.notas}` : "";
-                return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}${notaTexto}`;
-            }).join("\n");
+            const groupedByCategory = items.reduce((acc: Record<string, any[]>, item) => {
+                const cat = item.categoriaNombre || "PRODUCTOS";
+                if (!acc[cat]) acc[cat] = [];
+                acc[cat].push(item);
+                return acc;
+            }, {});
+
+            const itemsTexto = Object.entries(groupedByCategory).map(([cat, catItems]) => {
+                const catHeader = `*${cat.toUpperCase()}:*`;
+                const productsText = catItems.map(i => {
+                    const groupedAds = (i.adicionales || []).reduce((acc: Record<string, { precio: number, qty: number }>, a: { nombre: string; precio: number }) => {
+                        if (!acc[a.nombre]) acc[a.nombre] = { precio: 0, qty: 0 };
+                        acc[a.nombre].qty += 1;
+                        acc[a.nombre].precio += a.precio;
+                        return acc;
+                    }, {} as Record<string, { precio: number, qty: number }>);
+                    const ads = Object.entries(groupedAds).map(([nombre, data]) => `  + ${(data as { qty: number }).qty > 1 ? `${nombre} x ${(data as { qty: number }).qty}` : nombre} (+$${(data as { precio: number }).precio})`).join("\n");
+                    const notaTexto = i.notas ? `\n  ⚠️ NOTA: ${i.notas}` : "";
+                    return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}${notaTexto}`;
+                }).join("\n");
+                return `${catHeader}\n${productsText}`;
+            }).join("\n\n");
 
             const msg = `🍕 *NUEVO PEDIDO*\n\n` +
                 `*ID:* ${pedido.numero_pedido || pedido.id.slice(0, 8)}\n` +
@@ -346,7 +367,7 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 `*Cliente:* ${nombre}\n` +
                 `*Teléfono:* +54 ${telefono}\n` +
                 (tipoEntrega === "delivery" ? `*Dirección:* ${direccion}\n` : "") +
-                `\n*Productos:*\n${itemsTexto}\n\n` +
+                `\n${itemsTexto}\n\n` +
                 `*Subtotal:* $${new Intl.NumberFormat("es-AR").format(total)}\n` +
                 (propina > 0 ? `*Propina:* $${new Intl.NumberFormat("es-AR").format(propina)}\n` : "") +
                 `*Total:* $${new Intl.NumberFormat("es-AR").format(totalConPropina)}\n` +
