@@ -33,77 +33,125 @@ export function ImportarMenuModal({ isOpen, onClose, sucursalId, onSuccess }: Im
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+          
+          // --- 1. Importar Productos ---
+          const sheetProds = workbook.Sheets["Productos"] || workbook.Sheets[workbook.SheetNames[0]];
+          const rowsProds: any[] = XLSX.utils.sheet_to_json(sheetProds);
 
-          if (rows.length === 0) {
-            throw new Error("El archivo está vacío");
-          }
+          if (rowsProds.length > 0) {
+            setStatus({ type: 'idle', message: `Procesando ${rowsProds.length} productos...` });
 
-          setStatus({ type: 'idle', message: `Procesando ${rows.length} registros...` });
+            // Coleccionar categorías únicas
+            const categoryNames = [...new Set(rowsProds.map(item => item['Categoría']).filter(Boolean))];
+            const catMap: Record<string, string> = {};
 
-          // 1. Coleccionar categorías únicas
-          const categoryNames = [...new Set(rows.map(item => item['Categoría']).filter(Boolean))];
-          const catMap: Record<string, string> = {};
-
-          // Upsert categorías
-          for (const catName of categoryNames) {
-            const { data: existing, error: fetchError } = await supabase
-              .from('categorias')
-              .select('id')
-              .eq('sucursal_id', sucursalId)
-              .eq('nombre', catName)
-              .single();
-
-            if (existing) {
-              catMap[catName as string] = existing.id;
-            } else {
-              const { data: newCat, error: insertError } = await supabase
+            for (const catName of categoryNames) {
+              const { data: existing } = await supabase
                 .from('categorias')
-                .insert([{ sucursal_id: sucursalId, nombre: catName, activo: true }])
-                .select()
+                .select('id')
+                .eq('sucursal_id', sucursalId)
+                .eq('nombre', catName)
                 .single();
-              
-              if (newCat) catMap[catName as string] = newCat.id;
+
+              if (existing) {
+                catMap[catName as string] = existing.id;
+              } else {
+                const { data: newCat } = await supabase
+                  .from('categorias')
+                  .insert([{ sucursal_id: sucursalId, nombre: catName, activo: true }])
+                  .select()
+                  .single();
+                if (newCat) catMap[catName as string] = newCat.id;
+              }
+            }
+
+            for (let i = 0; i < rowsProds.length; i++) {
+              const item = rowsProds[i];
+              const nombre = item['Nombre Producto'];
+              const categoria = item['Categoría'];
+              if (!nombre || !catMap[categoria]) continue;
+
+              const precio = parseFloat(item['Precio Venta']) || 0;
+              const sugerido = item['Es producto sugerido'] === true || item['Es producto sugerido'] === 'true' || item['Es producto sugerido'] === 1 || item['Es producto sugerido'] === 'SI';
+              const oculto = item['Es producto oculto'] === true || item['Es producto oculto'] === 'true' || item['Es producto oculto'] === 1 || item['Es producto oculto'] === 'SI';
+              const activo = item['Está activo'] === true || item['Está activo'] === 'true' || item['Está activo'] === 1 || item['Está activo'] === undefined || item['Está activo'] === 'SI';
+
+              await supabase.from('productos').upsert({
+                sucursal_id: sucursalId,
+                categoria_id: catMap[categoria],
+                nombre: nombre,
+                nombre_interno: item['Nombre Interno Producto'] || nombre,
+                descripcion: item['Descripción Producto'] || '',
+                precio: precio,
+                imagen_url: item['Imagen Producto'] || '',
+                producto_sugerido: sugerido,
+                producto_oculto: oculto,
+                activo: activo,
+                visible_en_menu: !oculto
+              }, { onConflict: 'sucursal_id,nombre' });
+
+              setProgress(Math.round(((i + 1) / rowsProds.length) * 50));
             }
           }
 
-          // 2. Importar productos
-          let imported = 0;
-          for (let i = 0; i < rows.length; i++) {
-            const item = rows[i];
-            const nombre = item['Nombre Producto'];
-            const categoria = item['Categoría'];
-            
-            if (!nombre || !catMap[categoria]) continue;
+          // --- 2. Importar Adicionales ---
+          const sheetAds = workbook.Sheets["Adicionales"];
+          if (sheetAds) {
+            const rowsAds: any[] = XLSX.utils.sheet_to_json(sheetAds);
+            if (rowsAds.length > 0) {
+              setStatus({ type: 'idle', message: `Procesando ${rowsAds.length} adicionales...` });
+              
+              const groupMap: Record<string, string> = {};
 
-            const precio = parseFloat(item['Precio Venta']) || 0;
-            const desc = item['Descripción Producto'] || '';
-            const img = item['Imagen Producto'] || '';
-            const sugerido = item['Es producto sugerido'] === true || item['Es producto sugerido'] === 'true' || item['Es producto sugerido'] === 1;
-            const oculto = item['Es producto oculto'] === true || item['Es producto oculto'] === 'true' || item['Es producto oculto'] === 1;
-            const activo = item['Está activo'] === true || item['Está activo'] === 'true' || item['Está activo'] === 1 || item['Está activo'] === undefined;
+              for (let i = 0; i < rowsAds.length; i++) {
+                const item = rowsAds[i];
+                const gName = item['Grupo'];
+                const oName = item['Opción'];
+                if (!gName || !oName) continue;
 
-            await supabase.from('productos').upsert({
-              sucursal_id: sucursalId,
-              categoria_id: catMap[categoria],
-              nombre: nombre,
-              nombre_interno: item['Nombre Interno Producto'] || nombre,
-              descripcion: desc,
-              precio: precio,
-              imagen_url: img,
-              producto_sugerido: sugerido,
-              producto_oculto: oculto,
-              activo: activo,
-              visible_en_menu: !oculto
-            }, { onConflict: 'sucursal_id,nombre' });
+                // 2.1 Upsert Grupo
+                if (!groupMap[gName]) {
+                  const { data: existingG } = await supabase
+                    .from('grupos_adicionales')
+                    .select('id')
+                    .eq('sucursal_id', sucursalId)
+                    .eq('nombre', gName)
+                    .single();
+                  
+                  if (existingG) {
+                    groupMap[gName] = existingG.id;
+                  } else {
+                    const { data: newG } = await supabase
+                      .from('grupos_adicionales')
+                      .insert([{
+                        sucursal_id: sucursalId,
+                        nombre: gName,
+                        seleccion_obligatoria: item['Obligatorio'] === 'SI',
+                        seleccion_minima: parseInt(item['Mínimo']) || 0,
+                        seleccion_maxima: parseInt(item['Máximo']) || 1
+                      }])
+                      .select()
+                      .single();
+                    if (newG) groupMap[gName] = newG.id;
+                  }
+                }
 
-            imported++;
-            setProgress(Math.round(((i + 1) / rows.length) * 100));
+                // 2.2 Upsert Opción (Adicional)
+                await supabase.from('adicionales').upsert({
+                  sucursal_id: sucursalId,
+                  grupo_id: groupMap[gName],
+                  nombre: oName,
+                  precio_venta: parseFloat(item['Precio Venta']) || 0,
+                  precio_costo: parseFloat(item['Precio Costo']) || 0,
+                  visible: item['Visible'] !== 'NO'
+                }, { onConflict: 'grupo_id,nombre' });
+
+                setProgress(50 + Math.round(((i + 1) / rowsAds.length) * 50));
+              }
+            }
           }
 
-          setStatus({ type: 'success', message: `¡Éxito! Se importaron ${imported} productos correctamente.` });
+          setStatus({ type: 'success', message: '¡Catálogo actualizado correctamente!' });
           onSuccess();
           setTimeout(onClose, 2000);
         } catch (err: any) {
