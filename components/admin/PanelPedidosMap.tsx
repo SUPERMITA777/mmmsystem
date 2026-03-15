@@ -129,13 +129,6 @@ export default function PanelPedidosMap({
                 // ID de mapa opcional si usas Advanced Markers con estilos personalizados en la consola
                 // ID de mapa necesario para Advanced Markers
                 mapId: "bfda76d97c66cb9", // ID de ejemplo o uno real de la consola de Google
-                styles: [
-                    {
-                        featureType: "poi",
-                        elementType: "labels",
-                        stylers: [{ visibility: "off" }]
-                    }
-                ]
             }}
         >
             {/* Active delivery zones */}

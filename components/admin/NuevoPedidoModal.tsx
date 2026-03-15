@@ -74,8 +74,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         return () => window.removeEventListener("keydown", handleEsc);
     }, [onClose]);
 
-    if (!isOpen) return null;
-
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
     const [alternativas, setAlternativas] = useState<any[]>([]);
 
