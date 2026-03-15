@@ -62,7 +62,7 @@ export default function PedidosPage() {
 
     useEffect(() => {
         if (sucursalId) fetchPedidos();
-    }, [page, perPage, filtroEstado, filtroTipo, filtroFecha, fechaDesde, fechaHasta, sucursalId]);
+    }, [page, perPage, filtroEstado, filtroTipo, filtroMetodoPago, filtroFecha, fechaDesde, fechaHasta, sucursalId]);
 
     async function fetchPedidos() {
         if (!sucursalId) return;
