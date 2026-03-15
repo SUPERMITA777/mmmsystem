@@ -157,8 +157,8 @@ export default function PanelPedidosPage() {
       .select("*, pedido_items(*, productos(categorias(nombre)))")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
-      .gte("created_at", `${fechaDesde}T00:00:00`)
-      .lte("created_at", `${fechaHasta}T23:59:59`)
+      .gte("created_at", new Date(fechaDesde + 'T00:00:00').toISOString())
+      .lte("created_at", new Date(fechaHasta + 'T23:59:59').toISOString())
       .order("created_at", { ascending: false });
 
     const { data } = await query;
