@@ -23,10 +23,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       if (panelSettings?.notificacion_sonora === false) return;
 
-      const customSoundUrl = panelSettings?.sonido_notificacion_custom_url;
+      const customSoundUrl = panelSettings?.sonido_notificacion === "custom" ? panelSettings?.sonido_notificacion_custom_url : null;
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
-      if (customSoundUrl) {
+      if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
         const audio = new Audio(customSoundUrl);
         audio.play().catch(e => console.warn("Error playing custom sound:", e));
         return;

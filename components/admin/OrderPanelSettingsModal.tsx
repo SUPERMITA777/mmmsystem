@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, Bell, MessageSquare, Monitor, Printer } from "lucide-react";
+import { X, Settings, Bell, MessageSquare, Monitor, Printer, Upload, Music, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 interface PanelSettings {
@@ -48,6 +48,7 @@ export default function OrderPanelSettingsModal({
         }
     });
     const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         if (initialSettings) {
@@ -56,6 +57,40 @@ export default function OrderPanelSettingsModal({
     }, [initialSettings]);
 
     if (!isOpen) return null;
+
+    async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.includes("audio/") && !file.name.endsWith(".mp3")) {
+            alert("Por favor, sube un archivo de audio válido (.mp3, .wav, etc)");
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `notification-${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const filePath = `notifications/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('images')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('images')
+                .getPublicUrl(filePath);
+
+            setSettings({ ...settings, sonido_notificacion_custom_url: publicUrl });
+        } catch (error: any) {
+            alert("Error subiendo el archivo: " + error.message);
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
+    }
 
     async function handleSave() {
         if (!configId) return;
@@ -196,28 +231,75 @@ export default function OrderPanelSettingsModal({
 
                             {settings.sonido_notificacion === "custom" && (
                                 <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    <label className="text-[10px] text-gray-400 uppercase font-bold px-1">URL del Sonido Personalizado (.mp3, .wav)</label>
-                                    <div className="flex gap-2">
+                                    <label className="text-[10px] text-gray-400 uppercase font-bold px-1">Archivo de Sonido Personalizado (.mp3, .wav)</label>
+                                    <div className="flex flex-col gap-3">
+                                        {settings.sonido_notificacion_custom_url ? (
+                                            <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                                                    <Music size={18} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-gray-900 truncate">Sonido subido</p>
+                                                    <p className="text-[10px] text-gray-500 truncate">{settings.sonido_notificacion_custom_url}</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            const audio = new Audio(settings.sonido_notificacion_custom_url);
+                                                            audio.play().catch(e => alert("Error al reproducir: " + e.message));
+                                                        }}
+                                                        className="px-3 py-1.5 bg-white text-purple-700 rounded-lg text-xs font-bold shadow-sm hover:bg-gray-50"
+                                                    >
+                                                        Probar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSettings({ ...settings, sonido_notificacion_custom_url: "" })}
+                                                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('sound-upload')?.click()}
+                                                disabled={uploading}
+                                                className="w-full flex flex-col items-center justify-center gap-2 py-6 border-2 border-dashed border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all text-gray-400 group"
+                                            >
+                                                {uploading ? (
+                                                    <div className="w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        <Upload size={24} className="group-hover:text-purple-500" />
+                                                        <span className="text-xs font-bold group-hover:text-gray-700">Subir archivo .mp3</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
+                                        
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-px flex-1 bg-gray-100" />
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase">o usa una URL</span>
+                                            <div className="h-px flex-1 bg-gray-100" />
+                                        </div>
+
                                         <input
                                             type="text"
                                             value={settings.sonido_notificacion_custom_url || ""}
                                             onChange={e => setSettings({ ...settings, sonido_notificacion_custom_url: e.target.value })}
                                             placeholder="https://ejemplo.com/sonido.mp3"
-                                            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
                                         />
-                                        <button
-                                            onClick={() => {
-                                                if (settings.sonido_notificacion_custom_url) {
-                                                    const audio = new Audio(settings.sonido_notificacion_custom_url);
-                                                    audio.play().catch(e => alert("Error al reproducir el sonido: " + e.message));
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl text-xs font-bold hover:bg-purple-200 transition-colors"
-                                        >
-                                            Probar
-                                        </button>
                                     </div>
-                                    <p className="text-[10px] text-gray-500 italic px-1">Asegúrate de que la URL sea pública y accesible.</p>
+                                    <input
+                                        id="sound-upload"
+                                        type="file"
+                                        accept="audio/*"
+                                        className="hidden"
+                                        onChange={handleFileChange}
+                                    />
+                                    <p className="text-[10px] text-gray-500 italic px-1 mt-1">Sube un archivo pequeño para que cargue rápido al sonar.</p>
                                 </div>
                             )}
                         </div>

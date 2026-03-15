@@ -90,6 +90,11 @@ function aggregateAds(adicionales: any[]) {
 
 /* ── Bell sound (Web Audio API) ── */
 
+const getLocalDate = () => {
+    // Retorna la fecha local en formato YYYY-MM-DD
+    return new Date().toLocaleDateString('en-CA');
+};
+
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [repartidores, setRepartidores] = useState<any[]>([]);
@@ -105,8 +110,8 @@ export default function PanelPedidosPage() {
   const [printConfig, setPrintConfig] = useState<any>(null);
   const [sucursalConfig, setSucursalConfig] = useState<any>(null);
   const [editingPedido, setEditingPedido] = useState<any>(null);
-  const [fechaDesde, setFechaDesde] = useState(() => new Date().toISOString().split('T')[0]);
-  const [fechaHasta, setFechaHasta] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaDesde, setFechaDesde] = useState(getLocalDate);
+  const [fechaHasta, setFechaHasta] = useState(getLocalDate);
 
   const { sucursalId } = useTenant();
   const { playNotificationSound, enableAudio } = useNotifications();
