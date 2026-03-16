@@ -11,6 +11,7 @@ import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal"
 import { useTenant } from "@/context/TenantContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { descontarStockDePedido } from "@/lib/stockUtils";
+import { getArgentinaDate, getStartOfDayArgentina, getEndOfDayArgentina, formatToArgentinaDateTime, formatToArgentinaTime } from "@/lib/dateUtils";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
@@ -90,10 +91,7 @@ function aggregateAds(adicionales: any[]) {
 
 /* ── Bell sound (Web Audio API) ── */
 
-const getLocalDate = () => {
-    // Retorna la fecha local en formato YYYY-MM-DD
-    return new Date().toLocaleDateString('en-CA');
-};
+const getLocalDate = () => getArgentinaDate();
 
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -157,8 +155,8 @@ export default function PanelPedidosPage() {
       .select("*, pedido_items(*, productos(categorias(nombre)))")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
-      .gte("created_at", new Date(fechaDesde + 'T00:00:00').toISOString())
-      .lte("created_at", new Date(fechaHasta + 'T23:59:59').toISOString())
+      .gte("created_at", getStartOfDayArgentina(fechaDesde))
+      .lte("created_at", getEndOfDayArgentina(fechaHasta))
       .order("created_at", { ascending: false });
 
     const { data } = await query;
@@ -286,11 +284,11 @@ export default function PanelPedidosPage() {
   }
 
   function formatHora(dateStr: string) {
-    return new Date(dateStr).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    return formatToArgentinaTime(dateStr);
   }
 
   function formatFechaCorta(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return formatToArgentinaDateTime(dateStr).split(",")[0];
   }
 
   const tipoLabel = (t: string) =>

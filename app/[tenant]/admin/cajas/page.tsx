@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Plus, Trash2, Edit2, Clock, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
+import { formatToArgentinaDateTime } from "@/lib/dateUtils";
 
 type Caja = {
     id: string;
@@ -101,7 +102,7 @@ export default function CajasPage() {
     }
 
     function formatDate(d: string) {
-        return new Date(d).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+        return formatToArgentinaDateTime(d);
     }
 
     if (loading) return <div className="p-8 text-gray-400 text-center">Cargando cajas...</div>;

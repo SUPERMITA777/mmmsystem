@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
+import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
 
 // --- Components ---
 
@@ -55,10 +56,8 @@ export default function ReportesPage() {
     const { sucursalId } = useTenant();
 
     // Dates
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const [startDate, setStartDate] = useState(firstDayOfMonth.toISOString().split("T")[0]);
-    const [endDate, setEndDate] = useState(today.toISOString().split("T")[0]);
+    const [startDate, setStartDate] = useState(getArgentinaFirstDayOfMonth());
+    const [endDate, setEndDate] = useState(getArgentinaDate());
 
     useEffect(() => {
         if (sucursalId) fetchData();
@@ -74,8 +73,8 @@ export default function ReportesPage() {
                 .select("*, metodos_pago(*)")
                 .eq("sucursal_id", sucursalId)
                 .eq("estado", "entregado")
-                .gte("created_at", `${startDate}T00:00:00`)
-                .lte("created_at", `${endDate}T23:59:59`)
+                .gte("created_at", getStartOfDayArgentina(startDate))
+                .lte("created_at", getEndOfDayArgentina(endDate))
                 .order("created_at", { ascending: false });
 
             setPedidos(pedidosData || []);
