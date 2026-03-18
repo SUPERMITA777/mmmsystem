@@ -205,7 +205,6 @@ function PublicMenuContent() {
           )
         `)
         .eq("sucursal_id", sucursalId)
-        .eq("activo", true)
         .order("orden", { ascending: true })
         .order("orden", { ascending: true, referencedTable: "productos" });
 
@@ -241,7 +240,7 @@ function PublicMenuContent() {
                 .sort((a: any, b: any) => (a.orden ?? 999) - (b.orden ?? 999)),
             };
           })
-          .filter((cat: any) => cat.productos.length > 0);
+          .filter((cat: any) => cat.activo && cat.productos.length > 0);
 
         setCategorias(filteredCats);
         if (filteredCats.length > 0) {

@@ -79,7 +79,6 @@ export default function MenuPage() {
         .from("categorias")
         .select("*")
         .eq("sucursal_id", sucursalId)
-        .eq("activo", true)
         .order("orden");
 
       if (data) {
