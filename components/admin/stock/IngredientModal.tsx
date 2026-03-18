@@ -18,6 +18,7 @@ export default function IngredientModal({ isOpen, onClose, onSave, ingredient, s
     const [costoUnitario, setCostoUnitario] = useState(0);
     const [stockMinimo, setStockMinimo] = useState(0);
     const [categoria, setCategoria] = useState("General");
+    const [proveedor, setProveedor] = useState("");
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -27,12 +28,14 @@ export default function IngredientModal({ isOpen, onClose, onSave, ingredient, s
             setCostoUnitario(ingredient.costo_unitario || 0);
             setStockMinimo(ingredient.stock_minimo || 0);
             setCategoria(ingredient.categoria || "General");
+            setProveedor(ingredient.proveedor || "");
         } else {
             setNombre("");
             setUnidad("gr");
             setCostoUnitario(0);
             setStockMinimo(0);
             setCategoria("General");
+            setProveedor("");
         }
     }, [ingredient, isOpen]);
 
@@ -47,6 +50,7 @@ export default function IngredientModal({ isOpen, onClose, onSave, ingredient, s
             costo_unitario: costoUnitario,
             stock_minimo: stockMinimo,
             categoria,
+            proveedor,
             updated_at: new Date().toISOString()
         };
 
@@ -81,15 +85,27 @@ export default function IngredientModal({ isOpen, onClose, onSave, ingredient, s
                 </div>
 
                 <div className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nombre</label>
-                        <input
-                            type="text"
-                            value={nombre}
-                            onChange={e => setNombre(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 outline-none focus:border-purple-500 transition-colors"
-                            placeholder="Ej: Harina 000"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Nombre</label>
+                            <input
+                                type="text"
+                                value={nombre}
+                                onChange={e => setNombre(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 outline-none focus:border-purple-500 transition-colors"
+                                placeholder="Ej: Harina 000"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Proveedor</label>
+                            <input
+                                type="text"
+                                value={proveedor}
+                                onChange={e => setProveedor(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 outline-none focus:border-purple-500 transition-colors"
+                                placeholder="Ej: Molinos S.A."
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
