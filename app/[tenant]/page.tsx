@@ -189,6 +189,7 @@ function PublicMenuContent() {
         .select(`
           id,
           nombre,
+          activo,
           imagen_url,
           descripcion,
           productos (
