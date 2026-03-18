@@ -8,9 +8,13 @@ BEGIN
         ALTER TABLE ingredientes ADD COLUMN sucursal_id UUID REFERENCES sucursales(id) ON DELETE CASCADE;
     END IF;
 
-    -- 2. Add categoria to ingredientes (This was the main cause of the 400 error)
+    -- 2. Add categoria and proveedor to ingredientes
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ingredientes' AND column_name = 'categoria') THEN
         ALTER TABLE ingredientes ADD COLUMN categoria TEXT DEFAULT 'General';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'ingredientes' AND column_name = 'proveedor') THEN
+        ALTER TABLE ingredientes ADD COLUMN proveedor TEXT;
     END IF;
 
     -- 3. Ensure sucursal_id exists in recetas
