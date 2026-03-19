@@ -30,9 +30,9 @@ function sortearPremio(premios: any[]): any | null {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { tenant: string; pedidoId: string } }
+  { params }: { params: Promise<{ tenant: string; pedidoId: string }> }
 ) {
-  const { tenant, pedidoId } = params;
+  const { tenant, pedidoId } = await params;
 
   try {
     // 1. Obtener sucursal_id desde el tenant
