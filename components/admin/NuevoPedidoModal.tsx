@@ -49,6 +49,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     // Cart
     const [carrito, setCarrito] = useState<CartItem[]>([]);
     const [seAbona, setSeAbona] = useState("");
+    const [promoCode, setPromoCode] = useState("");
+    const [promoValidating, setPromoValidating] = useState(false);
+    const [promoResult, setPromoResult] = useState<null | { valid: boolean; message?: string; codigo?: any }>(null);
 
     // Order metadata
     const [tipo, setTipo] = useState<"delivery" | "takeaway">("delivery");
@@ -109,6 +112,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
                 setNotaPedido("");
                 setSeAbona("");
+                setPromoCode("");
+                setPromoResult(null);
             }
         }
     }, [isOpen, sucursalId]);
@@ -417,7 +422,18 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
     const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
-    const total = subtotal + costoEnvio;
+
+    // Descuento promo QR
+    const promoDescuento = (() => {
+        if (!promoResult?.valid || !promoResult?.codigo?.premio) return 0;
+        const p = promoResult.codigo.premio;
+        if (p.tipo === "envio_gratis") return costoEnvio;
+        if (p.tipo === "porcentaje" && p.valor) return Math.round(subtotal * p.valor / 100);
+        if (p.tipo === "fijo" && p.valor) return Math.min(p.valor, subtotal);
+        return 0;
+    })();
+
+    const total = subtotal + costoEnvio - promoDescuento;
 
     const isGroupValid = (grp: any) => {
         if (!productoCustom) return true;
@@ -443,6 +459,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         if (carrito.length === 0) return;
         if (!omitirCliente && !cliente.nombre) { alert("Ingresá el nombre del cliente"); return; }
         setLoading(true);
+        let pedidoFinalId: string | null = null;
         try {
             const mPago = metodosPago.find(m => m.id === metodoPagoId);
             const metodoPagoNombre = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
@@ -499,8 +516,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     notas: item.nota || "",
                     adicionales: item.adicionales || []
                 }));
-                const { error: iError } = await supabase.from("pedido_items").insert(items);
-                if (iError) throw iError;
+                const { error: iError2 } = await supabase.from("pedido_items").insert(items);
+                if (iError2) throw iError2;
+                pedidoFinalId = editPedido.id;
             } else {
                 // CREATE new order - daily sequential numbering
                 const now = new Date();
@@ -558,12 +576,22 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     notas: item.nota || "",
                     adicionales: item.adicionales || []
                 }));
-                const { error: iError } = await supabase.from("pedido_items").insert(items);
-                if (iError) throw iError;
+                const { error: iError3 } = await supabase.from("pedido_items").insert(items);
+                if (iError3) throw iError3;
+                pedidoFinalId = pedido.id;
             }
 
             onCreated();
             onClose();
+
+            // Marcar código promo como usado
+            if (promoResult?.valid && promoResult?.codigo?.id && pedidoFinalId) {
+                await supabase.from("promo_qr_codigos").update({
+                    usado: true,
+                    fecha_uso: new Date().toISOString(),
+                    pedido_canje_id: pedidoFinalId,
+                }).eq("id", promoResult.codigo.id);
+            }
         } catch (e: any) {
             console.error(e);
             alert("Error al " + (editPedido ? "editar" : "crear") + " pedido: " + (e.message || ""));
@@ -571,6 +599,25 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }
 
     function fmt(n: number) { return new Intl.NumberFormat("es-AR").format(n); }
+
+    async function validatePromoCode() {
+        if (!promoCode.trim() || !sucursalId) return;
+        setPromoValidating(true);
+        setPromoResult(null);
+        try {
+            const res = await fetch("/api/promo/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ codigo: promoCode.trim().toUpperCase(), sucursalId }),
+            });
+            const data = await res.json();
+            setPromoResult(data);
+        } catch {
+            setPromoResult({ valid: false, message: "Error de conexión" });
+        } finally {
+            setPromoValidating(false);
+        }
+    }
 
     if (!isOpen) return null;
 
@@ -641,6 +688,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    {/* Código Promo QR */}
+                    <div className="px-3 pt-3 border-t border-gray-200">
+                        <label className="text-[10px] text-gray-400 font-medium block mb-1">🎁 Código Promo QR</label>
+                        <div className="flex gap-1">
+                            <input
+                                type="text"
+                                value={promoCode}
+                                onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
+                                onKeyDown={e => e.key === 'Enter' && validatePromoCode()}
+                                placeholder="XXXX"
+                                maxLength={4}
+                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono font-bold tracking-widest outline-none focus:border-purple-500 uppercase"
+                            />
+                            <button
+                                onClick={validatePromoCode}
+                                disabled={promoValidating || promoCode.length < 4}
+                                className="px-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-500 disabled:opacity-40 transition-colors"
+                            >
+                                {promoValidating ? "..." : "OK"}
+                            </button>
+                        </div>
+                        {promoResult && (
+                            <div className={`mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 ${promoResult.valid ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                                {promoResult.valid ? '✅' : '❌'}
+                                {promoResult.valid
+                                    ? `${promoResult.codigo?.premio?.nombre || 'Premio'} — Ahorro: $${fmt(promoDescuento)}`
+                                    : (promoResult.message || 'Código inválido')}
+                                {promoResult.valid && (
+                                    <button onClick={() => { setPromoResult(null); setPromoCode(''); }} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Se abona */}

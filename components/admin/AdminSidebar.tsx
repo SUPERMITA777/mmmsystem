@@ -16,7 +16,8 @@ import {
   CreditCard,
   MonitorPlay,
   UtensilsCrossed,
-  UserCheck
+  UserCheck,
+  QrCode
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
@@ -35,6 +36,7 @@ const items = [
   { id: "stock", href: "/admin/stock", icon: Package, label: "Stock" },
   { id: "clientes", href: "/admin/clientes", icon: Users, label: "Clientes" },
   { id: "descuentos", href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
+  { id: "promo-qr", href: "/admin/promo-qr", icon: QrCode, label: "Promo QR" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
   { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
   { id: "permisos", href: "/admin/permisos", icon: Shield, label: "Permisos" },

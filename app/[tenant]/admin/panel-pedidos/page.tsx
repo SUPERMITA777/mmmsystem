@@ -110,6 +110,7 @@ export default function PanelPedidosPage() {
   const [editingPedido, setEditingPedido] = useState<any>(null);
   const [fechaDesde, setFechaDesde] = useState(getLocalDate);
   const [fechaHasta, setFechaHasta] = useState(getLocalDate);
+  const [promoActiva, setPromoActiva] = useState(false);
 
   const { sucursalId } = useTenant();
   const { playNotificationSound, enableAudio } = useNotifications();
@@ -121,6 +122,7 @@ export default function PanelPedidosPage() {
     fetchRepartidores();
     fetchPrintConfig();
     fetchSucursalConfig();
+    fetchPromoConfig();
 
     const timer = setInterval(() => setNow(new Date()), 60000);
 
@@ -196,6 +198,16 @@ export default function PanelPedidosPage() {
     if (!sucursalId) return;
     const { data } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
     if (data) setSucursalConfig(data);
+  }
+
+  async function fetchPromoConfig() {
+    if (!sucursalId) return;
+    const { data } = await supabase
+      .from("promo_qr_config")
+      .select("activo")
+      .eq("sucursal_id", sucursalId)
+      .maybeSingle();
+    setPromoActiva(data?.activo ?? false);
   }
 
   const sendWhatsAppNotification = useCallback((pedido: Pedido, type: 'confirmado' | 'listo' | 'entregado') => {
@@ -650,7 +662,13 @@ export default function PanelPedidosPage() {
 
                   {/* Action buttons: Comandar / Cocina / Facturar */}
                   <div className="flex gap-2">
-                    <button onClick={() => printComanda(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Comandar</button>
+                    <button onClick={() => {
+                      const tenant = window.location.pathname.split('/')[1];
+                      const promoQrUrl = promoActiva
+                        ? `${window.location.origin}/${tenant}/promo/${selectedPedido.id}`
+                        : undefined;
+                      printComanda(selectedPedido, { ...printConfig, promoQrUrl });
+                    }} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Comandar</button>
                     <button onClick={() => printCocina(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cocina</button>
                     <button className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors opacity-50">Facturar</button>
                   </div>

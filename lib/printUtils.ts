@@ -18,6 +18,7 @@ export type PrintConfig = {
   mostrar_fecha_hora: boolean;
   color_accents: string;
   boldMap?: Record<string, boolean>;
+  promoQrUrl?: string; // URL para el código QR de la promo
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -231,6 +232,15 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <div class="center" style="font-size:${c.fuente_footer}px;color:${c.color_accents};font-style:italic;margin-top:2px">
     Comprobante no válido como factura.
   </div>
+
+  ${c.promoQrUrl ? `
+  <hr class="sep" style="margin-top:10px">
+  <!-- PROMO QR -->
+  <div class="center" style="margin-top:8px">
+    <div style="font-size:13px;font-weight:bold;margin-bottom:4px">🎁 ¡Escaneá y ganá un premio!</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(c.promoQrUrl)}" alt="QR Promo" width="110" height="110" style="display:block;margin:0 auto 4px" />
+    <div style="font-size:10px;color:#555;margin-top:2px">Recibís un descuento o regalo sorpresa</div>
+  </div>` : ''}
 
 </body></html>`;
 
