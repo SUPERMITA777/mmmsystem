@@ -54,6 +54,14 @@ function PublicMenuContent() {
     }
   }, [sucursalId]);
 
+  // Auto-abrir carrito si viene de la página promo con ?openCart=1
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("openCart") === "1") {
+      setCartOpen(true);
+    }
+  }, []);
+
   // ========== Manejo del historial para botón Atrás de Android ==========
   useEffect(() => {
     function handlePopState() {

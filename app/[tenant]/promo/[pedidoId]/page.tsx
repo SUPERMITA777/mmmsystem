@@ -238,6 +238,14 @@ export default function PromoPage() {
                       {copied ? "¡Copiado!" : "Copiar código"}
                     </button>
 
+                    <a
+                      href={`/${tenant}?promo=${codigoData.codigo}&openCart=1`}
+                      className="flex items-center justify-center gap-2 mx-auto px-5 py-2.5 rounded-xl font-bold text-sm text-white border-2 transition-all active:scale-95 mt-2"
+                      style={{ borderColor: storeColors.primario, color: storeColors.primario }}
+                    >
+                      🛒 Hacer pedido
+                    </a>
+
                     {codigoData.fecha_vencimiento && (
                       <p className="text-[11px] text-gray-400 mt-3">
                         Válido hasta el {new Date(codigoData.fecha_vencimiento).toLocaleDateString("es-AR")}

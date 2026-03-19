@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed } from "lucide-react";
+import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed, Gift } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { supabase } from "@/lib/supabaseClient";
 import { pointInPolygon, getDistance, LatLng } from "@/lib/geoutils";
@@ -31,6 +31,8 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
     const [propina, setPropina] = useState(0);
     const [propinaCustom, setPropinaCustom] = useState("");
     const [codigoPromo, setCodigoPromo] = useState("");
+    const [promoValidating, setPromoValidating] = useState(false);
+    const [promoResult, setPromoResult] = useState<null | { valid: boolean; message?: string; codigo?: any }>(null);
     const [sending, setSending] = useState(false);
 
     // Zona / geocoding states
@@ -42,7 +44,18 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
     const ALIAS_TRANSFERENCIA = "MMM.PIZZA";
     const COSTO_ENVIO = tipoEntrega === "delivery" ? costoEnvioCalc : 0;
-    const totalConPropina = total + propina + COSTO_ENVIO;
+
+    // Descuento promo QR
+    const promoDescuento = (() => {
+        if (!promoResult?.valid || !promoResult?.codigo?.premio) return 0;
+        const p = promoResult.codigo.premio;
+        if (p.tipo === "envio_gratis") return COSTO_ENVIO;
+        if (p.tipo === "porcentaje" && p.valor) return Math.round(total * p.valor / 100);
+        if (p.tipo === "fijo" && p.valor) return Math.min(p.valor, total);
+        return 0;
+    })();
+
+    const totalConPropina = total + propina + COSTO_ENVIO - promoDescuento;
 
     const propinaOpciones = [0, 100, 200, 500];
 
@@ -190,6 +203,36 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
+    }
+
+    // Leer código promo desde URL params al montar
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const codigoParam = params.get("promo");
+        if (codigoParam) {
+            setCodigoPromo(codigoParam.toUpperCase());
+        }
+    }, []);
+
+    async function validatePromoCode() {
+        if (!codigoPromo.trim()) return;
+        setPromoValidating(true);
+        setPromoResult(null);
+        try {
+            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
+            if (!suc) { setPromoResult({ valid: false, message: "Error interno" }); return; }
+            const res = await fetch("/api/promo/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ codigo: codigoPromo.trim().toUpperCase(), sucursalId: suc.id }),
+            });
+            const data = await res.json();
+            setPromoResult(data);
+        } catch {
+            setPromoResult({ valid: false, message: "Error de conexión" });
+        } finally {
+            setPromoValidating(false);
+        }
     }
 
     useEffect(() => {
@@ -381,6 +424,15 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
             alert("¡Pedido recibido y guardado! Redirigiendo a WhatsApp...");
             window.open(waUrl, '_blank');
+
+            // Marcar código promo como usado
+            if (promoResult?.valid && promoResult?.codigo?.id && pedido?.id) {
+                await supabase.from("promo_qr_codigos").update({
+                    usado: true,
+                    fecha_uso: new Date().toISOString(),
+                    pedido_canje_id: pedido.id,
+                }).eq("id", promoResult.codigo.id);
+            }
 
             clearCart();
             onClose();
@@ -695,15 +747,43 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                     <div className="px-5 pb-4 space-y-4">
                         <div className="bg-[#1a1a1a] rounded-xl p-4">
                             <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest font-bold mb-3">
-                                <Tag size={14} /><span>Código promocional</span>
+                                <Tag size={14} /><span>Código Promo QR</span>
                             </div>
-                            <input
-                                type="text"
-                                placeholder="Ingresá el código"
-                                value={codigoPromo}
-                                onChange={e => setCodigoPromo(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors"
-                            />
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="XXXX"
+                                    value={codigoPromo}
+                                    maxLength={4}
+                                    onChange={e => { setCodigoPromo(e.target.value.toUpperCase()); setPromoResult(null); }}
+                                    onKeyDown={e => e.key === 'Enter' && validatePromoCode()}
+                                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-mono font-bold tracking-widest placeholder-slate-500 outline-none focus:border-orange-500/50 transition-colors uppercase"
+                                />
+                                <button
+                                    onClick={validatePromoCode}
+                                    disabled={promoValidating || codigoPromo.length < 4}
+                                    className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-4 rounded-xl transition-colors shrink-0"
+                                >
+                                    {promoValidating ? (
+                                        <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                                    ) : "Validar"}
+                                </button>
+                            </div>
+                            {promoResult && (
+                                <div className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${
+                                    promoResult.valid
+                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                }`}>
+                                    {promoResult.valid ? <Gift size={13} /> : <AlertCircle size={13} />}
+                                    {promoResult.valid
+                                        ? `🎉 ${promoResult.codigo?.premio?.nombre || 'Premio'} — Ahorrás $${new Intl.NumberFormat('es-AR').format(promoDescuento)}`
+                                        : (promoResult.message || 'Código inválido')}
+                                    {promoResult.valid && (
+                                        <button onClick={() => { setPromoResult(null); setCodigoPromo(''); }} className="ml-auto text-slate-500 hover:text-white">×</button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -728,6 +808,12 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                                     <div className="flex justify-between text-slate-300">
                                         <span>Propina</span>
                                         <span>$ {new Intl.NumberFormat("es-AR").format(propina)}</span>
+                                    </div>
+                                )}
+                                {promoDescuento > 0 && (
+                                    <div className="flex justify-between text-green-400 font-bold">
+                                        <span>🎁 Descuento promo</span>
+                                        <span>- $ {new Intl.NumberFormat("es-AR").format(promoDescuento)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-white font-black text-base border-t border-white/10 pt-2">
