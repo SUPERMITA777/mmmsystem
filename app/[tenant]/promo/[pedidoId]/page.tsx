@@ -29,6 +29,7 @@ export default function PromoPage() {
   const [copied, setCopied] = useState(false);
   const [storeColors, setStoreColors] = useState({ primario: "#7c3aed", secundario: "#1a1a2e" });
   const [storeName, setStoreName] = useState("MMM System");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     init();
@@ -39,12 +40,13 @@ export default function PromoPage() {
     try {
       const { data: suc } = await supabase
         .from("sucursales")
-        .select("id, nombre")
+        .select("id, nombre, logo_url")
         .eq("slug", tenant)
         .maybeSingle();
 
       if (suc) {
         setStoreName(suc.nombre || "MMM System");
+        if (suc.logo_url) setLogoUrl(suc.logo_url);
         const { data: cfg } = await supabase
           .from("config_sucursal")
           .select("color_primario, color_secundario")
@@ -151,10 +153,19 @@ export default function PromoPage() {
           <div className="flex flex-col items-center gap-6">
             {/* Spinning gift box */}
             <div
-              className="w-28 h-28 rounded-3xl flex items-center justify-center shadow-2xl animate-bounce"
+              className="w-28 h-28 rounded-3xl flex items-center justify-center shadow-2xl animate-bounce overflow-hidden"
               style={{ background: `linear-gradient(135deg, ${storeColors.primario}, ${storeColors.secundario})` }}
             >
-              <Gift size={52} className="text-white animate-spin" style={{ animationDuration: "1s" }} />
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  className="w-full h-full object-contain p-2 animate-spin"
+                  style={{ animationDuration: "1s" }}
+                />
+              ) : (
+                <Gift size={52} className="text-white animate-spin" style={{ animationDuration: "1s" }} />
+              )}
             </div>
             <div className="text-center">
               <p className="text-white text-xl font-black tracking-tight">¡Girando la ruleta!</p>
