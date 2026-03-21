@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink, QrCode } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
-import { printComanda, printCocina } from "@/lib/printUtils";
+import { printComanda, printCocina, printPromoQrWeb } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 import { useTenant } from "@/context/TenantContext";
@@ -369,6 +369,18 @@ export default function PanelPedidosPage() {
               title="Probar sonido de notificación y habilitar en el navegador"
             >
               🔔 Activar Sonido
+            </button>
+            <button
+              onClick={() => {
+                const tenant = window.location.pathname.split('/')[1];
+                const promoQrUrl = `${window.location.origin}/${tenant}`;
+                const texto = sucursalConfig?.panel_settings?.promo_qr_text || "#GRACIAS POR ELEGIRNOS";
+                printPromoQrWeb(promoQrUrl, texto, printConfig);
+              }}
+              className="flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-purple-200 transition-all shadow-sm active:scale-95"
+              title="Imprimir QR de Promo Web"
+            >
+              <QrCode size={16} /> Promo QR
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}

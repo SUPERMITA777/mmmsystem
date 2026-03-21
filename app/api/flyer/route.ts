@@ -27,14 +27,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { id, sucursal_id, imagen_url, producto_id, es_eterno, vence_at, activo } = body;
+        const { id, sucursal_id, imagen_url, producto_id, es_eterno, fecha_desde, fecha_hasta, activo } = body;
 
         const flyerData = {
             sucursal_id,
             imagen_url,
             producto_id,
             es_eterno,
-            vence_at: es_eterno ? null : (vence_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
+            fecha_desde: es_eterno ? null : (fecha_desde || new Date().toISOString()),
+            fecha_hasta: es_eterno ? null : (fecha_hasta || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
             activo,
         };
 

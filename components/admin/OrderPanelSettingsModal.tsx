@@ -17,6 +17,7 @@ interface PanelSettings {
         listo: string;
         entregado: string;
     };
+    promo_qr_text?: string;
 }
 
 interface OrderPanelSettingsModalProps {
@@ -45,7 +46,8 @@ export default function OrderPanelSettingsModal({
             confirmado: "¡Hola! Tu pedido ya fue confirmado y se encuentra en preparación. Te avisaremos cuando esté en camino!",
             listo: "TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!",
             entregado: "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido."
-        }
+        },
+        promo_qr_text: "#GRACIAS POR ELEGIRNOS"
     });
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -337,6 +339,23 @@ export default function OrderPanelSettingsModal({
                                     placeholder="Mensaje al estar listo..."
                                 />
                             </div>
+                        </div>
+                    </section>
+
+                    {/* Promo QR Web */}
+                    <section className="space-y-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <Monitor size={14} /> <span>Promo QR Web</span>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">Texto debajo del QR (Impresión libre)</label>
+                            <input
+                                type="text"
+                                value={settings.promo_qr_text || ""}
+                                onChange={e => setSettings({ ...settings, promo_qr_text: e.target.value })}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
+                                placeholder="#GRACIAS POR ELEGIRNOS"
+                            />
                         </div>
                     </section>
                 </div>

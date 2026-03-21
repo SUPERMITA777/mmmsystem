@@ -325,3 +325,44 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
 
 /* Alias legacy */
 export const printOrderTicket = printComanda;
+
+/* ──────────────────────────────────────────────────────
+   PROMO QR WEB – Ticket genérico de promo
+   ────────────────────────────────────────────────────── */
+export function printPromoQrWeb(url: string, texto: string, config: Partial<PrintConfig> = {}) {
+  const c = { ...DEFAULT_CONFIG, ...config };
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  @page { size: 80mm auto; margin: 5mm 4mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; line-height: 1.4; color: #000; }
+  .center { text-align: center; }
+  .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
+</style>
+</head>
+<body>
+  
+  <div class="center" style="font-size:${c.fuente_titulo}px;${bw(c, 'fuente_titulo')}margin-bottom:6px">
+    PROMO ONLINE
+  </div>
+
+  <div class="center" style="margin-top:10px;margin-bottom:10px">
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}" alt="QR Promo" width="180" height="180" style="display:block;margin:0 auto" />
+  </div>
+
+  <div class="center" style="font-size:${c.fuente_cliente_nombre}px;font-weight:bold;margin-top:8px;padding:4px">
+    ${texto || "#GRACIAS POR ELEGIRNOS"}
+  </div>
+
+  <div class="center" style="font-size:${c.fuente_footer}px;color:#333;margin-top:6px">
+    ¡Escaneá y pedí desde nuestra web!
+  </div>
+
+</body></html>`;
+
+  doPrint(html);
+}
+

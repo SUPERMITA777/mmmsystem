@@ -38,12 +38,13 @@ export default function FlyerOverlay({
 
     async function fetchActiveFlyer() {
         try {
+            const now = new Date().toISOString();
             const { data, error } = await supabase
                 .from("sucursal_flyers")
                 .select("id, imagen_url, producto_id")
                 .eq("sucursal_id", sucursalId)
                 .eq("activo", true)
-                .or(`es_eterno.eq.true,vence_at.gt.${new Date().toISOString()}`)
+                .or(`es_eterno.eq.true,and(fecha_desde.lte.${now},fecha_hasta.gte.${now})`)
                 .maybeSingle();
 
             if (data) {
