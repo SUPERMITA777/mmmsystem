@@ -1,0 +1,3 @@
+# REGLAS DEL AGENTE / AGENT RULES
+Siempre haz `git add .`, `git commit` y `git push` al finalizar cada tarea importante.
+Nunca olvides commitear y pushear los cambios al final de cada requerimiento del usuario.

@@ -370,18 +370,38 @@ export default function PanelPedidosPage() {
             >
               🔔 Activar Sonido
             </button>
-            <button
-              onClick={() => {
-                const tenant = window.location.pathname.split('/')[1];
-                const promoQrUrl = `${window.location.origin}/${tenant}`;
-                const texto = sucursalConfig?.panel_settings?.promo_qr_text || "#GRACIAS POR ELEGIRNOS";
-                printPromoQrWeb(promoQrUrl, texto, printConfig);
-              }}
-              className="flex items-center gap-2 bg-purple-100 text-purple-700 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-purple-200 transition-all shadow-sm active:scale-95"
-              title="Imprimir QR de Promo Web"
-            >
-              <QrCode size={16} /> Promo QR
-            </button>
+            <div className="flex items-stretch bg-purple-100 rounded-xl shadow-sm border border-purple-200">
+              <button
+                onClick={() => {
+                  const tenant = window.location.pathname.split('/')[1];
+                  const promoQrUrl = `${window.location.origin}/${tenant}`;
+                  const texto = sucursalConfig?.panel_settings?.promo_qr_text || "#GRACIAS POR ELEGIRNOS";
+                  printPromoQrWeb(promoQrUrl, texto, printConfig);
+                }}
+                className="flex items-center gap-2 text-purple-700 px-3 py-2.5 rounded-l-xl text-xs font-bold hover:bg-purple-200 transition-all active:scale-95"
+                title="Imprimir QR de Promo Web"
+              >
+                <QrCode size={16} /> Promo QR
+              </button>
+              <div className="w-px bg-purple-200 my-1"></div>
+              <button
+                onClick={() => {
+                  const prev = sucursalConfig?.panel_settings?.promo_qr_text || "#GRACIAS POR ELEGIRNOS";
+                  const texto = window.prompt("Ingresa el mensaje personalizado para el ticket:", prev);
+                  if (texto !== null && texto !== prev) {
+                    const newSettings = { ...sucursalConfig?.panel_settings, promo_qr_text: texto };
+                    setSucursalConfig({ ...sucursalConfig, panel_settings: newSettings });
+                    if (sucursalConfig?.id) {
+                      supabase.from("config_sucursal").update({ panel_settings: newSettings }).eq("id", sucursalConfig.id).then();
+                    }
+                  }
+                }}
+                className="flex items-center justify-center px-2 text-purple-700 rounded-r-xl hover:bg-purple-200 transition-all active:scale-95"
+                title="Configurar texto del ticket"
+              >
+                <SettingsIcon size={14} />
+              </button>
+            </div>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2.5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
