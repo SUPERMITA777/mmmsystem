@@ -376,7 +376,8 @@ export default function PanelPedidosPage() {
                   const tenant = window.location.pathname.split('/')[1];
                   const promoQrUrl = `${window.location.origin}/${tenant}`;
                   const texto = sucursalConfig?.panel_settings?.promo_qr_text || "#GRACIAS POR ELEGIRNOS";
-                  printPromoQrWeb(promoQrUrl, texto, printConfig);
+                  const imageUrl = sucursalConfig?.panel_settings?.promo_qr_image_url;
+                  printPromoQrWeb(promoQrUrl, texto, imageUrl, printConfig);
                 }}
                 className="flex items-center gap-2 text-purple-700 px-3 py-2.5 rounded-l-xl text-xs font-bold hover:bg-purple-200 transition-all active:scale-95"
                 title="Imprimir QR de Promo Web"

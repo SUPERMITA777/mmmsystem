@@ -18,6 +18,7 @@ interface PanelSettings {
         entregado: string;
     };
     promo_qr_text?: string;
+    promo_qr_image_url?: string;
 }
 
 interface OrderPanelSettingsModalProps {
@@ -356,6 +357,68 @@ export default function OrderPanelSettingsModal({
                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
                                 placeholder="#GRACIAS POR ELEGIRNOS"
                             />
+                        </div>
+                        <div className="space-y-1 mt-4">
+                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">Logo del ticket (Opcional)</label>
+                            <div className="flex flex-col gap-3">
+                                {settings.promo_qr_image_url ? (
+                                    <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                        <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                                            <img src={settings.promo_qr_image_url} alt="Logo preview" className="h-8 object-contain" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-900 truncate">Logo cargado</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setSettings({ ...settings, promo_qr_image_url: "" })}
+                                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => document.getElementById('logo-upload')?.click()}
+                                        disabled={uploading}
+                                        className="w-full flex flex-col items-center justify-center gap-2 py-4 border-2 border-dashed border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all text-gray-400 group"
+                                    >
+                                        {uploading ? (
+                                            <div className="w-6 h-6 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Upload size={20} className="group-hover:text-purple-500" />
+                                                <span className="text-xs font-bold group-hover:text-gray-700">Subir Logo (.png, .jpg)</span>
+                                            </>
+                                        )}
+                                    </button>
+                                )}
+                                <input
+                                    id="logo-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        setUploading(true);
+                                        try {
+                                            const fileExt = file.name.split('.').pop();
+                                            const fileName = `logo-${Math.random().toString(36).substring(2)}.${fileExt}`;
+                                            const filePath = `logos/${fileName}`;
+                                            const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file);
+                                            if (uploadError) throw uploadError;
+                                            const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+                                            setSettings({ ...settings, promo_qr_image_url: publicUrl });
+                                        } catch (error: any) {
+                                            alert("Error subiendo el logo: " + error.message);
+                                        } finally {
+                                            setUploading(false);
+                                            e.target.value = '';
+                                        }
+                                    }}
+                                />
+                            </div>
                         </div>
                     </section>
                 </div>

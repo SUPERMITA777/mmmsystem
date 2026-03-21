@@ -329,7 +329,7 @@ export const printOrderTicket = printComanda;
 /* ──────────────────────────────────────────────────────
    PROMO QR WEB – Ticket genérico de promo
    ────────────────────────────────────────────────────── */
-export function printPromoQrWeb(url: string, texto: string, config: Partial<PrintConfig> = {}) {
+export function printPromoQrWeb(url: string, texto: string, imageUrl?: string, config: Partial<PrintConfig> = {}) {
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const html = `<!DOCTYPE html>
@@ -345,6 +345,10 @@ export function printPromoQrWeb(url: string, texto: string, config: Partial<Prin
 </head>
 <body>
   
+  ${imageUrl ? `<div class="center" style="margin-bottom:8px">
+    <img src="${imageUrl}" alt="Promo Logo" style="max-width:200px; max-height:80px; display:block; margin:0 auto;" />
+  </div>` : ''}
+
   <div class="center" style="font-size:${c.fuente_titulo}px;${bw(c, 'fuente_titulo')}margin-bottom:6px">
     PROMO ONLINE
   </div>
