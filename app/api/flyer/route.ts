@@ -6,21 +6,24 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const sucursalId = searchParams.get("sucursal_id");
 
-    if (!sucursalId) {
-        return NextResponse.json({ success: false, message: "Falta sucursal_id" }, { status: 400 });
+    if (!sucursalId || sucursalId === "undefined" || sucursalId === "null") {
+        return NextResponse.json({ success: false, message: "Falta sucursal_id válido" }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin
         .from("sucursal_flyers")
         .select("*")
         .eq("sucursal_id", sucursalId)
-        .maybeSingle();
+        .limit(1);
 
     if (error) {
+        console.error("GET /api/flyer error:", error);
         return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, data });
+    const flyer = data && data.length > 0 ? data[0] : null;
+
+    return NextResponse.json({ success: true, data: flyer });
 }
 
 // POST: crear o actualizar flyer

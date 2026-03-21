@@ -38,17 +38,26 @@ export default function FlyerOverlay({
 
     async function fetchActiveFlyer() {
         try {
-            const now = new Date().toISOString();
             const { data, error } = await supabase
                 .from("sucursal_flyers")
-                .select("id, imagen_url, producto_id")
+                .select("*")
                 .eq("sucursal_id", sucursalId)
-                .eq("activo", true)
-                .or(`es_eterno.eq.true,and(fecha_desde.lte.${now},fecha_hasta.gte.${now})`)
-                .maybeSingle();
+                .eq("activo", true);
 
-            if (data) {
-                setFlyer(data);
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                const now = new Date();
+                const validFlyer = data.find((f: any) => {
+                    if (f.es_eterno) return true;
+                    if (!f.fecha_desde || !f.fecha_hasta) return true; // Fallback if no dates set
+                    const desde = new Date(f.fecha_desde);
+                    const hasta = new Date(f.fecha_hasta);
+                    return now >= desde && now <= hasta;
+                });
+                if (validFlyer) {
+                    setFlyer(validFlyer);
+                }
             }
         } catch (err) {
             console.error("Error fetching flyer:", err);
