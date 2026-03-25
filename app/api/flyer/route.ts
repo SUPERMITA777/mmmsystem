@@ -30,9 +30,15 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const body = await request.json();
+        console.log("POST /api/flyer body:", body);
+        
         const { id, sucursal_id, imagen_url, producto_id, es_eterno, fecha_desde, fecha_hasta, activo } = body;
 
-        const flyerData = {
+        if (!sucursal_id) {
+            return NextResponse.json({ success: false, message: "Falta sucursal_id" }, { status: 400 });
+        }
+
+        const flyerData: any = {
             sucursal_id,
             imagen_url,
             producto_id,
@@ -42,21 +48,20 @@ export async function POST(request: Request) {
             activo,
         };
 
-        if (id) {
-            // Update
-            const { error } = await supabaseAdmin
-                .from("sucursal_flyers")
-                .update(flyerData)
-                .eq("id", id);
+        // Si viene el ID, lo incluimos para que upsert sepa qué registro actualizar por PK si no hay conflicto por sucursal_id
+        if (id) flyerData.id = id;
 
-            if (error) throw error;
-        } else {
-            // Insert
-            const { error } = await supabaseAdmin
-                .from("sucursal_flyers")
-                .insert([flyerData]);
+        // Usamos upsert con onConflict sucursal_id para evitar el error de unique constraint
+        const { error } = await supabaseAdmin
+            .from("sucursal_flyers")
+            .upsert(flyerData, { 
+                onConflict: 'sucursal_id',
+                ignoreDuplicates: false 
+            });
 
-            if (error) throw error;
+        if (error) {
+            console.error("Supabase upsert error:", error);
+            throw error;
         }
 
         return NextResponse.json({ success: true, message: "Flyer guardado correctamente." });

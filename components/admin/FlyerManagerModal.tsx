@@ -138,6 +138,8 @@ export default function FlyerManagerModal({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...flyer,
+                    fecha_desde: flyer.fecha_desde ? new Date(flyer.fecha_desde).toISOString() : null,
+                    fecha_hasta: flyer.fecha_hasta ? new Date(flyer.fecha_hasta).toISOString() : null,
                     sucursal_id: sucursalId,
                 }),
             });

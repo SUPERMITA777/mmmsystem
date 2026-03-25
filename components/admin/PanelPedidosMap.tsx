@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, PolygonF } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, InfoWindowF, PolygonF } from "@react-google-maps/api";
+import AdvancedMarker from "@/components/ui/AdvancedMarker";
 
 type PedidoMapCoords = {
     id: string;
@@ -150,19 +151,16 @@ export default function PanelPedidosMap({
 
             {/* Store marker */}
             {storePos && (
-                <MarkerF
+                <AdvancedMarker
                     position={storePos}
-                    label={{
-                        text: "🏪",
-                        fontSize: "20px"
-                    }}
+                    label="🏪"
                     title="MMM Pizza Artesanal"
                 />
             )}
 
             {/* Order markers */}
             {validPedidos.map((p) => (
-                <MarkerF
+                <AdvancedMarker
                     key={p.id}
                     position={{ lat: p.cliente_lat as number, lng: p.cliente_lng as number }}
                     onClick={() => {
@@ -187,7 +185,7 @@ export default function PanelPedidosMap({
                             </div>
                         </InfoWindowF>
                     )}
-                </MarkerF>
+                </AdvancedMarker>
             ))}
         </GoogleMap>
     );

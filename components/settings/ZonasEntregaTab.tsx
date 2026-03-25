@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { MapPin, Plus, Trash2, Edit3, Check, X, Navigation } from "lucide-react";
-import { GoogleMap, useJsApiLoader, MarkerF, PolygonF, PolylineF } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, PolygonF, PolylineF } from "@react-google-maps/api";
+import AdvancedMarker from "@/components/ui/AdvancedMarker";
 import { LatLng, pointInPolygon } from "@/lib/geoutils";
 import { useTenant } from "@/context/TenantContext";
 
@@ -101,18 +102,13 @@ function MapaZonas({
         >
             {/* Marcador del local */}
             {localPos && (
-                <MarkerF
+                <AdvancedMarker
                     position={{ lat: localPos.lat, lng: localPos.lng }}
                     draggable={true}
-                    onDragEnd={(e) => {
-                        if (e.latLng) {
-                            onLocalDrag({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-                        }
+                    onDragEnd={(latlng) => {
+                        onLocalDrag(latlng);
                     }}
-                    label={{
-                        text: "🏠",
-                        fontSize: "18px"
-                    }}
+                    label="🏠"
                 />
             )}
 
@@ -145,17 +141,10 @@ function MapaZonas({
                         }}
                     />
                     {tempPoints.map((p, i) => (
-                        <MarkerF
+                        <AdvancedMarker
                             key={`temp-${i}`}
                             position={p}
-                            icon={{
-                                path: google.maps.SymbolPath.CIRCLE,
-                                fillColor: "#8b5cf6",
-                                fillOpacity: 1,
-                                strokeColor: "#ffffff",
-                                strokeWeight: 2,
-                                scale: 5
-                            }}
+                            label="🟣"
                         />
                     ))}
                 </>
@@ -164,25 +153,14 @@ function MapaZonas({
             {/* Vértices editables para polígono existente */}
             {editingVerticesZonaId && zonas.filter(z => z.id === editingVerticesZonaId).map(zona =>
                 zona.polygon_coords?.map((p, i) => (
-                    <MarkerF
+                    <AdvancedMarker
                         key={`vertex-${zona.id}-${i}`}
                         position={p}
                         draggable={true}
-                        onDragEnd={(e) => {
-                            if (e.latLng) {
-                                onVertexDrag(zona.id, i, { lat: e.latLng.lat(), lng: e.latLng.lng() });
-                            }
+                        onDragEnd={(latlng) => {
+                            onVertexDrag(zona.id, i, latlng);
                         }}
-                        icon={{
-                            path: google.maps.SymbolPath.CIRCLE,
-                            fillColor: "#10b981", // Verde brillante Pedisy
-                            fillOpacity: 1,
-                            strokeColor: "#ffffff",
-                            strokeWeight: 3,
-                            scale: 8 // Más grande y destacado como pidió el usuario
-                        }}
-                        // @ts-ignore - Soporte para cambiar cursor en hover
-                        onMouseOver={(e: any) => e.target?.setOptions({ cursor: 'pointer' })}
+                        label="🟢"
                     />
                 ))
             )}
