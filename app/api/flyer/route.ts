@@ -29,13 +29,29 @@ export async function GET(request: Request) {
 // POST: crear o actualizar flyer
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
+        // Validación de inicialización de Supabase
+        if (!supabaseAdmin) {
+            console.error("supabaseAdmin no está inicializado.");
+            return NextResponse.json({ success: false, message: "Error de configuración del servidor (Supabase Admin)" }, { status: 500 });
+        }
+
+        let body;
+        try {
+            body = await request.json();
+        } catch (e) {
+            return NextResponse.json({ success: false, message: "Cuerpo de solicitud inválido (no es JSON)" }, { status: 400 });
+        }
+
         console.log("POST /api/flyer body:", body);
         
         const { id, sucursal_id, imagen_url, producto_id, es_eterno, fecha_desde, fecha_hasta, activo } = body;
 
         if (!sucursal_id) {
             return NextResponse.json({ success: false, message: "Falta sucursal_id" }, { status: 400 });
+        }
+
+        if (!imagen_url) {
+            return NextResponse.json({ success: false, message: "Falta imagen_url" }, { status: 400 });
         }
 
         const flyerData: any = {
@@ -56,25 +72,29 @@ export async function POST(request: Request) {
         console.log("Upserting flyer data:", flyerData);
 
         // Usamos upsert con onConflict sucursal_id para evitar el error de unique constraint
-        const { error } = await supabaseAdmin
+        const { error, data } = await supabaseAdmin
             .from("sucursal_flyers")
             .upsert(flyerData, { 
-                onConflict: 'sucursal_id',
-                ignoreDuplicates: false 
-            });
+                onConflict: 'sucursal_id'
+            })
+            .select();
 
         if (error) {
             console.error("Supabase upsert error:", error);
             return NextResponse.json({ 
                 success: false, 
-                message: `Database Error: ${error.message || JSON.stringify(error)}`,
+                message: `Database Error: ${error.message || "Error desconocido en la base de datos"}`,
                 details: error
             }, { status: 500 });
         }
 
-        return NextResponse.json({ success: true, message: "Flyer guardado correctamente." });
+        return NextResponse.json({ success: true, message: "Flyer guardado correctamente.", data });
     } catch (error: any) {
-        console.error("Flyer API error:", error);
-        return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+        console.error("Flyer API error fatal:", error);
+        return NextResponse.json({ 
+            success: false, 
+            message: `Server Error: ${error.message || "Error fatal en el servidor"}`,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }, { status: 500 });
     }
 }
