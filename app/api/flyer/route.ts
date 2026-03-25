@@ -1,39 +1,66 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
 
 // GET: obtener flyer activo de una sucursal
 export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const sucursalId = searchParams.get("sucursal_id");
+    try {
+        const { searchParams } = new URL(request.url);
+        const sucursalId = searchParams.get("sucursal_id");
 
-    if (!sucursalId || sucursalId === "undefined" || sucursalId === "null") {
-        return NextResponse.json({ success: false, message: "Falta sucursal_id válido" }, { status: 400 });
-    }
+        if (!sucursalId || sucursalId === "undefined" || sucursalId === "null") {
+            return NextResponse.json({ success: false, message: "Falta sucursal_id válido" }, { status: 400 });
+        }
 
-    const { data, error } = await supabaseAdmin
-        .from("sucursal_flyers")
-        .select("*")
-        .eq("sucursal_id", sucursalId)
-        .limit(1);
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
-    if (error) {
-        console.error("GET /api/flyer error:", error);
+        if (!supabaseUrl || !supabaseServiceKey) {
+            return NextResponse.json({ success: false, message: "Error de configuración de Supabase" }, { status: 500 });
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { autoRefreshToken: false, persistSession: false }
+        });
+
+        const { data, error } = await supabase
+            .from("sucursal_flyers")
+            .select("*")
+            .eq("sucursal_id", sucursalId)
+            .limit(1);
+
+        if (error) {
+            console.error("GET /api/flyer error:", error);
+            return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+        }
+
+        const flyer = data && data.length > 0 ? data[0] : null;
+
+        return NextResponse.json({ success: true, data: flyer });
+    } catch (error: any) {
         return NextResponse.json({ success: false, message: error.message }, { status: 500 });
     }
-
-    const flyer = data && data.length > 0 ? data[0] : null;
-
-    return NextResponse.json({ success: true, data: flyer });
 }
 
 // POST: crear o actualizar flyer
 export async function POST(request: Request) {
     try {
-        // Validación de inicialización de Supabase
-        if (!supabaseAdmin) {
-            console.error("supabaseAdmin no está inicializado.");
-            return NextResponse.json({ success: false, message: "Error de configuración del servidor (Supabase Admin)" }, { status: 500 });
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+
+        if (!supabaseUrl || !supabaseServiceKey) {
+            return NextResponse.json({ 
+                success: false, 
+                message: "Error de configuración: Faltan variables de entorno de Supabase",
+                details: {
+                    hasUrl: !!supabaseUrl,
+                    hasKey: !!supabaseServiceKey
+                }
+            }, { status: 500 });
         }
+
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { autoRefreshToken: false, persistSession: false }
+        });
 
         let body;
         try {
@@ -72,7 +99,7 @@ export async function POST(request: Request) {
         console.log("Upserting flyer data:", flyerData);
 
         // Usamos upsert con onConflict sucursal_id para evitar el error de unique constraint
-        const { error, data } = await supabaseAdmin
+        const { error, data } = await supabase
             .from("sucursal_flyers")
             .upsert(flyerData, { 
                 onConflict: 'sucursal_id'
