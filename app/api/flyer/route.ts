@@ -41,15 +41,19 @@ export async function POST(request: Request) {
         const flyerData: any = {
             sucursal_id,
             imagen_url,
-            producto_id,
-            es_eterno,
+            producto_id: producto_id || null,
+            es_eterno: !!es_eterno,
             fecha_desde: es_eterno ? null : (fecha_desde || new Date().toISOString()),
             fecha_hasta: es_eterno ? null : (fecha_hasta || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
-            activo,
+            activo: activo !== false,
         };
 
-        // Si viene el ID, lo incluimos para que upsert sepa qué registro actualizar por PK si no hay conflicto por sucursal_id
-        if (id) flyerData.id = id;
+        // Si viene el ID y no está vacío, lo incluimos
+        if (id && typeof id === "string" && id.trim() !== "" && id !== "undefined" && id !== "null") {
+            flyerData.id = id;
+        }
+
+        console.log("Upserting flyer data:", flyerData);
 
         // Usamos upsert con onConflict sucursal_id para evitar el error de unique constraint
         const { error } = await supabaseAdmin
@@ -61,7 +65,11 @@ export async function POST(request: Request) {
 
         if (error) {
             console.error("Supabase upsert error:", error);
-            throw error;
+            return NextResponse.json({ 
+                success: false, 
+                message: `Database Error: ${error.message || JSON.stringify(error)}`,
+                details: error
+            }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, message: "Flyer guardado correctamente." });
