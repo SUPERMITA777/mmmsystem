@@ -50,13 +50,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         : null;
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
-      console.log("[NotificationContext] Reproduciendo sonido:", predefinedSound, customSoundUrl ? "(custom)" : "");
+      console.log("[NotificationContext] Intento de sonido:", predefinedSound);
 
       if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
+        console.log("[NotificationContext] Intentando audio custom URL:", customSoundUrl);
         const audio = new Audio(customSoundUrl);
-        audio.play().catch(e => {
-          console.warn("[NotificationContext] Error reproduciendo audio custom:", e);
-          // Si falla el audio custom, intentamos el de fallback
+        
+        audio.oncanplaythrough = () => {
+          console.log("[NotificationContext] Audio custom cargado y listo");
+        };
+
+        audio.onerror = (e) => {
+          console.warn("[NotificationContext] Error cargando audio custom (URL inválida o CORS):", e);
+          playPredefinedTone("campana_1");
+        };
+
+        audio.play().then(() => {
+          console.log("[NotificationContext] Audio custom iniciado con éxito");
+        }).catch(e => {
+          console.warn("[NotificationContext] Audio custom bloqueado/error:", e.message);
+          // Fallback al tono de sistema si el MP3 falla
           playPredefinedTone("campana_1");
         });
         return;
@@ -64,23 +77,34 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       playPredefinedTone(predefinedSound);
     } catch (e) {
-      console.warn("[NotificationContext] Audio notification error:", e);
+      console.warn("[NotificationContext] Audio notification error general:", e);
     }
   }, []);
 
   // Helper to play predefined sounds using the persistent AudioContext
-  const playPredefinedTone = (type: string) => {
+  const playPredefinedTone = async (type: string) => {
     try {
-      // Ensure context exists and is running
+      console.log("[NotificationContext] playPredefinedTone:", type);
+      
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtx) return;
+
       if (!audioContextRef.current) {
-        const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
-        if (!AudioCtx) return;
         audioContextRef.current = new AudioCtx();
+        console.log("[NotificationContext] AudioContext creado bajo demanda");
       }
 
       const ctx = audioContextRef.current;
+      
+      // Ensure it's running
       if (ctx.state === "suspended") {
-        ctx.resume();
+        console.log("[NotificationContext] Resumiendo AudioContext...");
+        await ctx.resume();
+      }
+
+      if (ctx.state !== "running") {
+        console.warn("[NotificationContext] AudioContext no está 'running', estado actual:", ctx.state);
+        return;
       }
 
       const playTone = (freq: number, start: number, duration: number, vol: number) => {
@@ -104,12 +128,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         playTone(1200, 0, 0.1, 0.2);
         playTone(1500, 0.05, 0.1, 0.2);
       } else {
-        // Default campana_1
+        // Default campana_1 (también se usa como fallback para custom)
         playTone(880, 0, 1.2, 0.4);
         playTone(1760, 0.05, 0.8, 0.2);
       }
     } catch (e) {
-      console.warn("[NotificationContext] playPredefinedTone error:", e);
+      console.warn("[NotificationContext] Error en playPredefinedTone:", e);
     }
   };
 
@@ -119,7 +143,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [playNotificationSound]);
 
   const enableAudio = async () => {
-    console.log("[NotificationContext] Habilitando audio y notificaciones...");
+    console.log("[NotificationContext] Usuario habilitó audio (clic)");
     setAudioEnabled(true);
 
     // Initialize/Unlock persistent AudioContext
@@ -131,7 +155,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
         const ctx = audioContextRef.current;
         await ctx.resume();
-        console.log("[NotificationContext] AudioContext activado:", ctx.state);
+        console.log("[NotificationContext] AudioContext listo. Estado:", ctx.state);
 
         // Play a quick silent beep to ensure it's "blessed" by user gesture
         const osc = ctx.createOscillator();
@@ -143,33 +167,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         osc.stop(0.1);
       }
     } catch (e) {
-      console.warn("[NotificationContext] Error activando AudioContext:", e);
+      console.warn("[NotificationContext] No se pudo activar el AudioContext:", e);
     }
 
-    // Request Web Notifications permission so we can alert even when in background
+    // Request Web Notifications permission
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
       try {
         const permission = await Notification.requestPermission();
         notifPermissionRef.current = permission;
-        console.log("[NotificationContext] Permiso de notificaciones obtenido:", permission);
-        if (permission !== "granted") {
-          console.warn("[NotificationContext] Notificaciones no permitidas por el usuario.");
-        }
+        console.log("[NotificationContext] Permiso de notificaciones ajustado a:", permission);
       } catch (e) {
-        console.warn("[NotificationContext] Error solicitando permiso de notificaciones:", e);
+        console.warn("[NotificationContext] Error pidiendo permiso de notificaciones:", e);
       }
     }
   };
 
-  // Show a system notification — works even when the tab is in the background
+  // Show a system notification
   const showSystemNotification = (pedido: any) => {
     if (typeof Notification === "undefined") return;
-    if (notifPermissionRef.current !== "granted") {
-      console.log("[NotificationContext] No se muestra notificación (sin permiso):", notifPermissionRef.current);
-      return;
-    }
+    if (notifPermissionRef.current !== "granted") return;
 
-    console.log("[NotificationContext] Mostrando notificación de sistema para pedido:", pedido.id);
+    console.log("[NotificationContext] Lanzando notificación visual para pedido:", pedido.id);
 
     const tipo =
       pedido?.tipo === "delivery" ? "🏍️ Delivery" :
@@ -181,11 +199,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     try {
       const notif = new Notification("🔔 ¡Nuevo Pedido!", {
-        body: `${tipo} · ${nombre}${total}\nMMM System`,
+        body: `${tipo} · ${nombre}${total}`,
         icon: "/favicon.ico",
         badge: "/favicon.ico",
         tag: `pedido-${pedido?.id || Date.now()}`,
-        requireInteraction: true,
+        requireInteraction: true, 
       });
 
       notif.onclick = () => {
@@ -195,7 +213,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       setTimeout(() => notif.close(), 60000);
     } catch (e) {
-      console.warn("[NotificationContext] Error creando notificación:", e);
+      console.warn("[NotificationContext] Error lanzando notificación:", e);
     }
   };
 
@@ -203,7 +221,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!sucursalId) return;
 
     const fetchCurrentIds = async () => {
-      console.log("[NotificationContext] Cargando IDs de pedidos actuales...");
       const { data } = await supabase
         .from("pedidos")
         .select("id")
@@ -214,9 +231,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       if (data) {
         knownIdsRef.current = new Set(data.map(p => p.id));
-        console.log("[NotificationContext] IDs cargados:", knownIdsRef.current.size);
       }
       firstLoadRef.current = false;
+      console.log("[NotificationContext] Carga inicial de pedidos completada");
     };
 
     const fetchSettings = async () => {
@@ -236,56 +253,51 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchSettings();
 
     const channel = supabase
-      .channel(`pedidos-notif-${sucursalId}`)
+      .channel(`pedidos-events-${sucursalId}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
         table: "pedidos",
         filter: `sucursal_id=eq.${sucursalId}`,
       }, (payload) => {
-        console.log("[NotificationContext] REALTIME: Nuevo registro detectado");
+        console.log("[NotificationContext] EVENTO REALTIME insert en pedidos");
         if (!firstLoadRef.current) {
           const newPedido = payload.new;
           if (!knownIdsRef.current.has(newPedido.id)) {
-            console.log("[NotificationContext] Pedido nuevo confirmado:", newPedido.id);
+            console.log("[NotificationContext] ¡Es un pedido nuevo!");
             knownIdsRef.current.add(newPedido.id);
 
             const soundEnabled = panelSettingsRef.current?.notificacion_sonora !== false;
             
-            // Disparamos notificación visual siempre (si hay permiso)
+            // Visual
             showSystemNotification(newPedido);
 
-            // Disparamos sonido si está habilitado
+            // Audio
             if (soundEnabled) {
               playNotificationSoundRef.current();
             }
-          } else {
-            console.log("[NotificationContext] Pedido ya conocido, ignorando sonido.");
           }
-        } else {
-          console.log("[NotificationContext] Carga inicial, ignorando sonidos previos.");
         }
       })
       .subscribe((status) => {
-        console.log("[NotificationContext] Canal pedidos status:", status);
+        console.log("[NotificationContext] Supabase Status:", status);
       });
 
     // Listener for real-time settings changes
     const settingsChannel = supabase
-      .channel(`settings-notif-${sucursalId}`)
+      .channel(`settings-updates-${sucursalId}`)
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
         table: "config_sucursal",
         filter: `sucursal_id=eq.${sucursalId}`,
       }, (payload) => {
-        console.log("[NotificationContext] Ajustes actualizados vía Realtime");
+        console.log("[NotificationContext] Ajustes actualizados vía Supabase");
         panelSettingsRef.current = payload.new.panel_settings;
       })
       .subscribe();
 
     return () => {
-      console.log("[NotificationContext] Cerrando canales...");
       supabase.removeChannel(channel);
       supabase.removeChannel(settingsChannel);
     };
