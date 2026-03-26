@@ -151,19 +151,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback((force = false) => {
     try {
       const panelSettings = panelSettingsRef.current;
       const soundEnabled = panelSettings?.notificacion_sonora !== false;
 
       console.group("[NotificationContext] 🔊 Alerta activada");
-      if (!soundEnabled) {
+      if (!soundEnabled && !force) {
           console.log("❌ Cancelado por ajustes (notificacion_sonora: false)");
           console.groupEnd();
           return;
       }
 
-      if (!audioEnabled) {
+      if (!audioEnabled && !force) {
           console.log("❌ Cancelado: El usuario no ha habilitado el audio");
           console.groupEnd();
           return;
@@ -193,7 +193,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.error("[NotificationContext] Error en alerta:", e);
       console.groupEnd();
     }
-  }, [triggerFlash, speakNotification, playOscillatorTone]);
+  }, [triggerFlash, speakNotification, playOscillatorTone, audioEnabled]);
 
   // UPDATE REF FOR SUPABASE CHANNELS
   useEffect(() => {
@@ -217,7 +217,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         speakNotification("Audio habilitado");
     }
 
-    playNotificationSound();
+    playNotificationSound(true); // Forzar sonido inicial
 
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
       Notification.requestPermission().then(p => {
@@ -259,6 +259,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchCurrentIds();
     fetchSettings();
 
+    const setupRealtime = () => {
       const channel = supabase
         .channel(`rt-ord-notif-${sucursalId}`)
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
@@ -281,7 +282,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         })
         .subscribe((status) => {
             console.log(`[NotificationContext] 📡 Estado suscripción real-time: ${status}`);
+            if (status === "CLOSED" || status === "TIMED_OUT") {
+                console.log("[NotificationContext] 🔄 Reintentando suscripción en 5s...");
+                setTimeout(setupRealtime, 5000);
+            }
         });
+      return channel;
+    };
+
+    const channel = setupRealtime();
 
     const settingsChannel = supabase
       .channel(`rt-set-notif-${sucursalId}`)
