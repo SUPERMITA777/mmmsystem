@@ -8,6 +8,7 @@ interface NotificationContextType {
   playNotificationSound: () => void;
   enableAudio: () => void;
   audioEnabled: boolean;
+  flash: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -15,6 +16,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { sucursalId } = useTenant();
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [flash, setFlash] = useState(false);
   const panelSettingsRef = useRef<any>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
@@ -23,26 +25,48 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // always calls the latest version (avoids stale closure bug)
   const playNotificationSoundRef = useRef<() => void>(() => {});
 
-  // PERSISTENT AUDIO CONTEXT — One engine to rule them all
+  // PERSISTENT AUDIO CONTEXT
   const audioContextRef = useRef<AudioContext | null>(null);
+  
+  // SHARED AUDIO ELEMENT for persistent playback
+  const audioTagRef = useRef<HTMLAudioElement | null>(null);
 
-  // Ref for notification permission — avoids stale closures without re-subscribing channels
+  // Ref for notification permission
   const notifPermissionRef = useRef<NotificationPermission>("default");
 
-  // Sync permission ref on mount and after changes
   useEffect(() => {
     if (typeof Notification !== "undefined") {
       notifPermissionRef.current = Notification.permission;
-      console.log("[NotificationContext] Permiso inicial:", notifPermissionRef.current);
+      console.log("[NotificationContext] Permiso de notificaciones:", notifPermissionRef.current);
     }
+    
+    // Create hidden audio tag
+    const audio = document.createElement("audio");
+    audio.style.display = "none";
+    document.body.appendChild(audio);
+    audioTagRef.current = audio;
+
+    return () => {
+      if (audioTagRef.current) {
+        document.body.removeChild(audioTagRef.current);
+      }
+    };
+  }, []);
+
+  // Visual flash effect to confirm receipt
+  const triggerFlash = useCallback(() => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 1000);
   }, []);
 
   const playNotificationSound = useCallback(() => {
     try {
       const panelSettings = panelSettingsRef.current;
-      if (panelSettings?.notificacion_sonora === false) {
-        console.log("[NotificationContext] Sonido desactivado en ajustes");
-        return;
+      const soundEnabled = panelSettings?.notificacion_sonora !== false;
+
+      if (!soundEnabled) {
+          console.log("[NotificationContext] Sonido deshabilitado en ajustes");
+          return;
       }
 
       const customSoundUrl = panelSettings?.sonido_notificacion === "custom"
@@ -50,170 +74,150 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         : null;
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
-      console.log("[NotificationContext] Intento de sonido:", predefinedSound);
+      console.log("[NotificationContext] Solicitud de sonido:", predefinedSound);
+      triggerFlash();
 
       if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
-        console.log("[NotificationContext] Intentando audio custom URL:", customSoundUrl);
-        const audio = new Audio(customSoundUrl);
-        
-        audio.oncanplaythrough = () => {
-          console.log("[NotificationContext] Audio custom cargado y listo");
-        };
-
-        audio.onerror = (e) => {
-          console.warn("[NotificationContext] Error cargando audio custom (URL inválida o CORS):", e);
-          playPredefinedTone("campana_1");
-        };
-
-        audio.play().then(() => {
-          console.log("[NotificationContext] Audio custom iniciado con éxito");
-        }).catch(e => {
-          console.warn("[NotificationContext] Audio custom bloqueado/error:", e.message);
-          // Fallback al tono de sistema si el MP3 falla
-          playPredefinedTone("campana_1");
-        });
+        console.log("[NotificationContext] Reproduciendo desde URL:", customSoundUrl);
+        if (audioTagRef.current) {
+          audioTagRef.current.src = customSoundUrl;
+          audioTagRef.current.volume = 1.0;
+          audioTagRef.current.play().catch(e => {
+            console.warn("[NotificationContext] Error .play() desde URL:", e.message);
+            playPredefinedChime("campana_1");
+          });
+        }
         return;
       }
 
-      playPredefinedTone(predefinedSound);
+      playPredefinedChime(predefinedSound);
     } catch (e) {
-      console.warn("[NotificationContext] Audio notification error general:", e);
+      console.warn("[NotificationContext] playNotificationSound error general:", e);
     }
-  }, []);
+  }, [triggerFlash]);
 
-  // Helper to play predefined sounds using the persistent AudioContext
-  const playPredefinedTone = async (type: string) => {
+  // Helper to play synthesized sounds with higher volume and persistence
+  const playPredefinedChime = async (type: string) => {
     try {
-      console.log("[NotificationContext] playPredefinedTone:", type);
+      console.log("[NotificationContext] Generando tono sintético:", type);
       
       const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
       if (!AudioCtx) return;
 
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioCtx();
-        console.log("[NotificationContext] AudioContext creado bajo demanda");
       }
 
       const ctx = audioContextRef.current;
       
-      // Ensure it's running
       if (ctx.state === "suspended") {
-        console.log("[NotificationContext] Resumiendo AudioContext...");
         await ctx.resume();
       }
 
       if (ctx.state !== "running") {
-        console.warn("[NotificationContext] AudioContext no está 'running', estado actual:", ctx.state);
+        console.warn("[NotificationContext] No se pudo activar el motor de audio. Estado:", ctx.state);
         return;
       }
 
-      const playTone = (freq: number, start: number, duration: number, vol: number) => {
+      const playTone = (freq: number, start: number, duration: number, vol: number, wave: OscillatorType = "sine") => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = type === "burbuja" ? "triangle" : "sine";
+        osc.type = wave;
         osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-        osc.frequency.exponentialRampToValueAtTime(freq / 2, ctx.currentTime + start + duration);
+        
+        // Linear fade is often more audible and predictable
         gain.gain.setValueAtTime(vol, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + duration);
+        
         osc.start(ctx.currentTime + start);
         osc.stop(ctx.currentTime + start + duration + 0.1);
       };
 
       if (type === "campana_2") {
-        playTone(440, 0, 0.5, 0.3);
-        playTone(440, 0.6, 0.5, 0.3);
+        playTone(523.25, 0, 0.4, 0.8, "triangle"); // C5
+        playTone(659.25, 0.5, 0.8, 0.6, "triangle"); // E5
       } else if (type === "burbuja") {
-        playTone(1200, 0, 0.1, 0.2);
-        playTone(1500, 0.05, 0.1, 0.2);
+        playTone(1500, 0, 0.1, 0.5, "sine");
+        playTone(2000, 0.05, 0.1, 0.5, "sine");
       } else {
-        // Default campana_1 (también se usa como fallback para custom)
-        playTone(880, 0, 1.2, 0.4);
-        playTone(1760, 0.05, 0.8, 0.2);
+        // High frequency chime (campana_1/fallback)
+        // More aggressive tones to ensure audibility
+        playTone(1000, 0, 1.0, 1.0, "triangle"); 
+        playTone(1500, 0.1, 0.8, 0.7, "triangle");
       }
     } catch (e) {
-      console.warn("[NotificationContext] Error en playPredefinedTone:", e);
+      console.warn("[NotificationContext] playPredefinedChime error:", e);
     }
   };
 
-  // Keep the ref always pointing to the latest version
   useEffect(() => {
     playNotificationSoundRef.current = playNotificationSound;
   }, [playNotificationSound]);
 
   const enableAudio = async () => {
-    console.log("[NotificationContext] Usuario habilitó audio (clic)");
+    console.log("[NotificationContext] Inicializando Audio por interacción del usuario...");
     setAudioEnabled(true);
 
-    // Initialize/Unlock persistent AudioContext
     try {
+      // 1. Prime AudioContext
       const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
       if (AudioCtx) {
         if (!audioContextRef.current) {
           audioContextRef.current = new AudioCtx();
         }
-        const ctx = audioContextRef.current;
-        await ctx.resume();
-        console.log("[NotificationContext] AudioContext listo. Estado:", ctx.state);
-
-        // Play a quick silent beep to ensure it's "blessed" by user gesture
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        gain.gain.value = 0.0001; // extremely silent
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(0);
-        osc.stop(0.1);
+        await audioContextRef.current.resume();
+        console.log("[NotificationContext] AudioContext: UNLOCKED (" + audioContextRef.current.state + ")");
       }
+      
+      // 2. Prime Audio Tag
+      if (audioTagRef.current) {
+        // Play a silence to "prime" the browser media session
+        audioTagRef.current.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD";
+        await audioTagRef.current.play().catch(() => {});
+        console.log("[NotificationContext] AudioTag: PRIMED");
+      }
+
+      // 3. Test sound to confirm it's working
+      playNotificationSound();
     } catch (e) {
-      console.warn("[NotificationContext] No se pudo activar el AudioContext:", e);
+      console.warn("[NotificationContext] Error en inicialización:", e);
     }
 
-    // Request Web Notifications permission
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-      try {
-        const permission = await Notification.requestPermission();
-        notifPermissionRef.current = permission;
-        console.log("[NotificationContext] Permiso de notificaciones ajustado a:", permission);
-      } catch (e) {
-        console.warn("[NotificationContext] Error pidiendo permiso de notificaciones:", e);
-      }
+      Notification.requestPermission().then(p => {
+          notifPermissionRef.current = p;
+          console.log("[NotificationContext] Notificaciones permiso:", p);
+      });
     }
   };
 
-  // Show a system notification
   const showSystemNotification = (pedido: any) => {
-    if (typeof Notification === "undefined") return;
-    if (notifPermissionRef.current !== "granted") return;
-
-    console.log("[NotificationContext] Lanzando notificación visual para pedido:", pedido.id);
-
-    const tipo =
-      pedido?.tipo === "delivery" ? "🏍️ Delivery" :
-      pedido?.tipo === "takeaway" ? "🥡 Take Away" :
-      pedido?.tipo === "salon"    ? "🍽️ Salón"    : "📦 Nuevo";
-
-    const nombre = pedido?.cliente_nombre || "Cliente";
-    const total  = pedido?.total != null ? ` — $${pedido.total}` : "";
+    if (typeof Notification === "undefined" || notifPermissionRef.current !== "granted") return;
 
     try {
+      const tipo =
+        pedido?.tipo === "delivery" ? "🏍️ Delivery" :
+        pedido?.tipo === "takeaway" ? "🥡 Take Away" :
+        pedido?.tipo === "salon"    ? "🍽️ Salón"    : "📦 Nuevo";
+
       const notif = new Notification("🔔 ¡Nuevo Pedido!", {
-        body: `${tipo} · ${nombre}${total}`,
+        body: `${tipo} · ${pedido?.cliente_nombre || "Cliente"} · $${pedido?.total || ""}`,
         icon: "/favicon.ico",
         badge: "/favicon.ico",
-        tag: `pedido-${pedido?.id || Date.now()}`,
-        requireInteraction: true, 
+        tag: `pedido-${pedido?.id}`,
+        requireInteraction: true,
       });
 
       notif.onclick = () => {
         window.focus();
         notif.close();
       };
-
+      
       setTimeout(() => notif.close(), 60000);
     } catch (e) {
-      console.warn("[NotificationContext] Error lanzando notificación:", e);
+      console.warn("[NotificationContext] System Notification error:", e);
     }
   };
 
@@ -227,72 +231,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .eq("sucursal_id", sucursalId)
         .in("estado", ["pendiente", "confirmado"])
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(30);
 
-      if (data) {
-        knownIdsRef.current = new Set(data.map(p => p.id));
-      }
+      if (data) knownIdsRef.current = new Set(data.map(p => p.id));
       firstLoadRef.current = false;
-      console.log("[NotificationContext] Carga inicial de pedidos completada");
+      console.log("[NotificationContext] Inicializado para sucursal:", sucursalId);
     };
 
     const fetchSettings = async () => {
-      const { data } = await supabase
-        .from("config_sucursal")
-        .select("panel_settings")
-        .eq("sucursal_id", sucursalId)
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        panelSettingsRef.current = data.panel_settings;
-        console.log("[NotificationContext] Ajustes de panel cargados");
-      }
+      const { data } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+      if (data) panelSettingsRef.current = data.panel_settings;
     };
 
     fetchCurrentIds();
     fetchSettings();
 
     const channel = supabase
-      .channel(`pedidos-events-${sucursalId}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "pedidos",
-        filter: `sucursal_id=eq.${sucursalId}`,
-      }, (payload) => {
-        console.log("[NotificationContext] EVENTO REALTIME insert en pedidos");
+      .channel(`rt-pedidos-${sucursalId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         if (!firstLoadRef.current) {
           const newPedido = payload.new;
           if (!knownIdsRef.current.has(newPedido.id)) {
-            console.log("[NotificationContext] ¡Es un pedido nuevo!");
+            console.log("[NotificationContext] NUEVO PEDIDO detectado:", newPedido.id);
             knownIdsRef.current.add(newPedido.id);
 
-            const soundEnabled = panelSettingsRef.current?.notificacion_sonora !== false;
-            
-            // Visual
+            // Trigger both visual and audio
             showSystemNotification(newPedido);
-
-            // Audio
-            if (soundEnabled) {
-              playNotificationSoundRef.current();
-            }
+            playNotificationSoundRef.current();
           }
         }
       })
-      .subscribe((status) => {
-        console.log("[NotificationContext] Supabase Status:", status);
-      });
+      .subscribe();
 
-    // Listener for real-time settings changes
     const settingsChannel = supabase
-      .channel(`settings-updates-${sucursalId}`)
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "config_sucursal",
-        filter: `sucursal_id=eq.${sucursalId}`,
-      }, (payload) => {
-        console.log("[NotificationContext] Ajustes actualizados vía Supabase");
+      .channel(`rt-settings-${sucursalId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "config_sucursal", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         panelSettingsRef.current = payload.new.panel_settings;
       })
       .subscribe();
@@ -304,8 +277,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [sucursalId]);
 
   return (
-    <NotificationContext.Provider value={{ playNotificationSound, enableAudio, audioEnabled }}>
+    <NotificationContext.Provider value={{ playNotificationSound, enableAudio, audioEnabled, flash }}>
       {children}
+      {/* Flash overlay confirming event receipt */}
+      {flash && (
+          <div className="fixed inset-0 z-[9999] pointer-events-none bg-blue-500/10 animate-pulse border-4 border-blue-500 rounded-3xl" />
+      )}
     </NotificationContext.Provider>
   );
 }
