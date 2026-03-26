@@ -17,23 +17,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { sucursalId } = useTenant();
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [flash, setFlash] = useState(false);
+  
+  // REFS
   const panelSettingsRef = useRef<any>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
-
   const audioContextRef = useRef<AudioContext | null>(null);
   const notifPermissionRef = useRef<NotificationPermission>("default");
+  const playNotificationSoundRef = useRef<() => void>(() => {});
 
+  // SYNC REF TO AVOID STALE CLOSURES IN SUPABASE SUBSCRIPTIONS
   useEffect(() => {
     if (typeof Notification !== "undefined") {
       notifPermissionRef.current = Notification.permission;
       console.log("[NotificationContext] 📊 Permiso Notif:", notifPermissionRef.current);
     }
-
+    
     // EXPOSE TO CONSOLE FOR DIRECT TESTING
     (window as any).__TEST_SOUND__ = () => {
       console.log("[NotificationContext] 🛠️ TEST MANUAL de sonido y voz...");
-      playNotificationSound();
+      if (playNotificationSoundRef.current) playNotificationSoundRef.current();
     };
 
     return () => {
@@ -46,7 +49,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setTimeout(() => setFlash(false), 1000);
   }, []);
 
-  // NEW: Speech Synthesis fallback - hard to block once activated
   const speakNotification = useCallback((text: string) => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
         console.log("[NotificationContext] 🗣️ Synthesizing speech:", text);
@@ -58,55 +60,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const playNotificationSound = useCallback(() => {
-    try {
-      const panelSettings = panelSettingsRef.current;
-      const soundEnabled = panelSettings?.notificacion_sonora !== false;
-
-      console.group("[NotificationContext] 🔊 Alerta activada");
-      console.log("- Status:", {
-          visible: document.visibilityState,
-          userActive: (navigator as any).userActivation?.isActive,
-          soundEnabled
-      });
-
-      if (!soundEnabled) {
-          console.log("❌ Cancelado por ajustes");
-          console.groupEnd();
-          return;
-      }
-
-      // 1. Visual
-      triggerFlash();
-
-      // 2. Audio (Custom MP3 or Synthesis)
-      const customSoundUrl = panelSettings?.sonido_notificacion === "custom"
-        ? panelSettings?.sonido_notificacion_custom_url
-        : null;
-      const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
-
-      if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
-          console.log("- Play: HTML Audio (" + customSoundUrl + ")");
-          const audio = new Audio(customSoundUrl);
-          audio.play().catch(e => {
-              console.warn("⚠️ Audio element failed:", e.message);
-              playOscillatorTone("campana_1");
-          });
-      } else {
-          playOscillatorTone(predefinedSound);
-      }
-
-      // 3. Speech (Safe fallback)
-      speakNotification("Nuevo pedido recibido");
-
-      console.groupEnd();
-    } catch (e) {
-      console.error("[NotificationContext] Error fatal en alerta:", e);
-      console.groupEnd();
-    }
-  }, [triggerFlash, speakNotification]);
-
-  const playOscillatorTone = async (type: string) => {
+  const playOscillatorTone = useCallback(async (type: string) => {
     try {
       const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
       if (!AudioCtx) return;
@@ -116,16 +70,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       
       if (ctx.state === "suspended") await ctx.resume();
       if (ctx.state !== "running") {
-          console.warn("⚠️ AudioContext not running. Current state:", ctx.state);
+          console.warn("⚠️ AudioContext not running. Status:", ctx.state);
           return;
       }
 
-      const playTone = (freq: number, start: number, duration: number, vol: number, type: OscillatorType) => {
+      const playTone = (freq: number, start: number, duration: number, vol: number, oscType: OscillatorType) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.connect(gain);
           gain.connect(ctx.destination);
-          osc.type = type;
+          osc.type = oscType;
           osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
           gain.gain.setValueAtTime(vol, ctx.currentTime + start);
           gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
@@ -140,39 +94,79 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           playTone(1800, 0, 0.1, 0.4, "sine");
           playTone(2200, 0.05, 0.1, 0.4, "sine");
       } else {
-          // Campana 1 / Default - AGGRESSIVE
           playTone(1000, 0, 0.8, 1.0, "square");
           playTone(1200, 0.1, 0.8, 0.8, "square");
       }
     } catch (e) {
       console.warn("Oscillator error:", e);
     }
-  };
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    try {
+      const panelSettings = panelSettingsRef.current;
+      const soundEnabled = panelSettings?.notificacion_sonora !== false;
+
+      console.group("[NotificationContext] 🔊 Alerta activada");
+      if (!soundEnabled) {
+          console.log("❌ Cancelado por ajustes");
+          console.groupEnd();
+          return;
+      }
+
+      triggerFlash();
+
+      const customSoundUrl = panelSettings?.sonido_notificacion === "custom"
+        ? panelSettings?.sonido_notificacion_custom_url
+        : null;
+      const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
+
+      if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
+          const audio = new Audio(customSoundUrl);
+          audio.play().catch(e => {
+              console.warn("⚠️ Audio element failed:", e.message);
+              playOscillatorTone("campana_1");
+          });
+      } else {
+          playOscillatorTone(predefinedSound);
+      }
+
+      speakNotification("Nuevo pedido recibido");
+      console.groupEnd();
+    } catch (e) {
+      console.error("[NotificationContext] Error en alerta:", e);
+      console.groupEnd();
+    }
+  }, [triggerFlash, speakNotification, playOscillatorTone]);
+
+  // UPDATE REF FOR SUPABASE CHANNELS
+  useEffect(() => {
+    playNotificationSoundRef.current = playNotificationSound;
+  }, [playNotificationSound]);
 
   const enableAudio = async () => {
     setAudioEnabled(true);
     console.log("[NotificationContext] 🖱️ Activado");
 
-    // Prime Web Audio
     try {
         const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
         if (AudioCtx) {
-            audioContextRef.current = new AudioCtx();
+            if (!audioContextRef.current) audioContextRef.current = new AudioCtx();
             await audioContextRef.current.resume();
         }
     } catch (e) {}
 
-    // Prime Speech (often helps just browsing voices)
     if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.getVoices();
         speakNotification("Audio habilitado");
     }
 
-    // Manual playback of test sound
     playNotificationSound();
 
     if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-      Notification.requestPermission().then(p => notifPermissionRef.current = p);
+      Notification.requestPermission().then(p => {
+        notifPermissionRef.current = p;
+      });
     }
   };
 
