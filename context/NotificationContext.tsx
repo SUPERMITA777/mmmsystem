@@ -9,6 +9,7 @@ interface NotificationContextType {
   enableAudio: () => void;
   audioEnabled: boolean;
   flash: boolean;
+  isAudioContextSuspended: boolean;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -17,6 +18,20 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { sucursalId } = useTenant();
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [isAudioContextSuspended, setIsAudioContextSuspended] = useState(false);
+
+  // Persistence of audioEnabled
+  useEffect(() => {
+    const saved = localStorage.getItem("order_notif_audio_enabled");
+    if (saved === "true") {
+      setAudioEnabled(true);
+      console.log("[NotificationContext] 🔄 Recordando estado de audio: ACTIVADO");
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("order_notif_audio_enabled", audioEnabled ? "true" : "false");
+  }, [audioEnabled]);
   
   // REFS
   const panelSettingsRef = useRef<any>(null);
@@ -39,9 +54,38 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (playNotificationSoundRef.current) playNotificationSoundRef.current();
     };
 
+    const handleGlobalClick = () => {
+      if (audioEnabled && audioContextRef.current && audioContextRef.current.state === "suspended") {
+        console.log("[NotificationContext] 🖱️ Autoresumiendo AudioContext por interacción global...");
+        audioContextRef.current.resume().then(() => {
+          setIsAudioContextSuspended(false);
+          // Opcional: pequeño tono de confirmación al desbloquear
+          if (playNotificationSoundRef.current) {
+             console.log("[NotificationContext] ✅ Audio desbloqueado");
+             // trigger a small test sound to confirm
+             playNotificationSoundRef.current();
+          }
+        });
+      }
+    };
+
+    window.addEventListener("click", handleGlobalClick);
+
     return () => {
       delete (window as any).__TEST_SOUND__;
+      window.removeEventListener("click", handleGlobalClick);
     };
+  }, [audioEnabled]);
+
+  // Monitor AudioContext state
+  useEffect(() => {
+    const checkState = () => {
+      if (audioContextRef.current) {
+        setIsAudioContextSuspended(audioContextRef.current.state === "suspended");
+      }
+    };
+    const timer = setInterval(checkState, 2000);
+    return () => clearInterval(timer);
   }, []);
 
   const triggerFlash = useCallback(() => {
@@ -71,8 +115,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (ctx.state === "suspended") await ctx.resume();
       if (ctx.state !== "running") {
           console.warn("⚠️ AudioContext not running. Status:", ctx.state);
+          setIsAudioContextSuspended(true);
           return;
       }
+      setIsAudioContextSuspended(false);
 
       const playTone = (freq: number, start: number, duration: number, vol: number, oscType: OscillatorType) => {
           const osc = ctx.createOscillator();
@@ -81,21 +127,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           gain.connect(ctx.destination);
           osc.type = oscType;
           osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(vol, ctx.currentTime + start);
+          gain.gain.setValueAtTime(vol * 1.5, ctx.currentTime + start); // Aumentar volumen un 50%
           gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
           osc.start(ctx.currentTime + start);
           osc.stop(ctx.currentTime + start + duration + 0.1);
       };
 
       if (type === "campana_2") {
-          playTone(440, 0, 0.5, 0.5, "triangle");
-          playTone(554.37, 0.3, 0.5, 0.5, "triangle");
+          // Campana doble más brillante
+          playTone(880, 0, 0.6, 0.6, "triangle");
+          playTone(1108.73, 0.2, 0.6, 0.6, "triangle");
       } else if (type === "burbuja") {
           playTone(1800, 0, 0.1, 0.4, "sine");
           playTone(2200, 0.05, 0.1, 0.4, "sine");
       } else {
-          playTone(1000, 0, 0.8, 1.0, "square");
-          playTone(1200, 0.1, 0.8, 0.8, "square");
+          // Tono de alerta más penetrante (campana_1 o default)
+          playTone(1200, 0, 0.8, 1.0, "square");
+          playTone(1500, 0.1, 0.8, 0.8, "square");
+          playTone(1000, 0.2, 0.8, 0.8, "square");
       }
     } catch (e) {
       console.warn("Oscillator error:", e);
@@ -109,23 +158,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
       console.group("[NotificationContext] 🔊 Alerta activada");
       if (!soundEnabled) {
-          console.log("❌ Cancelado por ajustes");
+          console.log("❌ Cancelado por ajustes (notificacion_sonora: false)");
+          console.groupEnd();
+          return;
+      }
+
+      if (!audioEnabled) {
+          console.log("❌ Cancelado: El usuario no ha habilitado el audio");
           console.groupEnd();
           return;
       }
 
       triggerFlash();
 
-      const customSoundUrl = panelSettings?.sonido_notificacion === "custom"
+      const customSoundUrl = panelSettings?.sonido_notificacion === "custom" || panelSettings?.sonido_notificacion_custom_url
         ? panelSettings?.sonido_notificacion_custom_url
         : null;
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
-      if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
+      if (customSoundUrl) {
           const audio = new Audio(customSoundUrl);
+          audio.volume = 1.0;
           audio.play().catch(e => {
-              console.warn("⚠️ Audio element failed:", e.message);
-              playOscillatorTone("campana_1");
+              console.warn("⚠️ Audio element failed, falling back to oscillator:", e.message);
+              playOscillatorTone(predefinedSound);
           });
       } else {
           playOscillatorTone(predefinedSound);
@@ -203,19 +259,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchCurrentIds();
     fetchSettings();
 
-    const channel = supabase
-      .channel(`rt-ord-notif-${sucursalId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
-        if (!firstLoadRef.current) {
-          const newPedido = payload.new;
-          if (!knownIdsRef.current.has(newPedido.id)) {
-            knownIdsRef.current.add(newPedido.id);
-            showSystemNotification(newPedido);
-            if (playNotificationSoundRef.current) playNotificationSoundRef.current();
+      const channel = supabase
+        .channel(`rt-ord-notif-${sucursalId}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
+          console.log("[NotificationContext] 🔔 NUEVO PEDIDO DETECTADO:", payload.new.id);
+          if (!firstLoadRef.current) {
+            const newPedido = payload.new;
+            if (!knownIdsRef.current.has(newPedido.id)) {
+              knownIdsRef.current.add(newPedido.id);
+              showSystemNotification(newPedido);
+              if (playNotificationSoundRef.current) {
+                  console.log("[NotificationContext] 🔊 Ejecutando playNotificationSoundRef");
+                  playNotificationSoundRef.current();
+              } else {
+                  console.warn("[NotificationContext] ⚠️ playNotificationSoundRef es null");
+              }
+            } else {
+                console.log("[NotificationContext] ℹ️ Pedido ya conocido, ignorando sonido");
+            }
           }
-        }
-      })
-      .subscribe();
+        })
+        .subscribe((status) => {
+            console.log(`[NotificationContext] 📡 Estado suscripción real-time: ${status}`);
+        });
 
     const settingsChannel = supabase
       .channel(`rt-set-notif-${sucursalId}`)
@@ -231,10 +297,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [sucursalId]);
 
   return (
-    <NotificationContext.Provider value={{ playNotificationSound, enableAudio, audioEnabled, flash }}>
+    <NotificationContext.Provider value={{ playNotificationSound, enableAudio, audioEnabled, flash, isAudioContextSuspended }}>
       {children}
       {flash && (
           <div className="fixed inset-0 z-[9999] pointer-events-none bg-blue-500/30 border-[15px] border-blue-500 animate-pulse" />
+      )}
+      {audioEnabled && isAudioContextSuspended && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] bg-orange-500 text-white px-6 py-3 rounded-full shadow-2xl font-bold animate-bounce flex items-center gap-3">
+          <span className="text-xl">🔔</span>
+          Haga clic en cualquier lugar para activar el sonido
+        </div>
       )}
     </NotificationContext.Provider>
   );

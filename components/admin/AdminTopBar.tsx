@@ -1,15 +1,17 @@
 "use client";
 
-import { ChevronDown, Headphones } from "lucide-react";
+import { ChevronDown, Headphones, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useTenant } from "@/context/TenantContext";
+import { useNotifications } from "@/context/NotificationContext";
 
 export function AdminTopBar() {
   const params = useParams();
   const pathname = usePathname();
   const tenantSlug = params?.tenant || pathname.split('/')[1] || "demo";
   const { sucursalData } = useTenant();
+  const { audioEnabled, enableAudio, isAudioContextSuspended } = useNotifications();
 
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-white border-b border-gray-200">
@@ -20,6 +22,26 @@ export function AdminTopBar() {
 
       {/* Right: buttons */}
       <div className="flex items-center gap-3">
+        {/* Audio Notification Status */}
+        <button
+          onClick={enableAudio}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-sm ${
+            audioEnabled 
+              ? isAudioContextSuspended 
+                ? "bg-orange-100 text-orange-600 border border-orange-200 animate-pulse" 
+                : "bg-green-100 text-green-600 border border-green-200"
+              : "bg-gray-100 text-gray-400 border border-gray-200 hover:bg-gray-200"
+          }`}
+          title={audioEnabled ? (isAudioContextSuspended ? "Click para activar sonido" : "Sonido activo") : "Activar sonido de notificaciones"}
+        >
+          {audioEnabled ? (
+            isAudioContextSuspended ? <VolumeX size={14} /> : <Volume2 size={14} />
+          ) : (
+            <VolumeX size={14} />
+          )}
+          <span>{audioEnabled ? (isAudioContextSuspended ? "Desbloquear" : "Activo") : "Sin Sonido"}</span>
+        </button>
+
         <Link
           href={`https://mmmsystem.vercel.app/`}
           target="_blank"
