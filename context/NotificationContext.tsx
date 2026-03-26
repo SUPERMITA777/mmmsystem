@@ -22,15 +22,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Persistence of audioEnabled
   useEffect(() => {
-    const saved = localStorage.getItem("order_notif_audio_enabled");
+    const saved = localStorage.getItem("MMM_AUDIO_ENABLED");
     if (saved === "true") {
       setAudioEnabled(true);
       console.log("[NotificationContext] 🔄 Recordando estado de audio: ACTIVADO");
+      
+      // Inicializar AudioContext si ya estaba habilitado
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (AudioCtx && !audioContextRef.current) {
+          audioContextRef.current = new AudioCtx();
+      }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("order_notif_audio_enabled", audioEnabled ? "true" : "false");
+    localStorage.setItem("MMM_AUDIO_ENABLED", audioEnabled ? "true" : "false");
   }, [audioEnabled]);
   
   // REFS
@@ -157,6 +163,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const soundEnabled = panelSettings?.notificacion_sonora !== false;
 
       console.group("[NotificationContext] 🔊 Alerta activada");
+
+      // Re-asegurar que el AudioContext esté activo
+      if (audioContextRef.current?.state === "suspended") {
+          console.log("🔄 Reanudando AudioContext...");
+          audioContextRef.current.resume();
+      }
+
       if (!soundEnabled && !force) {
           console.log("❌ Cancelado por ajustes (notificacion_sonora: false)");
           console.groupEnd();
@@ -177,7 +190,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
       if (customSoundUrl) {
-          const audio = new Audio(customSoundUrl);
+          console.log("🎵 Cargando sonido personalizado:", customSoundUrl);
+          // Cache busting para evitar ERR_CACHE_OPERATION_NOT_SUPPORTED
+          const audioUrl = `${customSoundUrl}${customSoundUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+          const audio = new Audio(audioUrl);
           audio.volume = 1.0;
           audio.play().catch(e => {
               console.warn("⚠️ Audio element failed, falling back to oscillator:", e.message);
@@ -200,17 +216,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     playNotificationSoundRef.current = playNotificationSound;
   }, [playNotificationSound]);
 
-  const enableAudio = async () => {
+  const enableAudio = useCallback(() => {
     setAudioEnabled(true);
-    console.log("[NotificationContext] 🖱️ Activado");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("MMM_AUDIO_ENABLED", "true");
+      
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+      if (AudioCtx && !audioContextRef.current) {
+          audioContextRef.current = new AudioCtx();
+          console.log("[NotificationContext] 🎹 AudioContext inicializado");
+      }
 
-    try {
-        const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
-        if (AudioCtx) {
-            if (!audioContextRef.current) audioContextRef.current = new AudioCtx();
-            await audioContextRef.current.resume();
-        }
-    } catch (e) {}
+      if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+          audioContextRef.current.resume().then(() => {
+              console.log("[NotificationContext] 🎹 AudioContext reanudado");
+              setIsAudioContextSuspended(false);
+          });
+      }
+    }
 
     if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.getVoices();
@@ -260,9 +283,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchSettings();
 
     const setupRealtime = () => {
+      if (!sucursalId) return;
+
+      console.log(`[NotificationContext] 📡 Iniciando suscripción Realtime para: ${sucursalId}`);
+
       const channel = supabase
         .channel(`rt-ord-notif-${sucursalId}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
+        .on("postgres_changes", { 
+          event: "INSERT", 
+          schema: "public", 
+          table: "pedidos", 
+          filter: `sucursal_id=eq.${sucursalId}` 
+        }, (payload) => {
           console.log("[NotificationContext] 🔔 NUEVO PEDIDO DETECTADO:", payload.new.id);
           if (!firstLoadRef.current) {
             const newPedido = payload.new;
@@ -270,23 +302,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               knownIdsRef.current.add(newPedido.id);
               showSystemNotification(newPedido);
               if (playNotificationSoundRef.current) {
-                  console.log("[NotificationContext] 🔊 Ejecutando playNotificationSoundRef");
+                  console.log("[NotificationContext] 🔊 Ejecutando alerta sonora");
                   playNotificationSoundRef.current();
-              } else {
-                  console.warn("[NotificationContext] ⚠️ playNotificationSoundRef es null");
               }
-            } else {
-                console.log("[NotificationContext] ℹ️ Pedido ya conocido, ignorando sonido");
             }
           }
         })
-        .subscribe((status) => {
+        .subscribe(async (status) => {
             console.log(`[NotificationContext] 📡 Estado suscripción real-time: ${status}`);
-            if (status === "CLOSED" || status === "TIMED_OUT") {
-                console.log("[NotificationContext] 🔄 Reintentando suscripción en 5s...");
-                setTimeout(setupRealtime, 5000);
+            if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                console.log("[NotificationContext] 🔄 Error detectado, reiniciando canal en 5s...");
+                setTimeout(() => {
+                    supabase.removeChannel(channel);
+                    setupRealtime();
+                }, 5000);
             }
         });
+      
       return channel;
     };
 
