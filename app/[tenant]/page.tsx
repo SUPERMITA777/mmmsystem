@@ -51,6 +51,8 @@ function PublicMenuContent() {
     if (sucursalId) {
       fetchMenuData();
       fetchIsOpen();
+      // Abrir flyer automáticamente al cargar la página
+      setFlyerOpen(true);
     }
   }, [sucursalId]);
 
@@ -347,6 +349,7 @@ function PublicMenuContent() {
           sucursalId={sucursal.id}
           onClose={() => setFlyerOpen(false)}
           onOpenProduct={openProduct}
+          onOpenCart={openCart}
         />
       )}
     </main>

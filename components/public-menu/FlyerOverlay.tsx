@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, ShoppingCart, View } from "lucide-react";
+import { X, ShoppingCart, BookOpen } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 
 interface FlyerData {
     id: string;
     imagen_url: string;
     producto_id: string | null;
+    es_eterno: boolean;
+    vence_at: string | null;
+    activo: boolean;
 }
 
 interface Producto {
@@ -23,10 +26,12 @@ export default function FlyerOverlay({
     sucursalId,
     onClose,
     onOpenProduct,
+    onOpenCart,
 }: {
     sucursalId: string;
     onClose: () => void;
     onOpenProduct: (producto: Producto) => void;
+    onOpenCart?: () => void;
 }) {
     const [flyer, setFlyer] = useState<FlyerData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -48,12 +53,11 @@ export default function FlyerOverlay({
 
             if (data && data.length > 0) {
                 const now = new Date();
+                // Buscar un flyer válido: eterno o que no haya vencido (usando vence_at)
                 const validFlyer = data.find((f: any) => {
                     if (f.es_eterno) return true;
-                    if (!f.fecha_desde || !f.fecha_hasta) return true; // Fallback if no dates set
-                    const desde = new Date(f.fecha_desde);
-                    const hasta = new Date(f.fecha_hasta);
-                    return now >= desde && now <= hasta;
+                    if (!f.vence_at) return true; // Sin fecha de vencimiento = siempre activo
+                    return now <= new Date(f.vence_at);
                 });
                 if (validFlyer) {
                     setFlyer(validFlyer);
@@ -66,14 +70,13 @@ export default function FlyerOverlay({
         }
     }
 
-    async function handleLoQuiero() {
+    async function handleAgregarAlCarrito() {
         if (!flyer?.producto_id) {
             onClose();
             return;
         }
 
         try {
-            // Fetch full product data
             const { data: prod } = await supabase
                 .from("productos")
                 .select("*")
@@ -82,7 +85,7 @@ export default function FlyerOverlay({
 
             if (!prod) return;
 
-            // Check if it has options/additionals
+            // Verificar si tiene opciones / adicionales
             const { data: options } = await supabase
                 .from("producto_grupos_adicionales")
                 .select("id")
@@ -90,11 +93,9 @@ export default function FlyerOverlay({
                 .limit(1);
 
             if (options && options.length > 0) {
-                // Has options, open the detail modal
                 onOpenProduct(prod);
                 onClose();
             } else {
-                // No options, add directly to cart
                 addItem({
                     productoId: prod.id,
                     nombre: prod.nombre,
@@ -104,40 +105,69 @@ export default function FlyerOverlay({
                     adicionales: [],
                 });
                 onClose();
-                alert(`¡"${prod.nombre}" agregado al carrito!`);
             }
         } catch (err) {
-            console.error("Error in LO QUIERO:", err);
+            console.error("Error al agregar al carrito:", err);
         }
     }
 
+    function handleVerCarta() {
+        onClose();
+        if (onOpenCart) {
+            // pequeño delay para que el flyer cierre primero
+            setTimeout(() => onOpenCart(), 150);
+        }
+    }
+
+    // Si cargando o no hay flyer activo → no renderizamos nada
     if (loading || !flyer) return null;
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            {/* Backdrop - Lighter and blurred to see menu behind */}
+            {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                 onClick={onClose}
             />
 
-            {/* Flyer Content */}
-            <div className="relative w-full max-w-sm animate-in fade-in zoom-in duration-300">
-                {/* Close Button Top Right */}
+            {/* Contenido del Flyer */}
+            <div className="relative w-full max-w-sm animate-in fade-in zoom-in duration-300 flex flex-col gap-3">
+                {/* Botón Cerrar */}
                 <button
                     onClick={onClose}
-                    className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white transition-colors z-10"
+                    className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white transition-colors z-10"
                 >
                     <X size={28} />
                 </button>
 
-                <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl flex flex-col cursor-pointer transform transition-transform hover:scale-[1.02] active:scale-[0.98]"
-                    onClick={handleLoQuiero}>
+                {/* Imagen */}
+                <div className="bg-white rounded-[2rem] overflow-hidden shadow-2xl">
                     <img
                         src={flyer.imagen_url}
                         alt="Promoción Especial"
                         className="w-full aspect-[9/16] object-cover"
                     />
+                </div>
+
+                {/* Botones de Acción */}
+                <div className="flex gap-3 w-full">
+                    {/* AGREGAR AL CARRITO */}
+                    <button
+                        onClick={handleAgregarAlCarrito}
+                        className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm"
+                    >
+                        <ShoppingCart size={18} />
+                        AGREGAR AL CARRITO
+                    </button>
+
+                    {/* VER CARTA */}
+                    <button
+                        onClick={handleVerCarta}
+                        className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl border border-white/20 shadow-lg backdrop-blur-sm transition-all text-sm"
+                    >
+                        <BookOpen size={18} />
+                        VER CARTA
+                    </button>
                 </div>
             </div>
         </div>
