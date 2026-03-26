@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 
@@ -15,12 +15,17 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { sucursalId } = useTenant();
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [panelSettings, setPanelSettings] = useState<any>(null);
+  const panelSettingsRef = useRef<any>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
 
-  const playNotificationSound = () => {
+  // Use a ref for playNotificationSound so the Supabase channel callback
+  // always calls the latest version (avoids stale closure bug)
+  const playNotificationSoundRef = useRef<() => void>(() => {});
+
+  const playNotificationSound = useCallback(() => {
     try {
+      const panelSettings = panelSettingsRef.current;
       if (panelSettings?.notificacion_sonora === false) return;
 
       const customSoundUrl = panelSettings?.sonido_notificacion === "custom" ? panelSettings?.sonido_notificacion_custom_url : null;
@@ -66,7 +71,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     } catch (e) {
       console.warn("Audio notification error:", e);
     }
-  };
+  }, []);
+
+  // Keep the ref always pointing to the latest version
+  useEffect(() => {
+    playNotificationSoundRef.current = playNotificationSound;
+  }, [playNotificationSound]);
 
   const enableAudio = () => {
     setAudioEnabled(true);
@@ -104,7 +114,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .limit(1)
         .maybeSingle();
       if (data) {
-        setPanelSettings(data.panel_settings);
+        panelSettingsRef.current = data.panel_settings;
       }
     };
 
@@ -123,7 +133,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const newPedido = payload.new;
           if (!knownIdsRef.current.has(newPedido.id)) {
             knownIdsRef.current.add(newPedido.id);
-            playNotificationSound();
+            // Use ref to avoid stale closure — always calls the latest function
+            playNotificationSoundRef.current();
           }
         }
       })
@@ -138,7 +149,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         table: "config_sucursal",
         filter: `sucursal_id=eq.${sucursalId}`
       }, (payload) => {
-        setPanelSettings(payload.new.panel_settings);
+        panelSettingsRef.current = payload.new.panel_settings;
       })
       .subscribe();
 

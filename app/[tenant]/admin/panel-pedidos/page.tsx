@@ -113,7 +113,7 @@ export default function PanelPedidosPage() {
   const [promoActiva, setPromoActiva] = useState(false);
 
   const { sucursalId } = useTenant();
-  const { playNotificationSound, enableAudio } = useNotifications();
+  const { playNotificationSound, enableAudio, audioEnabled } = useNotifications();
 
   useEffect(() => {
     if (!sucursalId) return;
@@ -365,10 +365,19 @@ export default function PanelPedidosPage() {
           <div className="ml-auto flex items-center gap-3">
             <button
               onClick={() => { enableAudio(); playNotificationSound(); }}
-              className="flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all active:scale-95"
-              title="Probar sonido de notificación y habilitar en el navegador"
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95 border ${
+                audioEnabled
+                  ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                  : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
+              }`}
+              title={audioEnabled ? "Sonido activo — click para probar" : "Habilitar sonido de notificación"}
             >
-              🔔 Activar Sonido
+              🔔
+              <span>{audioEnabled ? "Sonido activo" : "Activar sonido"}</span>
+              {/* Toggle pill */}
+              <span className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${audioEnabled ? "bg-green-500" : "bg-gray-300"}`}>
+                <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform duration-200 ${audioEnabled ? "translate-x-3.5" : "translate-x-0.5"}`} />
+              </span>
             </button>
             <div className="flex items-stretch bg-purple-100 rounded-xl shadow-sm border border-purple-200">
               <button
