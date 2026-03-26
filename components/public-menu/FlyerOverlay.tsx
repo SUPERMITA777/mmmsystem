@@ -151,22 +151,22 @@ export default function FlyerOverlay({
 
                 {/* Botones de Acción */}
                 <div className="flex gap-3 w-full">
-                    {/* AGREGAR AL CARRITO */}
-                    <button
-                        onClick={handleAgregarAlCarrito}
-                        className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm"
-                    >
-                        <ShoppingCart size={18} />
-                        AGREGAR AL CARRITO
-                    </button>
-
-                    {/* VER CARTA */}
+                    {/* VER CARTA - izquierda, naranja */}
                     <button
                         onClick={handleVerCarta}
-                        className="flex-1 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl border border-white/20 shadow-lg backdrop-blur-sm transition-all text-sm"
+                        className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm"
                     >
                         <BookOpen size={18} />
                         VER CARTA
+                    </button>
+
+                    {/* AGREGAR AL CARRITO - derecha, verde */}
+                    <button
+                        onClick={handleAgregarAlCarrito}
+                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm"
+                    >
+                        <ShoppingCart size={18} />
+                        AGREGAR
                     </button>
                 </div>
             </div>
