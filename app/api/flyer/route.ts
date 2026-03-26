@@ -81,13 +81,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ success: false, message: "Falta imagen_url" }, { status: 400 });
         }
 
+        // La tabla tiene columna 'vence_at', no 'fecha_desde'/'fecha_hasta'
+        // Si es eterno, vence_at = null; si no, usamos fecha_hasta o un dia en el futuro
+        const vence_at = es_eterno 
+            ? null 
+            : (fecha_hasta || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+
         const flyerData: any = {
             sucursal_id,
             imagen_url,
             producto_id: producto_id || null,
             es_eterno: !!es_eterno,
-            fecha_desde: es_eterno ? null : (fecha_desde || new Date().toISOString()),
-            fecha_hasta: es_eterno ? null : (fecha_hasta || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()),
+            vence_at,
             activo: activo !== false,
         };
 

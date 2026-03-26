@@ -16,8 +16,7 @@ interface Flyer {
     imagen_url: string;
     producto_id: string | null;
     es_eterno: boolean;
-    fecha_desde: string | null;
-    fecha_hasta: string | null;
+    vence_at: string | null;
     activo: boolean;
 }
 
@@ -36,8 +35,7 @@ export default function FlyerManagerModal({
         imagen_url: "",
         producto_id: null,
         es_eterno: true,
-        fecha_desde: new Date().toISOString().slice(0, 16),
-        fecha_hasta: new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 16),
+        vence_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 16),
         activo: true,
     });
     const [productos, setProductos] = useState<Producto[]>([]);
@@ -64,8 +62,7 @@ export default function FlyerManagerModal({
                     imagen_url: d.imagen_url,
                     producto_id: d.producto_id,
                     es_eterno: d.es_eterno,
-                    fecha_desde: d.fecha_desde ? new Date(d.fecha_desde).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16),
-                    fecha_hasta: d.fecha_hasta ? new Date(d.fecha_hasta).toISOString().slice(0, 16) : new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 16),
+                    vence_at: d.vence_at ? new Date(d.vence_at).toISOString().slice(0, 16) : new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 16),
                     activo: d.activo,
                 });
             }
@@ -138,8 +135,7 @@ export default function FlyerManagerModal({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...flyer,
-                    fecha_desde: flyer.fecha_desde ? new Date(flyer.fecha_desde).toISOString() : null,
-                    fecha_hasta: flyer.fecha_hasta ? new Date(flyer.fecha_hasta).toISOString() : null,
+                    vence_at: !flyer.es_eterno && flyer.vence_at ? new Date(flyer.vence_at).toISOString() : null,
                     sucursal_id: sucursalId,
                 }),
             });
@@ -320,31 +316,18 @@ export default function FlyerManagerModal({
                         </div>
                     </div>
 
-                    {/* Rango de Fechas (sólo si no es eterno) */}
+                    {/* Fecha de vencimiento (sólo si no es eterno) */}
                     {!flyer.es_eterno && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 text-xs text-gray-500 uppercase">
-                                    Mostrar Desde
-                                </label>
-                                <input
-                                    type="datetime-local"
-                                    value={flyer.fecha_desde || ""}
-                                    onChange={(e) => setFlyer({ ...flyer, fecha_desde: e.target.value })}
-                                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500/20"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700 text-xs text-gray-500 uppercase">
-                                    Mostrar Hasta
-                                </label>
-                                <input
-                                    type="datetime-local"
-                                    value={flyer.fecha_hasta || ""}
-                                    onChange={(e) => setFlyer({ ...flyer, fecha_hasta: e.target.value })}
-                                    className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500/20"
-                                />
-                            </div>
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="text-sm font-semibold text-gray-700 text-xs text-gray-500 uppercase">
+                                Mostrar Hasta
+                            </label>
+                            <input
+                                type="datetime-local"
+                                value={flyer.vence_at || ""}
+                                onChange={(e) => setFlyer({ ...flyer, vence_at: e.target.value })}
+                                className="w-full p-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500/20"
+                            />
                         </div>
                     )}
                 </div>
