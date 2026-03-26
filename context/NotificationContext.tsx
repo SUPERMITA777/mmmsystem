@@ -23,12 +23,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   // always calls the latest version (avoids stale closure bug)
   const playNotificationSoundRef = useRef<() => void>(() => {});
 
+  // Ref for notification permission — avoids stale closures without re-subscribing channels
+  const notifPermissionRef = useRef<NotificationPermission>("default");
+
+  // Sync permission ref on mount and after changes
+  useEffect(() => {
+    if (typeof Notification !== "undefined") {
+      notifPermissionRef.current = Notification.permission;
+    }
+  }, []);
+
   const playNotificationSound = useCallback(() => {
     try {
       const panelSettings = panelSettingsRef.current;
       if (panelSettings?.notificacion_sonora === false) return;
 
-      const customSoundUrl = panelSettings?.sonido_notificacion === "custom" ? panelSettings?.sonido_notificacion_custom_url : null;
+      const customSoundUrl = panelSettings?.sonido_notificacion === "custom"
+        ? panelSettings?.sonido_notificacion_custom_url
+        : null;
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
       if (customSoundUrl && panelSettings?.sonido_notificacion === "custom") {
@@ -37,11 +49,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      // Predefined sounds Fallback/Default
+      // Predefined sounds via Web Audio API
       const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === "suspended") ctx.resume();
 
       const playTone = (freq: number, start: number, duration: number, vol: number) => {
         const osc = ctx.createOscillator();
@@ -78,14 +90,61 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     playNotificationSoundRef.current = playNotificationSound;
   }, [playNotificationSound]);
 
-  const enableAudio = () => {
+  const enableAudio = async () => {
     setAudioEnabled(true);
-    // Play a silent sound to unlock audio
+
+    // Unlock Web Audio context (requires user gesture)
     const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
     if (AudioCtx) {
       const ctx = new AudioCtx();
       ctx.resume();
     }
+
+    // Request Web Notifications permission so we can alert even when in background
+    if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+      try {
+        const permission = await Notification.requestPermission();
+        notifPermissionRef.current = permission;
+        if (permission !== "granted") {
+          console.warn("Notificaciones del sistema no permitidas. Solo sonido cuando la pestaña esté activa.");
+        }
+      } catch (e) {
+        console.warn("Error solicitando permiso de notificaciones:", e);
+      }
+    }
+  };
+
+  // Show a system notification — works even when the tab is in the background
+  const showSystemNotification = (pedido: any) => {
+    if (typeof Notification === "undefined") return;
+    if (notifPermissionRef.current !== "granted") return;
+
+    const tipo =
+      pedido?.tipo === "delivery" ? "🏍️ Delivery" :
+      pedido?.tipo === "takeaway" ? "🥡 Take Away" :
+      pedido?.tipo === "salon"    ? "🍽️ Salón"    : "📦 Nuevo";
+
+    const nombre = pedido?.cliente_nombre || "Cliente";
+    const total  = pedido?.total != null ? ` — $${pedido.total}` : "";
+
+    const notif = new Notification("🔔 ¡Nuevo Pedido!", {
+      body: `${tipo} · ${nombre}${total}`,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      // Unique tag per order prevents duplicate pop-ups
+      tag: `pedido-${pedido?.id || Date.now()}`,
+      // requireInteraction keeps the notification visible until the user acts on it
+      requireInteraction: true,
+    });
+
+    // Clicking the notification focuses the tab
+    notif.onclick = () => {
+      window.focus();
+      notif.close();
+    };
+
+    // Auto-dismiss after 60 seconds as a safety net
+    setTimeout(() => notif.close(), 60000);
   };
 
   useEffect(() => {
@@ -99,7 +158,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         .in("estado", ["pendiente", "confirmado"])
         .order("created_at", { ascending: false })
         .limit(50);
-      
+
       if (data) {
         knownIdsRef.current = new Set(data.map(p => p.id));
       }
@@ -123,31 +182,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const channel = supabase
       .channel("global-pedidos-rt")
-      .on("postgres_changes", { 
-        event: "INSERT", 
-        schema: "public", 
-        table: "pedidos", 
-        filter: `sucursal_id=eq.${sucursalId}` 
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "pedidos",
+        filter: `sucursal_id=eq.${sucursalId}`,
       }, (payload) => {
         if (!firstLoadRef.current) {
           const newPedido = payload.new;
           if (!knownIdsRef.current.has(newPedido.id)) {
             knownIdsRef.current.add(newPedido.id);
-            // Use ref to avoid stale closure — always calls the latest function
+
+            const soundEnabled = panelSettingsRef.current?.notificacion_sonora !== false;
+            if (!soundEnabled) return;
+
+            // Always show a system notification — it works even in background
+            // and also appears as a banner/alert in the OS task bar
+            showSystemNotification(newPedido);
+
+            // Play audio — browsers allow this when the page is focused.
+            // When in background it may be silently blocked, but the system
+            // notification above covers that case visually + audibly (OS sound).
             playNotificationSoundRef.current();
           }
         }
       })
       .subscribe();
 
-    // Listener for settings changes
+    // Listener for real-time settings changes
     const settingsChannel = supabase
       .channel("global-settings-rt")
       .on("postgres_changes", {
         event: "UPDATE",
         schema: "public",
         table: "config_sucursal",
-        filter: `sucursal_id=eq.${sucursalId}`
+        filter: `sucursal_id=eq.${sucursalId}`,
       }, (payload) => {
         panelSettingsRef.current = payload.new.panel_settings;
       })
@@ -157,7 +226,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       supabase.removeChannel(channel);
       supabase.removeChannel(settingsChannel);
     };
-  }, [sucursalId]);
+  }, [sucursalId]); // stable — no function dependencies needed since we use refs
 
   return (
     <NotificationContext.Provider value={{ playNotificationSound, enableAudio, audioEnabled }}>
