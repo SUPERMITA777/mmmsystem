@@ -112,11 +112,8 @@ export default function FlyerOverlay({
     }
 
     function handleVerCarta() {
+        // Solo cerrar el flyer → el usuario queda en la carta
         onClose();
-        if (onOpenCart) {
-            // pequeño delay para que el flyer cierre primero
-            setTimeout(() => onOpenCart(), 150);
-        }
     }
 
     // Si cargando o no hay flyer activo → no renderizamos nada

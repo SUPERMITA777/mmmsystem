@@ -12,7 +12,7 @@ import AdicionalesManagerModal from "@/components/menu/AdicionalesManagerModal";
 import FlyerManagerModal from "@/components/admin/FlyerManagerModal";
 import CartaGeneratorButton from "@/components/admin/CartaGeneratorButton";
 import MenuExportButton from "@/components/menu/MenuExportButton";
-import { Upload, DollarSign, Megaphone } from "lucide-react";
+import { Upload, DollarSign, Megaphone, QrCode, Download, X } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import ImportarMenuModal from "@/components/menu/ImportarMenuModal";
 
@@ -54,8 +54,10 @@ export default function MenuPage() {
   const [isAdicionalesModalOpen, setIsAdicionalesModalOpen] = useState(false);
   const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
-  const { sucursalId, loading: tenantLoading } = useTenant();
+  const { sucursalId, tenantSlug, loading: tenantLoading } = useTenant();
 
   useEffect(() => {
     if (sucursalId) loadCategorias();
@@ -512,6 +514,33 @@ export default function MenuPage() {
 
   const productoActual = productosCompletos.find((p) => p.id === productoSeleccionado) || null;
 
+  function handleGenerateQrCarta() {
+    const baseUrl = window.location.origin;
+    const cartaUrl = `${baseUrl}/${tenantSlug}`;
+    // Usar API pública para generar imagen QR
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(cartaUrl)}&margin=16&format=png`;
+    setQrImageUrl(qrApiUrl);
+    setIsQrModalOpen(true);
+  }
+
+  async function downloadQrImage() {
+    if (!qrImageUrl) return;
+    try {
+      const response = await fetch(qrImageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `qr-carta-${tenantSlug}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error descargando QR:", err);
+      // Fallback: abrir en nueva pestaña
+      window.open(qrImageUrl, "_blank");
+    }
+  }
+
   async function handleDuplicateProducto(id: string) {
     try {
       setLoading(true);
@@ -591,6 +620,13 @@ export default function MenuPage() {
           </button>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handleGenerateQrCarta}
+            className="flex items-center gap-2 px-3 py-2 text-emerald-600 hover:text-emerald-900 text-sm transition-colors font-semibold"
+          >
+            <QrCode size={15} />
+            QR CARTA
+          </button>
           <button
             onClick={() => setIsFlyerModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 text-purple-600 hover:text-purple-900 text-sm transition-colors font-semibold"
@@ -719,6 +755,41 @@ export default function MenuPage() {
           if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
         }}
       />
+
+      {/* Modal QR Carta */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-4 w-full max-w-xs relative">
+            <button
+              onClick={() => setIsQrModalOpen(false)}
+              className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-700 transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <QrCode size={20} className="text-emerald-600" />
+              QR de la Carta
+            </h2>
+            {qrImageUrl && (
+              <img
+                src={qrImageUrl}
+                alt="QR Carta"
+                className="w-48 h-48 rounded-xl border border-gray-100 shadow"
+              />
+            )}
+            <p className="text-xs text-gray-500 text-center break-all">
+              {typeof window !== "undefined" ? `${window.location.origin}/${tenantSlug}` : ""}
+            </p>
+            <button
+              onClick={downloadQrImage}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors text-sm shadow"
+            >
+              <Download size={16} />
+              Descargar QR
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
