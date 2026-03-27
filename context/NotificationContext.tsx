@@ -158,25 +158,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const playNotificationSound = useCallback((force = false) => {
     try {
+      // Usamos el ref para settings para asegurar datos frescos sin re-crear el callback
       const panelSettings = panelSettingsRef.current;
       const soundEnabled = panelSettings?.notificacion_sonora !== false;
 
-      console.group("[NotificationContext] 🔊 Alerta activada");
-
+      console.group("[NotificationContext] 🔊 Intentando Alerta Sonora");
+      
       // Re-asegurar que el AudioContext esté activo
       if (audioContextRef.current?.state === "suspended") {
           console.log("🔄 Reanudando AudioContext...");
           audioContextRef.current.resume();
       }
 
-      if (!soundEnabled && !force) {
-          console.log("❌ Cancelado por ajustes (notificacion_sonora: false)");
+      // IMPORTANTE: Para evitar stale closures, leemos el estado de audio directamente del ref
+      // que actualizaremos en cada render
+      if (!audioEnabledRef.current && !force) {
+          console.log("❌ Cancelado: El usuario no ha habilitado el audio (audioEnabledRef es false)");
           console.groupEnd();
           return;
       }
 
-      if (!audioEnabled && !force) {
-          console.log("❌ Cancelado: El usuario no ha habilitado el audio");
+      if (!soundEnabled && !force) {
+          console.log("❌ Cancelado por ajustes (notificacion_sonora: false)");
           console.groupEnd();
           return;
       }
@@ -189,8 +192,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const predefinedSound = panelSettings?.sonido_notificacion || "campana_1";
 
       if (customSoundUrl) {
-          console.log("🎵 Cargando sonido personalizado:", customSoundUrl);
-          // Cache busting para evitar ERR_CACHE_OPERATION_NOT_SUPPORTED
+          console.log("🎵 Reproduciendo sonido personalizado:", customSoundUrl);
           const audioUrl = `${customSoundUrl}${customSoundUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
           const audio = new Audio(audioUrl);
           audio.volume = 1.0;
@@ -199,6 +201,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               playOscillatorTone(predefinedSound);
           });
       } else {
+          console.log("🔔 Reproduciendo tono predefinido:", predefinedSound);
           playOscillatorTone(predefinedSound);
       }
 
@@ -208,12 +211,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.error("[NotificationContext] Error en alerta:", e);
       console.groupEnd();
     }
-  }, [triggerFlash, speakNotification, playOscillatorTone, audioEnabled]);
+  }, [triggerFlash, speakNotification, playOscillatorTone]); // Quitamos audioEnabled de deps
 
-  // UPDATE REF FOR SUPABASE CHANNELS
+  // MANTENER REFS ACTUALIZADOS PARA EVITAR STALE CLOSURES
+  const audioEnabledRef = useRef(audioEnabled);
   useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
     playNotificationSoundRef.current = playNotificationSound;
-  }, [playNotificationSound]);
+  }, [audioEnabled, playNotificationSound]);
 
   const enableAudio = useCallback(() => {
     setAudioEnabled(true);
