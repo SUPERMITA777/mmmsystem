@@ -273,9 +273,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!sucursalId) return;
 
     const fetchCurrentIds = async () => {
-      const { data } = await supabase.from("pedidos").select("id").eq("sucursal_id", sucursalId).in("estado", ["pendiente", "confirmado"]).order("created_at", { ascending: false }).limit(30);
-      if (data) knownIdsRef.current = new Set(data.map(p => p.id));
-      firstLoadRef.current = false;
+      try {
+        const { data, error } = await supabase
+          .from("pedidos")
+          .select("id")
+          .eq("sucursal_id", sucursalId)
+          .in("estado", ["pendiente", "confirmado"])
+          .order("created_at", { ascending: false })
+          .limit(50);
+        
+        if (error) throw error;
+        
+        if (data) {
+          const ids = data.map(p => p.id);
+          // Si es la primera vez, solo llenamos el set
+          if (firstLoadRef.current) {
+            knownIdsRef.current = new Set(ids);
+            firstLoadRef.current = false;
+            console.log("[NotificationContext] ✅ IDs iniciales cargados:", knownIdsRef.current.size);
+          } else {
+            // Si no es la primera vez (polling fallback), buscamos nuevos
+            for (const id of ids) {
+              if (!knownIdsRef.current.has(id)) {
+                console.log("[NotificationContext] 🔍 Detectado nuevo pedido por POLLING:", id);
+                knownIdsRef.current.add(id);
+                // Buscar el objeto completo para la notificación del sistema
+                const { data: fullPedido } = await supabase.from("pedidos").select("*").eq("id", id).single();
+                if (fullPedido) showSystemNotification(fullPedido);
+                if (playNotificationSoundRef.current) playNotificationSoundRef.current();
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[NotificationContext] Error en polling/fetch:", e);
+      }
     };
 
     const fetchSettings = async () => {
@@ -286,40 +318,38 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchCurrentIds();
     fetchSettings();
 
+    // Polling de seguridad cada 20 segundos (Fallback por si Realtime falla)
+    const pollInterval = setInterval(fetchCurrentIds, 20000);
+
     const setupRealtime = () => {
       if (!sucursalId) return;
 
-      console.log(`[NotificationContext] 📡 Iniciando suscripción Realtime para: ${sucursalId}`);
+      console.log(`[NotificationContext] 📡 Intentando suscripción Realtime: ${sucursalId}`);
 
       const channel = supabase
-        .channel(`rt-ord-notif-${sucursalId}`)
+        .channel(`rt-orders-${sucursalId}`)
         .on("postgres_changes", { 
           event: "INSERT", 
           schema: "public", 
           table: "pedidos", 
           filter: `sucursal_id=eq.${sucursalId}` 
         }, (payload) => {
-          console.log("[NotificationContext] 🔔 NUEVO PEDIDO DETECTADO:", payload.new.id);
-          if (!firstLoadRef.current) {
-            const newPedido = payload.new;
-            if (!knownIdsRef.current.has(newPedido.id)) {
-              knownIdsRef.current.add(newPedido.id);
-              showSystemNotification(newPedido);
-              if (playNotificationSoundRef.current) {
-                  console.log("[NotificationContext] 🔊 Ejecutando alerta sonora");
-                  playNotificationSoundRef.current();
-              }
+          const newPedido = payload.new;
+          console.log("[NotificationContext] 🔔 NUEVO PEDIDO Realtime:", newPedido.id);
+          
+          if (!knownIdsRef.current.has(newPedido.id)) {
+            knownIdsRef.current.add(newPedido.id);
+            showSystemNotification(newPedido);
+            if (playNotificationSoundRef.current) {
+                console.log("[NotificationContext] 🔊 Disparando sonido");
+                playNotificationSoundRef.current();
             }
           }
         })
         .subscribe(async (status) => {
-            console.log(`[NotificationContext] 📡 Estado suscripción real-time: ${status}`);
+            console.log(`[NotificationContext] 📡 Realtime status: ${status}`);
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-                console.log("[NotificationContext] 🔄 Error detectado, reiniciando canal en 5s...");
-                setTimeout(() => {
-                    if (channel) supabase.removeChannel(channel);
-                    setupRealtime();
-                }, 5000);
+                console.warn("[NotificationContext] ⚠️ Realtime falló, el sistema usará POLLING como respaldo.");
             }
         });
       
@@ -329,13 +359,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const channel = setupRealtime();
 
     const settingsChannel = sucursalId ? supabase
-      .channel(`rt-set-notif-${sucursalId}`)
+      .channel(`rt-settings-${sucursalId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "config_sucursal", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         panelSettingsRef.current = payload.new.panel_settings;
       })
       .subscribe() : undefined;
 
     return () => {
+      clearInterval(pollInterval);
       if (channel) supabase.removeChannel(channel);
       if (settingsChannel) supabase.removeChannel(settingsChannel);
     };
