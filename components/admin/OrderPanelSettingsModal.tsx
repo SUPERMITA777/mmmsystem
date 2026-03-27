@@ -11,6 +11,7 @@ interface PanelSettings {
     ocultar_pedidos_pago_pendiente: boolean;
     sonido_notificacion: string;
     notificacion_sonora: boolean;
+    voz_notificacion_texto?: string;
     sonido_notificacion_custom_url?: string;
     whatsapp_templates: {
         confirmado: string;
@@ -230,6 +231,20 @@ export default function OrderPanelSettingsModal({
                                         <option>Hasta ver el pedido</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <div className="space-y-1 mt-2">
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight px-1 flex justify-between items-center">
+                                    <span>Texto de voz personalizada</span>
+                                    <span className="text-[9px] text-purple-400 normal-case font-medium italic">Usa %NOMBRE% para el nombre del cliente</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={settings.voz_notificacion_texto || ""}
+                                    onChange={e => setSettings({ ...settings, voz_notificacion_texto: e.target.value })}
+                                    placeholder="Ej: Nuevo pedido de %NOMBRE%"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#7B1FA2]/20"
+                                />
                             </div>
 
                             {settings.sonido_notificacion === "custom" && (

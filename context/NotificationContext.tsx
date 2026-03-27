@@ -103,14 +103,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (typeof window !== "undefined" && window.speechSynthesis) {
         console.log("[NotificationContext] 🗣️ Synthesizing speech:", text);
         
-        // Cancelar cualquier discurso previo para evitar colas
         window.speechSynthesis.cancel();
         
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "es-ES";
-        utterance.rate = 0.9; // Un poco más lento para mayor claridad
+        
+        // Intentar encontrar una voz latina o argentina
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.lang === 'es-AR') || 
+                              voices.find(v => v.lang === 'es-MX') || 
+                              voices.find(v => v.lang.startsWith('es-'));
+        
+        if (preferredVoice) utterance.voice = preferredVoice;
+        
+        utterance.lang = preferredVoice?.lang || "es-ES";
+        utterance.rate = 0.9;
         utterance.pitch = 1.0;
-        utterance.volume = 1.0; // Máximo volumen de síntesis
+        utterance.volume = 1.0;
         window.speechSynthesis.speak(utterance);
     }
   }, []);
@@ -132,7 +140,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           gain.connect(ctx.destination);
           osc.type = oscType;
           osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          // Aumentar la ganancia para un sonido mucho más fuerte
           gain.gain.setValueAtTime(vol * 2.5, ctx.currentTime + start); 
           gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
           osc.start(ctx.currentTime + start);
@@ -146,7 +153,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           playTone(1800, 0, 0.2, 0.6, "sine");
           playTone(2200, 0.05, 0.2, 0.6, "sine");
       } else {
-          // Tono de alerta MUY fuerte (campana_1 o default)
           playTone(1000, 0, 1.0, 1.0, "square");
           playTone(1200, 0.15, 1.0, 1.0, "square");
           playTone(800, 0.3, 1.0, 1.0, "square");
@@ -156,22 +162,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const playNotificationSound = useCallback((force = false) => {
+  const playNotificationSound = useCallback((force = false, clienteNombre?: string) => {
     try {
-      // Usamos el ref para settings para asegurar datos frescos sin re-crear el callback
       const panelSettings = panelSettingsRef.current;
       const soundEnabled = panelSettings?.notificacion_sonora !== false;
 
       console.group("[NotificationContext] 🔊 Intentando Alerta Sonora");
       
-      // Re-asegurar que el AudioContext esté activo
       if (audioContextRef.current?.state === "suspended") {
           console.log("🔄 Reanudando AudioContext...");
           audioContextRef.current.resume();
       }
 
-      // IMPORTANTE: Para evitar stale closures, leemos el estado de audio directamente del ref
-      // que actualizaremos en cada render
       if (!audioEnabledRef.current && !force) {
           console.log("❌ Cancelado: El usuario no ha habilitado el audio (audioEnabledRef es false)");
           console.groupEnd();
@@ -205,7 +207,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           playOscillatorTone(predefinedSound);
       }
 
-      speakNotification("Nuevo pedido recibido");
+      // LÓGICA DE VOZ PERSONALIZADA
+      let textoVoz = panelSettings?.voz_notificacion_texto || "Nuevo pedido recibido";
+      if (clienteNombre) {
+          textoVoz = textoVoz.replace(/%NOMBRE%/gi, clienteNombre);
+      } else {
+          textoVoz = textoVoz.replace(/%NOMBRE%/gi, "un cliente");
+      }
+
+      speakNotification(textoVoz);
       console.groupEnd();
     } catch (e) {
       console.error("[NotificationContext] Error en alerta:", e);
@@ -299,8 +309,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 knownIdsRef.current.add(id);
                 // Buscar el objeto completo para la notificación del sistema
                 const { data: fullPedido } = await supabase.from("pedidos").select("*").eq("id", id).single();
-                if (fullPedido) showSystemNotification(fullPedido);
-                if (playNotificationSoundRef.current) playNotificationSoundRef.current();
+                if (fullPedido) {
+                    showSystemNotification(fullPedido);
+                    if (playNotificationSoundRef.current) {
+                        playNotificationSoundRef.current(false, fullPedido.cliente_nombre);
+                    }
+                }
               }
             }
           }
@@ -318,8 +332,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchCurrentIds();
     fetchSettings();
 
-    // Polling de seguridad cada 10 segundos (Fallback por si Realtime falla)
-    const pollInterval = setInterval(fetchCurrentIds, 10000);
+    // Polling de seguridad cada 5 segundos (Fallback por si Realtime falla)
+    const pollInterval = setInterval(fetchCurrentIds, 5000);
 
     const setupRealtime = () => {
       if (!sucursalId) return;
@@ -342,7 +356,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             showSystemNotification(newPedido);
             if (playNotificationSoundRef.current) {
                 console.log("[NotificationContext] 🔊 Disparando sonido");
-                playNotificationSoundRef.current();
+                playNotificationSoundRef.current(false, newPedido.cliente_nombre);
             }
           }
         })
