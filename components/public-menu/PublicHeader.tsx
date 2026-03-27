@@ -6,11 +6,31 @@ interface PublicHeaderProps {
     sucursal: any;
     isOpen: boolean;
     statusMessage?: string;
+    textoDelivery?: string;
+    textoTakeaway?: string;
+    bannerUrl?: string;
+    descripcion?: string;
 }
 
-export default function PublicHeader({ sucursal, isOpen, statusMessage }: PublicHeaderProps) {
+export default function PublicHeader({
+    sucursal,
+    isOpen,
+    statusMessage,
+    textoDelivery = "DELIVERY",
+    textoTakeaway = "RETIRAR",
+    bannerUrl,
+    descripcion,
+}: PublicHeaderProps) {
     return (
-        <header className="relative w-full bg-slate-950">
+        <header className="relative w-full bg-slate-950 overflow-hidden">
+            {/* Optional banner image as background */}
+            {bannerUrl && (
+                <div
+                    className="absolute inset-0 bg-cover bg-center opacity-20"
+                    style={{ backgroundImage: `url(${bannerUrl})` }}
+                />
+            )}
+
             {/* Info Container */}
             <div className="relative z-20 max-w-5xl mx-auto px-4 pt-6 pb-6">
                 <div className="flex flex-col items-center gap-4">
@@ -33,6 +53,11 @@ export default function PublicHeader({ sucursal, isOpen, statusMessage }: Public
                     <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter text-center">
                         {sucursal?.nombre || "MMM PIZZA ARTESANAL"}
                     </h1>
+
+                    {/* Descripción / slogan */}
+                    {descripcion && (
+                        <p className="text-white/50 text-xs text-center max-w-xs leading-relaxed">{descripcion}</p>
+                    )}
                 </div>
 
                 {/* Status Bar */}
@@ -50,10 +75,10 @@ export default function PublicHeader({ sucursal, isOpen, statusMessage }: Public
                             className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] text-white shadow-xl transition-all uppercase"
                             style={{ backgroundColor: 'var(--color-primario, #f97316)' }}
                         >
-                            DELIVERY
+                            {textoDelivery}
                         </button>
                         <button className="flex-1 py-3 px-4 rounded-xl text-[10px] font-black tracking-[0.15em] text-slate-500 hover:text-white transition-all uppercase">
-                            RETIRAR
+                            {textoTakeaway}
                         </button>
                     </div>
                 </div>

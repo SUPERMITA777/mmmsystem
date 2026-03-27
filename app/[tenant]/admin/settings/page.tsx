@@ -14,9 +14,11 @@ import { ComandasTab } from "@/components/settings/ComandasTab";
 import { LocalidadesTab } from "@/components/settings/LocalidadesTab";
 import { PanelTab } from "@/components/settings/PanelTab";
 import { DatabaseTab } from "@/components/settings/DatabaseTab";
+import { WebConfigTab } from "@/components/settings/WebConfigTab";
 
 const TABS = [
   { id: "panel", label: "Panel" },
+  { id: "web", label: "🌐 Web" },
   { id: "modalidades", label: "Modalidades" },
   { id: "pedidos", label: "Pedidos" },
   { id: "horarios", label: "Horarios" },
@@ -86,6 +88,10 @@ export default function SettingsPage() {
 
         <TabPanel id="localidades" activeId={activeTab}>
           <LocalidadesTab />
+        </TabPanel>
+
+        <TabPanel id="web" activeId={activeTab}>
+          <WebConfigTab />
         </TabPanel>
 
         <TabPanel id="database" activeId={activeTab}>

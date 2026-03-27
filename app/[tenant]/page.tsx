@@ -46,6 +46,15 @@ function PublicMenuContent() {
   const [statusMessage, setStatusMessage] = useState("");
   const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
   const [descuentos, setDescuentos] = useState<any[]>([]);
+  const [webConfig, setWebConfig] = useState({
+    primario: "#f97316",
+    secundario: "#1a1a2e",
+    bannerUrl: "",
+    descripcion: "",
+    textoDelivery: "DELIVERY",
+    textoTakeaway: "RETIRAR",
+    mensajeCerrado: "",
+  });
 
   useEffect(() => {
     if (sucursalId) {
@@ -179,17 +188,22 @@ function PublicMenuContent() {
     try {
       setLoading(true);
 
-      // Fetch store colors from config_sucursal
+      // Fetch store config
       if (sucursal?.id) {
         const { data: cfg } = await supabase
           .from("config_sucursal")
-          .select("color_primario, color_secundario")
+          .select("color_primario, color_secundario, banner_url, texto_delivery, texto_takeaway, mensaje_cerrado")
           .eq("sucursal_id", sucursal.id)
           .maybeSingle();
         if (cfg) {
-          setStoreColors({
-            primario: cfg.color_primario || "#f97316",
-            secundario: cfg.color_secundario || "#1a1a2e",
+          setWebConfig({
+            primario: (cfg as any).color_primario || "#f97316",
+            secundario: (cfg as any).color_secundario || "#1a1a2e",
+            bannerUrl: (cfg as any).banner_url || "",
+            descripcion: (sucursal as any)?.descripcion || "",
+            textoDelivery: (cfg as any).texto_delivery || "DELIVERY",
+            textoTakeaway: (cfg as any).texto_takeaway || "RETIRAR",
+            mensajeCerrado: (cfg as any).mensaje_cerrado || "",
           });
         }
       }
@@ -301,14 +315,22 @@ function PublicMenuContent() {
     <main
       className="min-h-screen text-slate-50"
       style={{
-        "--color-primario": storeColors.primario,
-        "--color-secundario": storeColors.secundario,
+        "--color-primario": webConfig.primario,
+        "--color-secundario": webConfig.secundario,
         backgroundColor: "#050505",
-        backgroundImage: `radial-gradient(circle at top, ${storeColors.secundario} 0%, #050505 100%)`,
+        backgroundImage: `radial-gradient(circle at top, ${webConfig.secundario} 0%, #050505 100%)`,
       } as React.CSSProperties}
     >
       {/* Header — hidden when product detail modal is open */}
-      {!selectedProduct && <PublicHeader sucursal={sucursal} isOpen={isOpen} statusMessage={statusMessage} />}
+      {!selectedProduct && <PublicHeader
+        sucursal={sucursal}
+        isOpen={isOpen}
+        statusMessage={statusMessage || (webConfig.mensajeCerrado && !isOpen ? webConfig.mensajeCerrado : undefined)}
+        textoDelivery={webConfig.textoDelivery}
+        textoTakeaway={webConfig.textoTakeaway}
+        bannerUrl={webConfig.bannerUrl}
+        descripcion={webConfig.descripcion}
+      />}
 
       {/* Category Nav — hidden when product detail modal is open */}
       {!selectedProduct && (
