@@ -318,8 +318,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     fetchCurrentIds();
     fetchSettings();
 
-    // Polling de seguridad cada 20 segundos (Fallback por si Realtime falla)
-    const pollInterval = setInterval(fetchCurrentIds, 20000);
+    // Polling de seguridad cada 10 segundos (Fallback por si Realtime falla)
+    const pollInterval = setInterval(fetchCurrentIds, 10000);
 
     const setupRealtime = () => {
       if (!sucursalId) return;
