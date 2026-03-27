@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 
 interface NotificationContextType {
-  playNotificationSound: () => void;
+  playNotificationSound: (force?: boolean, clienteNombre?: string) => void;
   enableAudio: () => void;
   audioEnabled: boolean;
   flash: boolean;
@@ -45,7 +45,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const firstLoadRef = useRef(true);
   const audioContextRef = useRef<AudioContext | null>(null);
   const notifPermissionRef = useRef<NotificationPermission>("default");
-  const playNotificationSoundRef = useRef<() => void>(() => {});
+  const playNotificationSoundRef = useRef<(force?: boolean, clienteNombre?: string) => void>(() => {});
 
   // SYNC REF TO AVOID STALE CLOSURES IN SUPABASE SUBSCRIPTIONS
   useEffect(() => {
