@@ -313,7 +313,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
                 console.log("[NotificationContext] 🔄 Error detectado, reiniciando canal en 5s...");
                 setTimeout(() => {
-                    supabase.removeChannel(channel);
+                    if (channel) supabase.removeChannel(channel);
                     setupRealtime();
                 }, 5000);
             }
@@ -324,16 +324,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const channel = setupRealtime();
 
-    const settingsChannel = supabase
+    const settingsChannel = sucursalId ? supabase
       .channel(`rt-set-notif-${sucursalId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "config_sucursal", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         panelSettingsRef.current = payload.new.panel_settings;
       })
-      .subscribe();
+      .subscribe() : undefined;
 
     return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(settingsChannel);
+      if (channel) supabase.removeChannel(channel);
+      if (settingsChannel) supabase.removeChannel(settingsChannel);
     };
   }, [sucursalId]);
 
