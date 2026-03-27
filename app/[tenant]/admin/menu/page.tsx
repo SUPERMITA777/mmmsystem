@@ -37,6 +37,7 @@ type Producto = {
   visible_en_menu: boolean;
   producto_oculto: boolean;
   producto_sugerido: boolean;
+  ficha_tecnica_id?: string | null;
 };
 
 export default function MenuPage() {
@@ -204,10 +205,16 @@ export default function MenuPage() {
         return;
       }
 
-      // 1. Actualizar tabla productos
+      // 1. Actualizar tabla productos (incluyendo ficha_tecnica_id si está presente)
+      const updateData: any = { ...pData };
+      // Si ficha_tecnica_id es undefined, no lo incluimos para no borrar el valor
+      if ('ficha_tecnica_id' in pData) {
+        updateData.ficha_tecnica_id = pData.ficha_tecnica_id ?? null;
+      }
+
       const { error: pError } = await supabase
         .from("productos")
-        .update(pData)
+        .update(updateData)
         .eq("id", pData.id);
 
       if (pError) throw pError;

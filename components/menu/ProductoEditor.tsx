@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ChefHat, TrendingUp } from "lucide-react";
 import ImageCropperModal from "@/components/ui/ImageCropperModal";
 
 type Categoria = {
@@ -26,12 +26,19 @@ type Producto = {
   visible_en_menu: boolean;
   producto_oculto: boolean;
   producto_sugerido: boolean;
-  grupos_adicionales?: string[]; // IDs de los grupos vinculados
+  grupos_adicionales?: string[];
+  ficha_tecnica_id?: string | null;
 };
 
 type GrupoAdicional = {
   id: string;
   titulo: string;
+};
+
+type FichaTecnica = {
+  id: string;
+  nombre: string;
+  costo_total: number;
 };
 
 export function ProductoEditor({
@@ -68,6 +75,7 @@ export function ProductoEditor({
   const [formData, setFormData] = useState<Producto | null>(isCreating ? emptyProduct : producto);
   const [todosLosGrupos, setTodosLosGrupos] = useState<GrupoAdicional[]>([]);
   const [gruposAsignados, setGruposAsignados] = useState<string[]>([]);
+  const [fichasTecnicas, setFichasTecnicas] = useState<FichaTecnica[]>([]);
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,7 +88,28 @@ export function ProductoEditor({
         loadGruposYAsignaciones(producto.id);
       }
     }
+    // Load fichas técnicas when category_id is available
+    if (formData?.categoria_id && formData.categoria_id !== 'sin-categoria') {
+      loadFichasTecnicas(formData.categoria_id);
+    }
   }, [producto, isCreating, defaultCategoriaId]);
+
+  async function loadFichasTecnicas(categoriaId: string) {
+    if (!categoriaId || categoriaId === 'sin-categoria') return;
+    const { data: catData } = await supabase
+      .from("categorias")
+      .select("sucursal_id")
+      .eq("id", categoriaId)
+      .single();
+    if (catData?.sucursal_id) {
+      const { data } = await supabase
+        .from("fichas_tecnicas")
+        .select("id, nombre, costo_total")
+        .eq("sucursal_id", catData.sucursal_id)
+        .order("nombre");
+      setFichasTecnicas((data as FichaTecnica[]) || []);
+    }
+  }
 
   async function loadGruposYAsignaciones(productoId: string) {
     if (formData?.categoria_id && formData.categoria_id !== 'sin-categoria') {
@@ -243,6 +272,55 @@ export function ProductoEditor({
               />
             </div>
           </fieldset>
+
+          {/* Ficha Técnica / Receta */}
+          <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50">
+            <div className="flex items-center gap-2 mb-2">
+              <ChefHat size={14} className="text-purple-500" />
+              <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Ficha Técnica / Receta</span>
+            </div>
+            <select
+              value={formData.ficha_tecnica_id || ""}
+              onChange={e => {
+                handleChange("ficha_tecnica_id", e.target.value || null);
+                if (e.target.value && formData.categoria_id) loadFichasTecnicas(formData.categoria_id);
+              }}
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 outline-none focus:border-purple-400 transition-colors"
+            >
+              <option value="">Sin receta asignada</option>
+              {fichasTecnicas.map(f => (
+                <option key={f.id} value={f.id}>{f.nombre}</option>
+              ))}
+            </select>
+            {formData.ficha_tecnica_id && (() => {
+              const ficha = fichasTecnicas.find(f => f.id === formData.ficha_tecnica_id);
+              if (!ficha) return null;
+              const costo = ficha.costo_total;
+              const precio = formData.precio || 0;
+              const utilidad = precio - costo;
+              const margen = costo > 0 ? (utilidad / costo) * 100 : 0;
+              const margenColor = margen > 100 ? "bg-green-100 text-green-700" : margen > 50 ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-600";
+              return (
+                <div className="mt-2 flex items-center justify-between bg-white rounded-lg border border-gray-100 px-3 py-2">
+                  <div className="flex items-center gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-400 font-medium">Costo receta </span>
+                      <span className="font-black text-gray-800">$ {new Intl.NumberFormat("es-AR").format(costo)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-medium">Utilidad </span>
+                      <span className={`font-black ${utilidad >= 0 ? "text-green-600" : "text-red-500"}`}>
+                        {utilidad >= 0 ? "+" : ""}$ {new Intl.NumberFormat("es-AR").format(utilidad)}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black ${margenColor}`}>
+                    <TrendingUp size={10} /> {Math.round(margen)}%
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
 
           {/* Visibilidad y Stock */}
           <div>

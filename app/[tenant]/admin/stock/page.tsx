@@ -6,7 +6,7 @@ import { Search, Plus, Edit2, Package, AlertTriangle, DollarSign, CookingPot, Hi
 import { useTenant } from "@/context/TenantContext";
 import IngredientModal from "@/components/admin/stock/IngredientModal";
 import MovementModal from "@/components/admin/stock/MovementModal";
-import RecipeModal from "@/components/admin/stock/RecipeModal";
+import FichasTecnicasTab from "@/components/admin/stock/FichasTecnicasTab";
 
 type Ingrediente = {
     id: string;
@@ -30,19 +30,12 @@ type Movimiento = {
     ingredientes?: { nombre: string; unidad: string };
 };
 
-type ProductoConCosto = {
-    id: string;
-    nombre: string;
-    precio: number;
-    categoria_nombre?: string;
-    costo_receta: number;
-};
+
 
 export default function StockPage() {
     const [tab, setTab] = useState<"inventario" | "recetas" | "movimientos" | "compras">("inventario");
     const [ingredientes, setIngredientes] = useState<Ingrediente[]>([]);
     const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-    const [productos, setProductos] = useState<ProductoConCosto[]>([]);
     const [busqueda, setBusqueda] = useState("");
     const [filtroProveedor, setFiltroProveedor] = useState("");
     const [filtroCategoria, setFiltroCategoria] = useState("");
@@ -52,15 +45,13 @@ export default function StockPage() {
     // Modals
     const [isIngModalOpen, setIsIngModalOpen] = useState(false);
     const [isMovModalOpen, setIsMovModalOpen] = useState(false);
-    const [isRecModalOpen, setIsRecModalOpen] = useState(false);
     const [selectedIng, setSelectedIng] = useState<Ingrediente | null>(null);
-    const [selectedProd, setSelectedProd] = useState<any | null>(null);
 
     useEffect(() => {
         if (sucursalId) {
             if (tab === "inventario" || tab === "compras") fetchIngredientes();
             if (tab === "movimientos") fetchMovimientos();
-            if (tab === "recetas") fetchProductosRecetas();
+            // recetas tab is self-contained via FichasTecnicasTab
         }
     }, [sucursalId, tab]);
 
@@ -85,30 +76,7 @@ export default function StockPage() {
         setLoading(false);
     }
 
-    async function fetchProductosRecetas() {
-        if (!sucursalId) return;
-        setLoading(true);
-        // Obtener productos y sus recetas con ingredientes para el costo
-        const { data: prods } = await supabase
-            .from("productos")
-            .select("id, nombre, precio, categorias(nombre), recetas(*, ingredientes(costo_unitario))")
-            .eq("sucursal_id", sucursalId)
-            .eq("activo", true)
-            .order("nombre");
 
-        const mapped = (prods || []).map(p => {
-            const costo = (p.recetas || []).reduce((acc: number, r: any) => acc + (r.cantidad * (r.ingredientes?.costo_unitario || 0)), 0);
-            return {
-                id: p.id,
-                nombre: p.nombre,
-                precio: p.precio,
-                categoria_nombre: (p as any).categorias?.nombre,
-                costo_receta: costo
-            };
-        });
-        setProductos(mapped);
-        setLoading(false);
-    }
 
     const filteredIng = ingredientes.filter(i => i.nombre.toLowerCase().includes(busqueda.toLowerCase()));
     const bajoStock = ingredientes.filter(i => i.stock_actual <= i.stock_minimo).length;
@@ -386,46 +354,13 @@ export default function StockPage() {
                             </table>
                         )}
 
-                        {tab === "recetas" && (
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-gray-400 text-[10px] uppercase tracking-widest border-b border-gray-50 bg-gray-50/50">
-                                        <th className="px-6 py-4 text-left font-black">Producto</th>
-                                        <th className="px-6 py-4 text-left font-black">Categoría</th>
-                                        <th className="px-6 py-4 text-right font-black">Precio Venta</th>
-                                        <th className="px-6 py-4 text-right font-black">Costo Producción</th>
-                                        <th className="px-6 py-4 text-right font-black">Margen Sugerido</th>
-                                        <th className="px-6 py-4 text-center font-black">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {productos.length === 0 ? (
-                                        <tr><td colSpan={6} className="text-center py-20 text-gray-300">No hay productos habilitados</td></tr>
-                                    ) : productos.map(p => {
-                                        const utilidad = p.precio - p.costo_receta;
-                                        const margen = p.costo_receta > 0 ? (utilidad / p.costo_receta) * 100 : 0;
-                                        return (
-                                            <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-6 py-4 font-bold text-gray-900">{p.nombre}</td>
-                                                <td className="px-6 py-4 text-gray-500 font-medium italic">{p.categoria_nombre || "—"}</td>
-                                                <td className="px-6 py-4 text-right font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.precio)}</td>
-                                                <td className="px-6 py-4 text-right font-black text-green-600">$ {new Intl.NumberFormat("es-AR").format(p.costo_receta)}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${margen > 100 ? "bg-green-100 text-green-700" : margen > 50 ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"}`}>
-                                                        {Math.round(margen)}% Margen
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => { setSelectedProd({ id: p.id, nombre: p.nombre }); setIsRecModalOpen(true); }}
-                                                        className="px-4 py-1.5 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-gray-800 transition-all shadow-md shadow-gray-100 active:scale-95"
-                                                    >Config. Receta</button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                        {tab === "recetas" && sucursalId && (
+                            <div className="p-6">
+                                <FichasTecnicasTab
+                                    sucursalId={sucursalId}
+                                    ingredientes={ingredientes}
+                                />
+                            </div>
                         )}
                     </div>
                 )}
@@ -445,14 +380,6 @@ export default function StockPage() {
                 onSave={() => { fetchIngredientes(); if (tab === "movimientos") fetchMovimientos(); }}
                 ingredient={selectedIng}
                 sucursalId={sucursalId || ""}
-            />
-            <RecipeModal
-                isOpen={isRecModalOpen}
-                onClose={() => setIsRecModalOpen(false)}
-                onSave={fetchProductosRecetas}
-                product={selectedProd}
-                sucursalId={sucursalId || ""}
-                allIngredients={ingredientes}
             />
         </section>
     );
