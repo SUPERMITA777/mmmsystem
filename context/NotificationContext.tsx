@@ -102,10 +102,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const speakNotification = useCallback((text: string) => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
         console.log("[NotificationContext] 🗣️ Synthesizing speech:", text);
+        
+        // Cancelar cualquier discurso previo para evitar colas
+        window.speechSynthesis.cancel();
+        
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "es-ES";
-        utterance.rate = 1.1;
-        utterance.volume = 1.0;
+        utterance.rate = 0.9; // Un poco más lento para mayor claridad
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0; // Máximo volumen de síntesis
         window.speechSynthesis.speak(utterance);
     }
   }, []);
@@ -119,13 +124,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       const ctx = audioContextRef.current;
       
       if (ctx.state === "suspended") await ctx.resume();
-      if (ctx.state !== "running") {
-          console.warn("⚠️ AudioContext not running. Status:", ctx.state);
-          setIsAudioContextSuspended(true);
-          return;
-      }
-      setIsAudioContextSuspended(false);
-
+      
       const playTone = (freq: number, start: number, duration: number, vol: number, oscType: OscillatorType) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -133,24 +132,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           gain.connect(ctx.destination);
           osc.type = oscType;
           osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(vol * 1.5, ctx.currentTime + start); // Aumentar volumen un 50%
+          // Aumentar la ganancia para un sonido mucho más fuerte
+          gain.gain.setValueAtTime(vol * 2.5, ctx.currentTime + start); 
           gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + duration);
           osc.start(ctx.currentTime + start);
           osc.stop(ctx.currentTime + start + duration + 0.1);
       };
 
       if (type === "campana_2") {
-          // Campana doble más brillante
-          playTone(880, 0, 0.6, 0.6, "triangle");
-          playTone(1108.73, 0.2, 0.6, 0.6, "triangle");
+          playTone(880, 0, 0.8, 0.8, "triangle");
+          playTone(1108.73, 0.2, 0.8, 0.8, "triangle");
       } else if (type === "burbuja") {
-          playTone(1800, 0, 0.1, 0.4, "sine");
-          playTone(2200, 0.05, 0.1, 0.4, "sine");
+          playTone(1800, 0, 0.2, 0.6, "sine");
+          playTone(2200, 0.05, 0.2, 0.6, "sine");
       } else {
-          // Tono de alerta más penetrante (campana_1 o default)
-          playTone(1200, 0, 0.8, 1.0, "square");
-          playTone(1500, 0.1, 0.8, 0.8, "square");
-          playTone(1000, 0.2, 0.8, 0.8, "square");
+          // Tono de alerta MUY fuerte (campana_1 o default)
+          playTone(1000, 0, 1.0, 1.0, "square");
+          playTone(1200, 0.15, 1.0, 1.0, "square");
+          playTone(800, 0.3, 1.0, 1.0, "square");
       }
     } catch (e) {
       console.warn("Oscillator error:", e);
