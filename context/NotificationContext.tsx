@@ -247,7 +247,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         notifPermissionRef.current = p;
       });
     }
-  };
+  }, [playNotificationSound, speakNotification]);
 
   const showSystemNotification = (pedido: any) => {
     if (typeof Notification === "undefined" || notifPermissionRef.current !== "granted") return;
