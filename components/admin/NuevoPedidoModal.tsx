@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
@@ -66,6 +66,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [configSucursal, setConfigSucursal] = useState<any>(null);
     const [validacionDelivery, setValidacionDelivery] = useState<{ valid: boolean; zona?: string; costo: number; loading: boolean; error?: string }>({ valid: false, costo: 0, loading: false });
     const { sucursalId } = useTenant();
+    const isLoadingEditPedido = useRef(false);
     
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
@@ -82,12 +83,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     useEffect(() => {
         if (isOpen && sucursalId) {
-            fetchAll();
+            fetchAll(!!editPedido);
             setView("catalog");
             if (editPedido) {
+                isLoadingEditPedido.current = true;
                 // Pre-fill from existing order
                 const items: CartItem[] = (editPedido.pedido_items || []).map((item: any) => ({
                     id: item.id || crypto.randomUUID(),
+                    producto_id: item.producto_id,
                     nombre: item.nombre_producto,
                     precio: item.precio_unitario,
                     precioOverride: item.precio_unitario,
@@ -106,19 +109,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setTipo(editPedido.tipo || "delivery");
                 setNotaPedido(editPedido.notas || "");
                 setSeAbona("");
+                // Preserve original payment method
                 if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
+                // Restore delivery validation if previously verified
+                if (editPedido.tipo === "delivery") {
+                    setValidacionDelivery({
+                        valid: true,
+                        costo: editPedido.costo_envio || 0,
+                        loading: false,
+                        zona: "Verificado previamente"
+                    });
+                    if (editPedido.cliente_lat && editPedido.cliente_lng) {
+                        setDireccionGeocoded({ lat: editPedido.cliente_lat, lng: editPedido.cliente_lng });
+                    }
+                }
+                // Allow address changes to reset validation only after initial load
+                setTimeout(() => { isLoadingEditPedido.current = false; }, 200);
             } else {
+                isLoadingEditPedido.current = false;
                 setCarrito([]);
                 setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
                 setNotaPedido("");
                 setSeAbona("");
                 setPromoCode("");
                 setPromoResult(null);
+                setValidacionDelivery({ valid: false, costo: 0, loading: false });
+                setDireccionGeocoded(null);
+                setAlternativas([]);
             }
         }
     }, [isOpen, sucursalId]);
 
     useEffect(() => {
+        // Skip reset during initial load of an existing order
+        if (isLoadingEditPedido.current) return;
         // Reset validation when address changes
         if (tipo === "delivery") {
             setValidacionDelivery({ valid: false, costo: 0, loading: false });
@@ -127,7 +151,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         }
     }, [cliente.direccion, tipo]);
 
-    async function fetchAll() {
+    async function fetchAll(isEditing: boolean = false) {
         if (!sucursalId) return;
         const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
 
@@ -165,7 +189,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setCategorias(cats || []);
         const { data: mps } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
         setMetodosPago(mps || []);
-        if (mps?.length) setMetodoPagoId(mps[0].id);
+        // Only set default payment method when creating a new order, not when editing
+        if (mps?.length && !isEditing) setMetodoPagoId(mps[0].id);
         const { data: szonas } = await supabase.from("zonas_entrega").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
         setZonas(szonas || []);
         const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
@@ -393,7 +418,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         const adsMapping: Record<string, number> = {};
         if (item.adicionales) {
             item.adicionales.forEach(a => {
-                const adici = adicionales.find(ad => ad.nombre === a.nombre);
+                // Normalize comparison: trim + lowercase to handle subtle differences
+                const normalizedName = a.nombre.trim().toLowerCase();
+                const adici = adicionales.find(ad => ad.nombre.trim().toLowerCase() === normalizedName);
                 if (adici) {
                     adsMapping[adici.id] = (adsMapping[adici.id] || 0) + (a.cantidad || 1);
                 }
