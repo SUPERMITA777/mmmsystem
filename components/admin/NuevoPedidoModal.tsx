@@ -406,7 +406,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     function editCartItem(idx: number) {
         const item = carrito[idx];
-        const p = productos.find(prod => prod.nombre === item.nombre);
+        const p = productos.find(prod => prod.id === item.producto_id) || productos.find(prod => prod.nombre === item.nombre);
         if (!p) {
             alert("No se puede editar este producto porque ya no se encuentra en el catálogo.");
             return;
@@ -415,12 +415,31 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setCustomQty(item.cantidad);
         setCustomNota(item.nota || "");
 
+        // Helper to normalize strings for robust comparison (handles whitespace, dashes, accents, cases)
+        const normalize = (s: string) => 
+            s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
         const adsMapping: Record<string, number> = {};
         if (item.adicionales) {
+            // Get allowed groups for this product to prioritize matches in those groups
+            const allowedGroupIds = productoGrupos
+                .filter((pg: any) => pg.producto_id === p.id)
+                .map((pg: any) => pg.grupo_id);
+
             item.adicionales.forEach(a => {
-                // Normalize comparison: trim + lowercase to handle subtle differences
-                const normalizedName = a.nombre.trim().toLowerCase();
-                const adici = adicionales.find(ad => ad.nombre.trim().toLowerCase() === normalizedName);
+                const target = normalize(a.nombre);
+                
+                // Priority 1: Match name in allowed groups
+                let adici = adicionales.find(ad => 
+                    normalize(ad.nombre) === target && 
+                    allowedGroupIds.includes(ad.grupo_id)
+                );
+
+                // Priority 2: Fallback to match name anywhere in master list
+                if (!adici) {
+                    adici = adicionales.find(ad => normalize(ad.nombre) === target);
+                }
+
                 if (adici) {
                     adsMapping[adici.id] = (adsMapping[adici.id] || 0) + (a.cantidad || 1);
                 }
@@ -537,6 +556,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
                 const items = carrito.map(item => ({
                     pedido_id: editPedido.id,
+                    producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
                     precio_unitario: item.precioOverride,
