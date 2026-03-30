@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Save, ChefHat, DollarSign } from "lucide-react";
+import { X, Save, DollarSign, Info } from "lucide-react";
 
 type Props = {
     isOpen: boolean;
     onClose: () => void;
     onSave: () => void;
-    producto: { id: string; nombre: string; costo_fijo?: number; ficha_tecnica_id?: string } | null;
+    producto: { id?: string; nombre: string; costo_fijo?: number; ficha_tecnica_id?: string } | null;
     sucursalId: string;
 };
 
@@ -40,17 +40,38 @@ export default function AsignarCostoModal({ isOpen, onClose, onSave, producto, s
         if (!producto) return;
         setLoading(true);
         try {
-            const { error } = await supabase
-                .from("productos")
-                .update({
-                    costo_fijo: parseFloat(costoManual) || 0,
-                    ficha_tecnica_id: fichaId || null
-                })
-                .eq("id", producto.id);
+            let error;
+
+            if (producto.id) {
+                // Update existing product
+                const { error: updateError } = await supabase
+                    .from("productos")
+                    .update({
+                        costo_fijo: parseFloat(costoManual) || 0,
+                        ficha_tecnica_id: fichaId || null
+                    })
+                    .eq("id", producto.id);
+                error = updateError;
+            } else {
+                // Create missing product as hidden
+                const { error: insertError } = await supabase
+                    .from("productos")
+                    .insert({
+                        nombre: producto.nombre,
+                        sucursal_id: sucursalId,
+                        costo_fijo: parseFloat(costoManual) || 0,
+                        ficha_tecnica_id: fichaId || null,
+                        visible_en_menu: false,
+                        activo: false
+                    });
+                error = insertError;
+            }
 
             if (!error) {
                 onSave();
                 onClose();
+            } else {
+                console.error("Error saving cost:", error);
             }
         } finally {
             setLoading(false);
@@ -77,6 +98,16 @@ export default function AsignarCostoModal({ isOpen, onClose, onSave, producto, s
                         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Producto</label>
                         <p className="text-lg font-bold text-gray-900">{producto.nombre}</p>
                     </div>
+
+                    {!producto.id && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800 flex items-start gap-2">
+                            <Info className="w-5 h-5 text-blue-600 shrink-0" />
+                            <p>
+                                Este producto provino de un pedido antiguo o de una app externa y no existe en tu catálogo. 
+                                Al guardar, se creará <strong>oculto de la caja y del menú</strong> solo para guardar el costo.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="space-y-4">
                         <div>

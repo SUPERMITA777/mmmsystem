@@ -544,14 +544,13 @@ export default function ReportesPage() {
                                                         ) : (
                                                             <button 
                                                                 onClick={() => {
-                                                                    setSelectedProductForCosto(p.productInfo);
+                                                                    setSelectedProductForCosto(p.productInfo || { nombre: p.nombre });
                                                                     setIsCostoModalOpen(true);
                                                                 }}
                                                                 className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 underline uppercase tracking-tighter"
-                                                                disabled={!p.productInfo}
-                                                                title={!p.productInfo ? "El producto no existe en el catálogo actual" : "Asignar costo manual o vincular receta"}
+                                                                title={!p.productInfo ? "Crear producto en catálogo para asignar costo" : "Asignar costo manual o vincular receta"}
                                                             >
-                                                                {p.productInfo ? "Asignar Costo" : "No vinculable"}
+                                                                {p.productInfo ? "Asignar Costo" : "Asignar Costo (Crear)"}
                                                             </button>
                                                         )}
                                                     </td>
