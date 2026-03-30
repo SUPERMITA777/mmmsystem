@@ -7,6 +7,7 @@ import { useTenant } from "@/context/TenantContext";
 import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
 
 // --- Components ---
+import AsignarCostoModal from "@/components/admin/reportes/AsignarCostoModal";
 
 function DonutChart({ data, colors }: { data: { label: string, value: number }[], colors: string[] }) {
     const total = data.reduce((s, d) => s + d.value, 0);
@@ -56,6 +57,10 @@ export default function ReportesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const { sucursalId } = useTenant();
 
+    // Cost Modal State
+    const [isCostoModalOpen, setIsCostoModalOpen] = useState(false);
+    const [selectedProductForCosto, setSelectedProductForCosto] = useState<any>(null);
+
     // Dates
     const [startDate, setStartDate] = useState(getArgentinaFirstDayOfMonth());
     const [endDate, setEndDate] = useState(getArgentinaDate());
@@ -95,7 +100,7 @@ export default function ReportesPage() {
             // Fetch products with their technical sheets for costs
             const { data: productsData } = await supabase
                 .from("productos")
-                .select("id, nombre, precio, ficha_tecnica_id, fichas_tecnicas(costo_total)")
+                .select("id, nombre, precio, ficha_tecnica_id, costo_fijo, fichas_tecnicas(costo_total)")
                 .eq("sucursal_id", sucursalId);
             setProductsWithCosts(productsData || []);
 
@@ -156,7 +161,8 @@ export default function ReportesPage() {
         }
 
         const ft = productInfo?.fichas_tecnicas;
-        const costoUnit = Array.isArray(ft) ? (ft[0]?.costo_total || 0) : (ft?.costo_total || 0);
+        const recipeCost = Array.isArray(ft) ? (ft[0]?.costo_total || 0) : (ft?.costo_total || 0);
+        const costoUnit = recipeCost > 0 ? recipeCost : (Number(productInfo?.costo_fijo) || 0);
 
         // Group by product info ID if found, to unify rows with same product but different linkage
         const key = productInfo?.id || item.producto_id || item.nombre_producto;
@@ -166,7 +172,8 @@ export default function ReportesPage() {
                 nombre: productInfo?.nombre || item.nombre_producto,
                 cant: 0,
                 totalVenta: 0,
-                totalCosto: 0
+                totalCosto: 0,
+                productInfo: productInfo // Store this to allow assigning cost later
             };
         }
         acc[key].cant += item.cantidad;
@@ -532,7 +539,21 @@ export default function ReportesPage() {
                                                         <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
-                                                        <span className="text-xs font-bold text-gray-500">$ {new Intl.NumberFormat("es-AR").format(p.totalCosto)}</span>
+                                                        {p.totalCosto > 0 ? (
+                                                            <span className="text-xs font-bold text-gray-500">$ {new Intl.NumberFormat("es-AR").format(p.totalCosto)}</span>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setSelectedProductForCosto(p.productInfo);
+                                                                    setIsCostoModalOpen(true);
+                                                                }}
+                                                                className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 underline uppercase tracking-tighter"
+                                                                disabled={!p.productInfo}
+                                                                title={!p.productInfo ? "El producto no existe en el catálogo actual" : "Asignar costo manual o vincular receta"}
+                                                            >
+                                                                {p.productInfo ? "Asignar Costo" : "No vinculable"}
+                                                            </button>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
                                                         <span className="text-xs font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.totalVenta)}</span>
@@ -563,6 +584,17 @@ export default function ReportesPage() {
                     )}
                 </>
             )}
+
+            <AsignarCostoModal 
+                isOpen={isCostoModalOpen}
+                onClose={() => {
+                    setIsCostoModalOpen(false);
+                    setSelectedProductForCosto(null);
+                }}
+                onSave={fetchData}
+                producto={selectedProductForCosto}
+                sucursalId={sucursalId || ""}
+            />
         </section>
     );
 }
