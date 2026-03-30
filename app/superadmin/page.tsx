@@ -232,6 +232,47 @@ export default function SuperAdminPage() {
         }
     }
 
+    // ========== Metrics calculations (Hoisted from JSX) ==========
+    const dataByDate = useMemo(() => {
+        const grouped: Record<string, number> = {};
+        metricsData.forEach(m => {
+            grouped[m.fecha] = (grouped[m.fecha] || 0) + Number(m.cantidad);
+        });
+        return Object.entries(grouped)
+            .map(([fecha, cantidad]) => ({ fecha, cantidad }))
+            .sort((a,b) => a.fecha.localeCompare(b.fecha));
+    }, [metricsData]);
+
+    const dataByTenant = useMemo(() => {
+        const grouped: Record<string, number> = {};
+        metricsData.forEach(m => {
+            const name = m.sucursales?.nombre || "Desconocido";
+            grouped[name] = (grouped[name] || 0) + Number(m.cantidad);
+        });
+        return Object.entries(grouped)
+            .map(([name, cantidad]) => ({ name, cantidad }))
+            .sort((a,b) => b.cantidad - a.cantidad);
+    }, [metricsData]);
+
+    const totalVisits = useMemo(() => 
+        metricsData.reduce((acc, curr) => acc + Number(curr.cantidad), 0)
+    , [metricsData]);
+
+    const handleExportCSV = () => {
+        const headers = ["Fecha", "Local", "Visitas"];
+        const rows = metricsData.map(m => [m.fecha, m.sucursales?.nombre || "N/A", m.cantidad]);
+        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `reporte_visitas_${startDate}_${endDate}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     if (authChecking) return <div className="min-h-screen bg-[#111] flex items-center justify-center text-white"><span className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" /></div>;
 
     if (!isSuperAdmin) {
@@ -525,162 +566,126 @@ export default function SuperAdminPage() {
                      </div>
                 )}
 
-                {activeTab === "metrics" && (() => {
-                    const dataByDate = useMemo(() => {
-                        const grouped: Record<string, number> = {};
-                        metricsData.forEach(m => {
-                            grouped[m.fecha] = (grouped[m.fecha] || 0) + Number(m.cantidad);
-                        });
-                        return Object.entries(grouped).map(([fecha, cantidad]) => ({ fecha, cantidad })).sort((a,b) => a.fecha.localeCompare(b.fecha));
-                    }, [metricsData]);
-
-                    const dataByTenant = useMemo(() => {
-                        const grouped: Record<string, number> = {};
-                        metricsData.forEach(m => {
-                            const name = m.sucursales?.nombre || "Desconocido";
-                            grouped[name] = (grouped[name] || 0) + Number(m.cantidad);
-                        });
-                        return Object.entries(grouped).map(([name, cantidad]) => ({ name, cantidad })).sort((a,b) => b.cantidad - a.cantidad);
-                    }, [metricsData]);
-
-                    const totalVisits = metricsData.reduce((acc, curr) => acc + Number(curr.cantidad), 0);
-
-                    const handleExportCSV = () => {
-                        const headers = ["Fecha", "Local", "Visitas"];
-                        const rows = metricsData.map(m => [m.fecha, m.sucursales?.nombre || "N/A", m.cantidad]);
-                        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                        const link = document.createElement("a");
-                        const url = URL.createObjectURL(blob);
-                        link.setAttribute("href", url);
-                        link.setAttribute("download", `reporte_visitas_${startDate}_${endDate}.csv`);
-                        link.style.visibility = 'hidden';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    };
-
-                    return (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                                <div>
-                                    <h2 className="text-3xl font-black text-white tracking-tight">Analíticas de <span className="text-[#00B2FF]">Alcance</span></h2>
-                                    <p className="text-sm text-slate-400 mt-2 font-medium">Reporte detallado de visitas a páginas públicas.</p>
-                                </div>
-                                
-                                <div className="flex flex-wrap items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5">
-                                    <div className="flex items-center gap-3 px-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Desde</span>
-                                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-white/10 focus:border-[#00B2FF]" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hasta</span>
-                                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-white/10 focus:border-[#00B2FF]" />
-                                        </div>
+                {activeTab === "metrics" && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                            <div>
+                                <h2 className="text-3xl font-black text-white tracking-tight">Analíticas de <span className="text-[#00B2FF]">Alcance</span></h2>
+                                <p className="text-sm text-slate-400 mt-2 font-medium">Reporte detallado de visitas a páginas públicas.</p>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-3 px-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Desde</span>
+                                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-white/10 focus:border-[#00B2FF]" />
                                     </div>
-                                    <button 
-                                        onClick={handleExportCSV}
-                                        className="bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-3 rounded-xl transition-all border border-white/10 flex items-center gap-3 text-xs"
-                                    >
-                                        <TrendingUp size={16} className="text-[#00B2FF]" /> Exportar CSV
-                                    </button>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Hasta</span>
+                                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-white/10 focus:border-[#00B2FF]" />
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={handleExportCSV}
+                                    className="bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-3 rounded-xl transition-all border border-white/10 flex items-center gap-3 text-xs"
+                                >
+                                    <TrendingUp size={16} className="text-[#00B2FF]" /> Exportar CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Visitas Totales Periodo</p>
+                                <h3 className="text-4xl font-black text-white">{totalVisits.toLocaleString()}</h3>
+                                <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
+                                    <TrendingUp size={14} />
+                                    <span>Tráfico Consolidado</span>
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Visitas Totales Periodo</p>
-                                    <h3 className="text-4xl font-black text-white">{totalVisits.toLocaleString()}</h3>
-                                    <div className="mt-4 flex items-center gap-2 text-emerald-400 text-xs font-bold">
-                                        <TrendingUp size={14} />
-                                        <span>Tráfico Consolidado</span>
-                                    </div>
-                                </div>
-                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Locales con Tráfico</p>
-                                    <h3 className="text-4xl font-black text-white">{dataByTenant.length}</h3>
-                                    <div className="mt-4 flex items-center gap-2 text-[#00B2FF] text-xs font-bold">
-                                        <Building2 size={14} />
-                                        <span>Negocios con actividad</span>
-                                    </div>
-                                </div>
-                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Promedio Diario</p>
-                                    <h3 className="text-4xl font-black text-white">
-                                        {dataByDate.length > 0 ? Math.round(totalVisits / dataByDate.length).toLocaleString() : 0}
-                                    </h3>
-                                    <div className="mt-4 flex items-center gap-2 text-slate-400 text-xs font-bold">
-                                        <Eye size={14} />
-                                        <span>Frecuencia por jornada</span>
-                                    </div>
+                            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Locales con Tráfico</p>
+                                <h3 className="text-4xl font-black text-white">{dataByTenant.length}</h3>
+                                <div className="mt-4 flex items-center gap-2 text-[#00B2FF] text-xs font-bold">
+                                    <Building2 size={14} />
+                                    <span>Negocios con actividad</span>
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl h-[450px] flex flex-col">
-                                    <h3 className="font-black text-white uppercase tracking-widest text-xs mb-8 flex items-center gap-3">
-                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
-                                        Evolución de Tráfico Diario
-                                    </h3>
-                                    {metricsLoading ? (
-                                        <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
-                                    ) : (
-                                        <div className="flex-1 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={dataByDate}>
-                                                    <defs>
-                                                        <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#00B2FF" stopOpacity={0.3}/>
-                                                            <stop offset="95%" stopColor="#00B2FF" stopOpacity={0}/>
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-                                                    <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => new Date(val).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} />
-                                                    <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
-                                                    <Tooltip 
-                                                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '1rem', border: '1px solid #ffffff10', color: '#fff' }}
-                                                        itemStyle={{ color: '#00B2FF', fontWeight: 'bold' }}
-                                                    />
-                                                    <Area type="monotone" dataKey="cantidad" stroke="#00B2FF" strokeWidth={4} fillOpacity={1} fill="url(#colorVisits)" />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl h-[450px] flex flex-col">
-                                    <h3 className="font-black text-white uppercase tracking-widest text-xs mb-8 flex items-center gap-3">
-                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
-                                        Ranking de Alcance por Local
-                                    </h3>
-                                    {metricsLoading ? (
-                                        <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
-                                    ) : (
-                                        <div className="flex-1 w-full">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={dataByTenant} layout="vertical">
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" horizontal={false} />
-                                                    <XAxis type="number" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
-                                                    <YAxis type="category" dataKey="name" stroke="#fff" fontSize={10} width={100} axisLine={false} tickLine={false} />
-                                                    <Tooltip 
-                                                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '1rem', border: '1px solid #ffffff10', color: '#fff' }}
-                                                        cursor={{ fill: '#ffffff05' }}
-                                                    />
-                                                    <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={20}>
-                                                        {dataByTenant.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={index === 0 ? "#00B2FF" : "#00B2FF80"} />
-                                                        ))}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    )}
+                            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Promedio Diario</p>
+                                <h3 className="text-4xl font-black text-white">
+                                    {dataByDate.length > 0 ? Math.round(totalVisits / dataByDate.length).toLocaleString() : 0}
+                                </h3>
+                                <div className="mt-4 flex items-center gap-2 text-slate-400 text-xs font-bold">
+                                    <Eye size={14} />
+                                    <span>Frecuencia por jornada</span>
                                 </div>
                             </div>
                         </div>
-                    );
-                })()}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl h-[450px] flex flex-col">
+                                <h3 className="font-black text-white uppercase tracking-widest text-xs mb-8 flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                    Evolución de Tráfico Diario
+                                </h3>
+                                {metricsLoading ? (
+                                    <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
+                                ) : (
+                                    <div className="flex-1 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={dataByDate}>
+                                                <defs>
+                                                    <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#00B2FF" stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor="#00B2FF" stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                                                <XAxis dataKey="fecha" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(val) => new Date(val).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} />
+                                                <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
+                                                <Tooltip 
+                                                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '1rem', border: '1px solid #ffffff10', color: '#fff' }}
+                                                    itemStyle={{ color: '#00B2FF', fontWeight: 'bold' }}
+                                                />
+                                                <Area type="monotone" dataKey="cantidad" stroke="#00B2FF" strokeWidth={4} fillOpacity={1} fill="url(#colorVisits)" />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl h-[450px] flex flex-col">
+                                <h3 className="font-black text-white uppercase tracking-widest text-xs mb-8 flex items-center gap-3">
+                                    <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                    Ranking de Alcance por Local
+                                </h3>
+                                {metricsLoading ? (
+                                    <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
+                                ) : (
+                                    <div className="flex-1 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={dataByTenant} layout="vertical">
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" horizontal={false} />
+                                                <XAxis type="number" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
+                                                <YAxis type="category" dataKey="name" stroke="#fff" fontSize={10} width={100} axisLine={false} tickLine={false} />
+                                                <Tooltip 
+                                                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '1rem', border: '1px solid #ffffff10', color: '#fff' }}
+                                                    cursor={{ fill: '#ffffff05' }}
+                                                />
+                                                <Bar dataKey="cantidad" radius={[0, 8, 8, 0]} barSize={20}>
+                                                    {dataByTenant.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={index === 0 ? "#00B2FF" : "#00B2FF80"} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {showUserModal && (
