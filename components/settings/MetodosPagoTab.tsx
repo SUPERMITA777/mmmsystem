@@ -26,6 +26,7 @@ export function MetodosPagoTab() {
       codigo: string;
       activo: boolean;
       expandido?: boolean;
+      detalles?: Record<string, any>;
     }>
   >([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,7 @@ export function MetodosPagoTab() {
           ...m,
           ...metodosMap.get(m.codigo),
           activo: metodosMap.has(m.codigo) ? metodosMap.get(m.codigo)!.activo : false,
+          detalles: metodosMap.has(m.codigo) ? metodosMap.get(m.codigo)!.detalles || {} : {},
           expandido: false,
         }));
         setMetodos(todosMetodos);
@@ -61,6 +63,7 @@ export function MetodosPagoTab() {
         const defaultMetodos = METODOS_PAGO_DEFAULT.map((m) => ({
           ...m,
           activo: m.codigo === "efectivo" || m.codigo === "transferencia", // Solo estos activos por defecto
+          detalles: {},
           expandido: false,
         }));
         setMetodos(defaultMetodos);
@@ -81,6 +84,7 @@ export function MetodosPagoTab() {
         nombre: m.nombre,
         codigo: m.codigo,
         activo: m.activo,
+        detalles: m.detalles || {},
         orden: index + 1
       }));
 
@@ -112,6 +116,15 @@ export function MetodosPagoTab() {
     setMetodos(nuevosMetodos);
   }
 
+  function handleDetalleChange(index: number, key: string, value: any) {
+    const nuevosMetodos = [...metodos];
+    if (!nuevosMetodos[index].detalles) {
+      nuevosMetodos[index].detalles = {};
+    }
+    nuevosMetodos[index].detalles![key] = value;
+    setMetodos(nuevosMetodos);
+  }
+
   if (loading) {
     return <div className="text-center py-8 text-slate-500">Cargando...</div>;
   }
@@ -126,44 +139,122 @@ export function MetodosPagoTab() {
 
         <div className="space-y-1">
           {metodos.map((metodo, index) => (
-            <div
-              key={metodo.codigo}
-              className="flex items-center justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
-            >
-              <div className="flex items-center gap-3 flex-1">
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={metodo.activo}
-                    onChange={() => toggleActivo(index)}
-                    className="sr-only peer"
-                  />
-                  <div className={`w-5 h-5 border-2 rounded ${metodo.activo
-                    ? "bg-purple-600 border-purple-600"
-                    : "border-slate-300"
-                    } flex items-center justify-center`}>
-                    {metodo.activo && (
-                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                </label>
-                <span className={`font-medium ${metodo.activo ? "text-slate-900" : "text-slate-500"
-                  }`}>
-                  {metodo.nombre}
-                </span>
-              </div>
-              <button
-                onClick={() => toggleExpandido(index)}
-                className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+            <div key={metodo.codigo} className="space-y-1">
+              <div
+                className={`flex items-center justify-between p-3 border border-slate-200 hover:bg-slate-50 transition-colors ${metodo.expandido ? "rounded-t-lg border-b-0 bg-slate-50" : "rounded-lg"}`}
               >
-                {metodo.expandido ? (
-                  <ChevronUp size={20} />
-                ) : (
-                  <ChevronDown size={20} />
-                )}
-              </button>
+                <div className="flex items-center gap-3 flex-1">
+                  <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={metodo.activo}
+                      onChange={() => toggleActivo(index)}
+                      className="sr-only peer"
+                    />
+                    <div className={`w-5 h-5 border-2 rounded ${metodo.activo
+                      ? "bg-purple-600 border-purple-600"
+                      : "border-slate-300"
+                      } flex items-center justify-center`}>
+                      {metodo.activo && (
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </label>
+                  <span className={`font-medium ${metodo.activo ? "text-slate-900" : "text-slate-500"
+                    }`}>
+                    {metodo.nombre}
+                  </span>
+                </div>
+                <button
+                  onClick={() => toggleExpandido(index)}
+                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {metodo.expandido ? (
+                    <ChevronUp size={20} />
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
+                </button>
+              </div>
+
+              {metodo.expandido && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-b-lg -mt-1 pt-4 shadow-inner space-y-4">
+                  {metodo.codigo === "transferencia" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">CBU / CVU</label>
+                        <input
+                          type="text"
+                          value={metodo.detalles?.cbu || ""}
+                          onChange={(e) => handleDetalleChange(index, "cbu", e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="0000000000000000000000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Alias</label>
+                        <input
+                          type="text"
+                          value={metodo.detalles?.alias || ""}
+                          onChange={(e) => handleDetalleChange(index, "alias", e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="AQUI.MI.ALIAS"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Banco</label>
+                        <input
+                          type="text"
+                          value={metodo.detalles?.banco || ""}
+                          onChange={(e) => handleDetalleChange(index, "banco", e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="Nombre del banco"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Titular</label>
+                        <input
+                          type="text"
+                          value={metodo.detalles?.titular || ""}
+                          onChange={(e) => handleDetalleChange(index, "titular", e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="Nombre del titular de la cuenta"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {metodo.codigo === "mercado_pago" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">CVU / Alias</label>
+                        <input
+                          type="text"
+                          value={metodo.detalles?.cvu_alias || ""}
+                          onChange={(e) => handleDetalleChange(index, "cvu_alias", e.target.value)}
+                          className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="CVU o Alias de Mercado Pago"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Instrucciones adicionales para el cliente
+                    </label>
+                    <textarea
+                      value={metodo.detalles?.instrucciones || ""}
+                      onChange={(e) => handleDetalleChange(index, "instrucciones", e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                      placeholder={`Ej: Por favor envía el comprobante al WhatsApp tras seleccionar ${metodo.nombre}.`}
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

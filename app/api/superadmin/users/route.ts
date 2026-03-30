@@ -1,0 +1,134 @@
+import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+async function verifySuperAdmin() {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) {
+                    return cookieStore.get(name)?.value;
+                },
+            },
+        }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
+    if (roleData?.role !== "superadmin") return null;
+
+    return user;
+}
+
+export async function GET() {
+    try {
+        const superAdmin = await verifySuperAdmin();
+        if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        // 1. Get all auth users using Admin API
+        const { data: authUsers, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+        if (usersError) return NextResponse.json({ error: usersError.message }, { status: 400 });
+
+        // 2. Get all roles and sucursales info
+        const { data: roles } = await supabaseAdmin.from("user_roles").select("*");
+        const { data: sucursales } = await supabaseAdmin.from("sucursales").select("id, nombre, slug");
+
+        // 3. Merge data
+        const mergedUsers = authUsers.users.map(u => {
+            const roleInfo = roles?.find(r => r.user_id === u.id);
+            const sucursalInfo = roleInfo?.sucursal_id ? sucursales?.find(s => s.id === roleInfo.sucursal_id) : null;
+            return {
+                id: u.id,
+                email: u.email,
+                created_at: u.created_at,
+                role: roleInfo?.role || "user",
+                sucursal_id: roleInfo?.sucursal_id || null,
+                sucursal_nombre: sucursalInfo?.nombre || null,
+                sucursal_slug: sucursalInfo?.slug || null,
+            };
+        });
+
+        // Sort by creation date descending
+        mergedUsers.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        return NextResponse.json({ users: mergedUsers });
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
+    }
+}
+
+export async function POST(request: Request) {
+    try {
+        const superAdmin = await verifySuperAdmin();
+        if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const body = await request.json();
+        const { email, password, role, sucursal_id } = body;
+
+        if (!email || !password || !role) {
+            return NextResponse.json({ error: "Faltan datos requeridos (email, password, role)" }, { status: 400 });
+        }
+
+        // Create Auth User
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: { role }
+        });
+
+        if (authError) return NextResponse.json({ error: authError.message }, { status: 400 });
+
+        // Map Role
+        await supabaseAdmin.from("user_roles").insert({
+            user_id: authData.user.id,
+            role: role,
+            sucursal_id: sucursal_id || null
+        });
+
+        return NextResponse.json({ success: true, message: "Usuario creado correctamente" });
+
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 500 });
+    }
+}
+
+export async function PUT(request: Request) {
+    try {
+        const superAdmin = await verifySuperAdmin();
+        if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const body = await request.json();
+        const { user_id, password, role, sucursal_id } = body;
+
+        if (!user_id) return NextResponse.json({ error: "user_id es requerido" }, { status: 400 });
+
+        // Update auth password if provided
+        if (password) {
+            const { error: pwdError } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
+                password: password
+            });
+            if (pwdError) return NextResponse.json({ error: "Error actualizando contraseña: " + pwdError.message }, { status: 400 });
+        }
+
+        // Upsert user role and sucursal mapped link
+        if (role) {
+            const valObj: any = { user_id, role };
+            if (sucursal_id) valObj.sucursal_id = sucursal_id;
+            else valObj.sucursal_id = null; // removing tenant link if empty
+
+            await supabaseAdmin.from("user_roles").upsert(valObj, { onConflict: "user_id" });
+        }
+
+        return NextResponse.json({ success: true, message: "Usuario actualizado correctamente" });
+
+    } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 500 });
+    }
+}
