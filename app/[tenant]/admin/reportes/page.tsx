@@ -48,10 +48,11 @@ function DonutChart({ data, colors }: { data: { label: string, value: number }[]
 const COLORS = ["#9333ea", "#f97316", "#06b6d4", "#10b981", "#ef4444", "#f59e0b"];
 
 export default function ReportesPage() {
-    const [tab, setTab] = useState<"facturacion" | "ventas">("facturacion");
+    const [tab, setTab] = useState<"facturacion" | "ventas" | "rentabilidad">("facturacion");
     const [loading, setLoading] = useState(true);
     const [pedidos, setPedidos] = useState<any[]>([]);
     const [items, setItems] = useState<any[]>([]);
+    const [productsWithCosts, setProductsWithCosts] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const { sucursalId } = useTenant();
 
@@ -90,6 +91,14 @@ export default function ReportesPage() {
             } else {
                 setItems([]);
             }
+
+            // Fetch products with their technical sheets for costs
+            const { data: productsData } = await supabase
+                .from("productos")
+                .select("id, nombre, precio, ficha_tecnica_id, fichas_tecnicas(costo_total)")
+                .eq("sucursal_id", sucursalId);
+            setProductsWithCosts(productsData || []);
+
         } catch (error) {
             console.error("Error fetching reports:", error);
         } finally {
@@ -137,6 +146,40 @@ export default function ReportesPage() {
         .filter((p: any) => p.nombre.toLowerCase().includes(searchQuery.toLowerCase()))
         .sort((a: any, b: any) => b.total - a.total);
 
+    // Rentabilidad Calculations
+    const rentabilidadStats = items.reduce((acc: any, item) => {
+        const key = item.producto_id || item.nombre_producto;
+        const productInfo = productsWithCosts.find(p => p.id === item.producto_id);
+        const ft = productInfo?.fichas_tecnicas;
+        const costoUnit = Array.isArray(ft) ? (ft[0]?.costo_total || 0) : (ft?.costo_total || 0);
+
+        if (!acc[key]) {
+            acc[key] = {
+                nombre: item.nombre_producto,
+                cant: 0,
+                totalVenta: 0,
+                totalCosto: 0
+            };
+        }
+        acc[key].cant += item.cantidad;
+        acc[key].totalVenta += Number(item.subtotal || 0);
+        acc[key].totalCosto += (Number(costoUnit) * item.cantidad);
+        return acc;
+    }, {});
+
+    const rentabilidadArray = Object.values(rentabilidadStats)
+        .map((p: any) => ({
+            ...p,
+            utilidad: p.totalVenta - p.totalCosto,
+            margen: p.totalVenta > 0 ? ((p.totalVenta - p.totalCosto) / p.totalVenta) * 100 : 0
+        }))
+        .filter((p: any) => p.nombre.toLowerCase().includes(searchQuery.toLowerCase()))
+        .sort((a: any, b: any) => b.utilidad - a.utilidad);
+
+    const totalCostoPeriodo = rentabilidadArray.reduce((acc, p) => acc + p.totalCosto, 0);
+    const totalUtilidadPeriodo = totalFacturado - totalCostoPeriodo;
+    const margenPromedioPeriodo = totalFacturado > 0 ? (totalUtilidadPeriodo / totalFacturado) * 100 : 0;
+
     function exportToCSV() {
         let csvContent = "data:text/csv;charset=utf-8,";
         if (tab === "facturacion") {
@@ -144,10 +187,15 @@ export default function ReportesPage() {
             metodosArray.forEach((m: any) => {
                 csvContent += `${m.label},${m.count},${(m.value / m.count).toFixed(2)},${m.envio},${m.propina},${m.value}\n`;
             });
-        } else {
+        } else if (tab === "ventas") {
             csvContent += "Producto,Cantidad,Precio Unit,Total Recaudado\n";
             productsArray.forEach((p: any) => {
                 csvContent += `${p.nombre},${p.cant},${p.precio},${p.total}\n`;
+            });
+        } else {
+            csvContent += "Producto,Cantidad,Venta Total,Costo Total,Utilidad,Margen %\n";
+            rentabilidadArray.forEach((p: any) => {
+                csvContent += `${p.nombre},${p.cant},${p.totalVenta},${p.totalCosto},${p.utilidad},${p.margen.toFixed(2)}%\n`;
             });
         }
         const encodedUri = encodeURI(csvContent);
@@ -162,18 +210,24 @@ export default function ReportesPage() {
         <section className="p-8 max-w-7xl mx-auto">
             {/* Header / Filters */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-4 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm transition-all">
+                <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm transition-all overflow-x-auto no-scrollbar">
                     <button
                         onClick={() => setTab("facturacion")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all ${tab === "facturacion" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "facturacion" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Facturación
                     </button>
                     <button
                         onClick={() => setTab("ventas")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all ${tab === "ventas" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "ventas" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Ventas
+                    </button>
+                    <button
+                        onClick={() => setTab("rentabilidad")}
+                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "rentabilidad" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                    >
+                        Rentabilidad
                     </button>
                 </div>
 
@@ -211,7 +265,7 @@ export default function ReportesPage() {
                 </div>
             ) : (
                 <>
-                    {tab === "facturacion" ? (
+                    {tab === "facturacion" && (
                         <div className="space-y-6">
                             {/* KPI Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -305,7 +359,7 @@ export default function ReportesPage() {
                                             <tr className="bg-white border-b border-gray-50">
                                                 <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Método</th>
                                                 <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pedidos</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Ticket Prom.</th>
+                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Ticket Prom..</th>
                                                 <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Envíos</th>
                                                 <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Propinas</th>
                                                 <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
@@ -335,7 +389,9 @@ export default function ReportesPage() {
                                 </div>
                             </div>
                         </div>
-                    ) : (
+                    )}
+
+                    {tab === "ventas" && (
                         <div className="space-y-6">
                             {/* Ventas Search & Table */}
                             <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
@@ -380,6 +436,114 @@ export default function ReportesPage() {
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <span className="text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(p.total)}</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === "rentabilidad" && (
+                        <div className="space-y-6">
+                            {/* KPI Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+                                            <TrendingUp size={24} />
+                                        </div>
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Utilidad Bruta</h3>
+                                    </div>
+                                    <p className="text-4xl font-black text-purple-600 leading-none">
+                                        $ {new Intl.NumberFormat("es-AR").format(totalUtilidadPeriodo)}
+                                    </p>
+                                </div>
+
+                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                                            <PieChartIcon size={24} />
+                                        </div>
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Margen Promedio</h3>
+                                    </div>
+                                    <p className="text-4xl font-black text-gray-900 leading-none">
+                                        {margenPromedioPeriodo.toFixed(1)}%
+                                    </p>
+                                </div>
+
+                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
+                                            <BarChart3 size={24} />
+                                        </div>
+                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Costo Total Invertido</h3>
+                                    </div>
+                                    <p className="text-4xl font-black text-gray-900 leading-none">
+                                        $ {new Intl.NumberFormat("es-AR").format(totalCostoPeriodo)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Rentabilidad Search & Table */}
+                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                <div className="p-6 border-b border-gray-50 flex items-center justify-between flex-wrap gap-4">
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Análisis de Utilidad por Producto</h4>
+                                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full max-w-xs shadow-inner">
+                                        <Search size={14} className="text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="FILTRAR PRODUCTO..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="bg-transparent outline-none text-[10px] font-black uppercase text-gray-900 w-full"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b border-gray-50">
+                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Producto</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Costo Tot.</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Venta Tot.</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Utilidad</th>
+                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Margen %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {rentabilidadArray.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={5} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin resultados</td>
+                                                </tr>
+                                            ) : rentabilidadArray.map((p: any, i) => (
+                                                <tr key={i} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="text-xs font-bold text-gray-500">$ {new Intl.NumberFormat("es-AR").format(p.totalCosto)}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="text-xs font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.totalVenta)}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className={`text-xs font-black ${p.utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                                            $ {new Intl.NumberFormat("es-AR").format(p.utilidad)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className={`h-full rounded-full ${p.margen > 30 ? "bg-green-500" : p.margen > 15 ? "bg-orange-500" : "bg-red-500"}`} 
+                                                                    style={{ width: `${Math.max(0, Math.min(100, p.margen))}%` }} 
+                                                                />
+                                                            </div>
+                                                            <span className="text-xs font-black text-gray-900 w-10">{p.margen.toFixed(1)}%</span>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
