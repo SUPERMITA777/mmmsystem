@@ -148,14 +148,22 @@ export default function ReportesPage() {
 
     // Rentabilidad Calculations
     const rentabilidadStats = items.reduce((acc: any, item) => {
-        const key = item.producto_id || item.nombre_producto;
-        const productInfo = productsWithCosts.find(p => p.id === item.producto_id);
+        // Look up product info by ID or Fallback by Name if ID is missing or not found
+        let productInfo = productsWithCosts.find(p => p.id === item.producto_id);
+        if (!productInfo && item.nombre_producto) {
+            const normalizedName = item.nombre_producto.trim().toLowerCase();
+            productInfo = productsWithCosts.find(p => p.nombre.trim().toLowerCase() === normalizedName);
+        }
+
         const ft = productInfo?.fichas_tecnicas;
         const costoUnit = Array.isArray(ft) ? (ft[0]?.costo_total || 0) : (ft?.costo_total || 0);
 
+        // Group by product info ID if found, to unify rows with same product but different linkage
+        const key = productInfo?.id || item.producto_id || item.nombre_producto;
+
         if (!acc[key]) {
             acc[key] = {
-                nombre: item.nombre_producto,
+                nombre: productInfo?.nombre || item.nombre_producto,
                 cant: 0,
                 totalVenta: 0,
                 totalCosto: 0
