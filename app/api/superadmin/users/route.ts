@@ -112,7 +112,10 @@ export async function PUT(request: Request) {
         // Update auth details (email/password) if provided
         const updatePayload: any = {};
         if (password) updatePayload.password = password;
-        if (email) updatePayload.email = email;
+        if (email) {
+            updatePayload.email = email;
+            updatePayload.email_confirm = true; // Auto-confirm email change
+        }
 
         if (Object.keys(updatePayload).length > 0) {
             const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(user_id, updatePayload);
@@ -125,7 +128,27 @@ export async function PUT(request: Request) {
             if (sucursal_id) valObj.sucursal_id = sucursal_id;
             else valObj.sucursal_id = null; // removing tenant link if empty
 
-            await supabaseAdmin.from("user_roles").upsert(valObj, { onConflict: "user_id" });
+            // Safely update or insert without relying on onConflict constraints
+            const { data, error: updateError } = await supabaseAdmin
+                .from("user_roles")
+                .update({ role: valObj.role, sucursal_id: valObj.sucursal_id })
+                .eq("user_id", user_id)
+                .select();
+
+            if (updateError) {
+                return NextResponse.json({ error: "Error actualizando rol: " + updateError.message }, { status: 400 });
+            }
+
+            // If no existing record was found for this user, insert a new one
+            if (!data || data.length === 0) {
+                const { error: insertError } = await supabaseAdmin
+                    .from("user_roles")
+                    .insert(valObj);
+                
+                if (insertError) {
+                    return NextResponse.json({ error: "Error insertando rol: " + insertError.message }, { status: 400 });
+                }
+            }
         }
 
         return NextResponse.json({ success: true, message: "Usuario actualizado correctamente" });
