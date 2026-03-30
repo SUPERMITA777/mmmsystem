@@ -30,6 +30,7 @@
     "react-easy-crop": "^5.5.6",
     "react-leaflet": "^5.0.0",
     "react-to-print": "3.2.0",
+    "recharts": "^3.8.1",
     "tailwindcss": "4.1.18",
     "xlsx": "^0.18.5"
   },

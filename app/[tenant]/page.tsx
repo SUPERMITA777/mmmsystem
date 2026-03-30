@@ -60,6 +60,10 @@ function PublicMenuContent() {
     if (sucursalId) {
       fetchMenuData();
       fetchIsOpen();
+      // Incrementar visitas
+      supabase.rpc("increment_sucursal_visits", { s_id: sucursalId }).then(({ error }) => {
+        if (error) console.error("Error incrementando visitas:", error);
+      });
       // Abrir flyer automáticamente al cargar la página
       setFlyerOpen(true);
     }
