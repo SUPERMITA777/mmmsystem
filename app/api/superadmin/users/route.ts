@@ -105,16 +105,18 @@ export async function PUT(request: Request) {
         if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const body = await request.json();
-        const { user_id, password, role, sucursal_id } = body;
+        const { user_id, password, role, sucursal_id, email } = body;
 
         if (!user_id) return NextResponse.json({ error: "user_id es requerido" }, { status: 400 });
 
-        // Update auth password if provided
-        if (password) {
-            const { error: pwdError } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-                password: password
-            });
-            if (pwdError) return NextResponse.json({ error: "Error actualizando contraseña: " + pwdError.message }, { status: 400 });
+        // Update auth details (email/password) if provided
+        const updatePayload: any = {};
+        if (password) updatePayload.password = password;
+        if (email) updatePayload.email = email;
+
+        if (Object.keys(updatePayload).length > 0) {
+            const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(user_id, updatePayload);
+            if (authError) return NextResponse.json({ error: "Error actualizando auth: " + authError.message }, { status: 400 });
         }
 
         // Upsert user role and sucursal mapped link

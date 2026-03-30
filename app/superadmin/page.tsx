@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { 
     Plus, Building2, ExternalLink, ShieldCheck, 
     Mail, LogOut, Loader2, BarChart3, Users as UsersIcon, 
-    TrendingUp, Eye, Search, Filter, MoreVertical, X
+    TrendingUp, Eye, Search, Filter, MoreVertical, X, Pencil
 } from "lucide-react";
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -551,8 +551,8 @@ export default function SuperAdminPage() {
                                                     setEditingUser(u);
                                                     setUserForm({ email: u.email, password: "", role: u.role, sucursal_id: u.sucursal_id || "" });
                                                     setShowUserModal(true);
-                                                }} className="bg-white/5 hover:bg-[#00B2FF]/10 text-slate-400 hover:text-[#00B2FF] p-2.5 rounded-xl transition-all border border-white/5 hover:border-[#00B2FF]/30">
-                                                    <Plus size={16} className="rotate-45" />
+                                                }} className="bg-white/5 hover:bg-[#00B2FF]/10 text-slate-400 hover:text-[#00B2FF] p-2.5 rounded-xl transition-all border border-white/5 hover:border-[#00B2FF]/30" title="Editar Usuario">
+                                                    <Pencil size={16} />
                                                 </button>
                                             </td>
                                         </tr>
@@ -705,7 +705,7 @@ export default function SuperAdminPage() {
                         <form onSubmit={handleSaveUser} className="p-10 space-y-8 relative z-10">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Correo Electrónico</label>
-                                <input required type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} disabled={!!editingUser} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] disabled:opacity-50 transition-all" />
+                                <input required type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] disabled:opacity-50 transition-all" />
                             </div>
                             
                             <div className="space-y-2">
