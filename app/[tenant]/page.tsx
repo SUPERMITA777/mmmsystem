@@ -6,6 +6,8 @@ import { CartProvider } from "@/context/CartContext";
 import PublicHeader from "@/components/public-menu/PublicHeader";
 import PublicCategoryNav from "@/components/public-menu/PublicCategoryNav";
 import PublicProductList from "@/components/public-menu/PublicProductList";
+import AlternativoHeader from "@/components/public-menu/AlternativoHeader";
+import AlternativoProductList from "@/components/public-menu/AlternativoProductList";
 import ProductDetailModal from "@/components/public-menu/ProductDetailModal";
 import CartModal from "@/components/public-menu/CartModal";
 import FloatingCartButton from "@/components/public-menu/FloatingCartButton";
@@ -54,6 +56,7 @@ function PublicMenuContent() {
     textoDelivery: "DELIVERY",
     textoTakeaway: "RETIRAR",
     mensajeCerrado: "",
+    estilo: "original",
   });
 
   useEffect(() => {
@@ -196,7 +199,7 @@ function PublicMenuContent() {
       if (sucursal?.id) {
         const { data: cfg } = await supabase
           .from("config_sucursal")
-          .select("color_primario, color_secundario, banner_url, texto_delivery, texto_takeaway, mensaje_cerrado")
+          .select("color_primario, color_secundario, banner_url, texto_delivery, texto_takeaway, mensaje_cerrado, estilo")
           .eq("sucursal_id", sucursal.id)
           .maybeSingle();
         if (cfg) {
@@ -208,6 +211,7 @@ function PublicMenuContent() {
             textoDelivery: (cfg as any).texto_delivery || "DELIVERY",
             textoTakeaway: (cfg as any).texto_takeaway || "RETIRAR",
             mensajeCerrado: (cfg as any).mensaje_cerrado || "",
+            estilo: (cfg as any).estilo || "original",
           });
         }
       }
@@ -317,27 +321,44 @@ function PublicMenuContent() {
 
   return (
     <main
-      className="min-h-screen text-slate-50"
-      style={{
+      className={`min-h-screen text-slate-50 ${webConfig.estilo === 'alternativo' ? 'bg-[#f8f9fa] text-gray-900' : ''}`}
+      style={webConfig.estilo === 'original' ? {
         "--color-primario": webConfig.primario,
         "--color-secundario": webConfig.secundario,
         backgroundColor: "#050505",
         backgroundImage: `radial-gradient(circle at top, ${webConfig.secundario} 0%, #050505 100%)`,
+      } as React.CSSProperties : {
+        "--color-primario": webConfig.primario,
+        "--color-secundario": webConfig.secundario,
       } as React.CSSProperties}
     >
       {/* Header — hidden when product detail modal is open */}
-      {!selectedProduct && <PublicHeader
-        sucursal={sucursal}
-        isOpen={isOpen}
-        statusMessage={statusMessage || (webConfig.mensajeCerrado && !isOpen ? webConfig.mensajeCerrado : undefined)}
-        textoDelivery={webConfig.textoDelivery}
-        textoTakeaway={webConfig.textoTakeaway}
-        bannerUrl={webConfig.bannerUrl}
-        descripcion={webConfig.descripcion}
-      />}
+      {!selectedProduct && (
+        webConfig.estilo === 'alternativo' ? (
+          <AlternativoHeader
+            sucursal={sucursal}
+            isOpen={isOpen}
+            statusMessage={statusMessage || (webConfig.mensajeCerrado && !isOpen ? webConfig.mensajeCerrado : undefined)}
+            textoDelivery={webConfig.textoDelivery}
+            textoTakeaway={webConfig.textoTakeaway}
+            bannerUrl={webConfig.bannerUrl}
+            descripcion={webConfig.descripcion}
+          />
+        ) : (
+          <PublicHeader
+            sucursal={sucursal}
+            isOpen={isOpen}
+            statusMessage={statusMessage || (webConfig.mensajeCerrado && !isOpen ? webConfig.mensajeCerrado : undefined)}
+            textoDelivery={webConfig.textoDelivery}
+            textoTakeaway={webConfig.textoTakeaway}
+            bannerUrl={webConfig.bannerUrl}
+            descripcion={webConfig.descripcion}
+          />
+        )
+      )}
 
       {/* Category Nav — hidden when product detail modal is open */}
-      {!selectedProduct && (
+      {!selectedProduct && webConfig.estilo === 'original' && (
         <PublicCategoryNav
           categorias={categorias}
           activeCategoryId={activeCategoryId}
@@ -346,11 +367,19 @@ function PublicMenuContent() {
       )}
 
       {/* Product List */}
-      <PublicProductList
-        categorias={categorias}
-        onProductClick={openProduct}
-        descuentos={descuentos}
-      />
+      {webConfig.estilo === 'alternativo' ? (
+         <AlternativoProductList
+          categorias={categorias}
+          onProductClick={openProduct}
+          descuentos={descuentos}
+        />
+      ) : (
+         <PublicProductList
+          categorias={categorias}
+          onProductClick={openProduct}
+          descuentos={descuentos}
+        />
+      )}
 
       {/* Floating Cart Button — hidden when product detail modal is open */}
       {!selectedProduct && <FloatingCartButton onClick={openCart} />}

@@ -6,7 +6,7 @@ import { useTenant } from "@/context/TenantContext";
 import {
     Save, Loader2, Upload, Store, Palette, Type, Share2,
     Instagram, Facebook, MessageCircle, Video, Globe,
-    Eye, RefreshCw, Image, X, ChefHat
+    Eye, RefreshCw, Image, X, ChefHat, LayoutTemplate
 } from "lucide-react";
 
 type WebConfig = {
@@ -27,6 +27,8 @@ type WebConfig = {
     instagram_url: string;
     facebook_url: string;
     tiktok_url: string;
+    // estilo
+    estilo: string;
 };
 
 const DEFAULT: WebConfig = {
@@ -44,9 +46,10 @@ const DEFAULT: WebConfig = {
     instagram_url: "",
     facebook_url: "",
     tiktok_url: "",
+    estilo: "original",
 };
 
-type Section = "identidad" | "colores" | "textos" | "redes";
+type Section = "identidad" | "colores" | "textos" | "redes" | "estilos";
 
 export function WebConfigTab() {
     const { sucursalId } = useTenant();
@@ -69,7 +72,7 @@ export function WebConfigTab() {
         try {
             const [{ data: suc }, { data: cfg }] = await Promise.all([
                 supabase.from("sucursales").select("nombre, descripcion, logo_url, whatsapp_numero").eq("id", sucursalId).single(),
-                supabase.from("config_sucursal").select("color_primario, color_secundario, banner_url, instagram_url, facebook_url, tiktok_url, mensaje_bienvenida, mensaje_cerrado, texto_delivery, texto_takeaway").eq("sucursal_id", sucursalId).maybeSingle(),
+                supabase.from("config_sucursal").select("color_primario, color_secundario, banner_url, instagram_url, facebook_url, tiktok_url, mensaje_bienvenida, mensaje_cerrado, texto_delivery, texto_takeaway, estilo").eq("sucursal_id", sucursalId).maybeSingle(),
             ]);
             setConfig({
                 nombre: suc?.nombre || "",
@@ -86,6 +89,7 @@ export function WebConfigTab() {
                 mensaje_cerrado: (cfg as any)?.mensaje_cerrado || "Estamos cerrados en este momento",
                 texto_delivery: (cfg as any)?.texto_delivery || "DELIVERY",
                 texto_takeaway: (cfg as any)?.texto_takeaway || "RETIRO EN LOCAL",
+                estilo: (cfg as any)?.estilo || "original",
             });
         } catch (e) {
             console.error(e);
@@ -117,6 +121,7 @@ export function WebConfigTab() {
                 mensaje_cerrado: config.mensaje_cerrado,
                 texto_delivery: config.texto_delivery,
                 texto_takeaway: config.texto_takeaway,
+                estilo: config.estilo,
             } as any, { onConflict: "sucursal_id" });
 
             alert("✅ Configuración guardada correctamente");
@@ -166,6 +171,7 @@ export function WebConfigTab() {
         { id: "colores", label: "Colores", icon: Palette },
         { id: "textos", label: "Textos", icon: Type },
         { id: "redes", label: "Redes sociales", icon: Share2 },
+        { id: "estilos", label: "Estilos", icon: LayoutTemplate },
     ];
 
     return (
@@ -514,6 +520,37 @@ export function WebConfigTab() {
                                 className="input-style"
                             />
                         </SocialField>
+                    </div>
+                )}
+
+                {/* ===== ESTILOS ===== */}
+                {activeSection === "estilos" && (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div>
+                            <h3 className="text-base font-bold text-gray-900">Diseño y Estilo</h3>
+                            <p className="text-xs text-gray-400 mt-0.5">Elige cómo quieres que se vea tu menú público online.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Original */}
+                            <button
+                                onClick={() => set("estilo", "original")}
+                                className={`text-left rounded-2xl p-4 border-2 transition-all ${config.estilo === "original" ? "border-purple-500 bg-purple-50 ring-4 ring-purple-100" : "border-gray-100 bg-white hover:border-gray-300"}`}
+                            >
+                                <div className="h-24 bg-gray-100 rounded-lg mb-3 flex items-center justify-center text-xs font-semibold text-gray-400">Preview Original</div>
+                                <h4 className="font-bold text-gray-900">Estilo Original</h4>
+                                <p className="text-[10px] text-gray-500 mt-1">Navegación tradicional con slider horizontal de categorías.</p>
+                            </button>
+
+                            {/* Alternativo */}
+                            <button
+                                onClick={() => set("estilo", "alternativo")}
+                                className={`text-left rounded-2xl p-4 border-2 transition-all ${config.estilo === "alternativo" ? "border-purple-500 bg-purple-50 ring-4 ring-purple-100" : "border-gray-100 bg-white hover:border-gray-300"}`}
+                            >
+                                <div className="h-24 bg-orange-50 rounded-lg mb-3 flex items-center justify-center text-xs font-semibold text-orange-400">Preview Alternativo</div>
+                                <h4 className="font-bold text-gray-900">Estilo Alternativo</h4>
+                                <p className="text-[10px] text-gray-500 mt-1">Diseño en formato lista, minimalista e inspirado en estilo premium.</p>
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
