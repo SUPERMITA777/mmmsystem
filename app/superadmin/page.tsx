@@ -127,6 +127,7 @@ export default function SuperAdminPage() {
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
     const [metricsData, setMetricsData] = useState<any[]>([]);
     const [metricsLoading, setMetricsLoading] = useState(false);
+    const [selectedSucursalFilter, setSelectedSucursalFilter] = useState("all");
 
     // User Edit modal states
     const [showUserModal, setShowUserModal] = useState(false);
@@ -152,16 +153,23 @@ export default function SuperAdminPage() {
     async function fetchMetrics() {
         setMetricsLoading(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from("analytics_visitas")
                 .select(`
                     id,
                     fecha,
+                    hora,
                     cantidad,
                     sucursales (nombre, slug)
                 `)
                 .gte("fecha", startDate)
                 .lte("fecha", endDate);
+
+            if (selectedSucursalFilter !== "all") {
+                query = query.eq("sucursal_id", selectedSucursalFilter);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
             setMetricsData(data || []);
@@ -183,7 +191,7 @@ export default function SuperAdminPage() {
         if (isSuperAdmin && activeTab === "metrics") {
             fetchMetrics();
         }
-    }, [activeTab, isSuperAdmin, startDate, endDate]);
+    }, [activeTab, isSuperAdmin, startDate, endDate, selectedSucursalFilter]);
 
     async function handleExtendSubscription(tenantId: string) {
         if(!extendDays || isNaN(Number(extendDays))) return alert("Días inválidos");
@@ -257,6 +265,18 @@ export default function SuperAdminPage() {
     const totalVisits = useMemo(() => 
         metricsData.reduce((acc, curr) => acc + Number(curr.cantidad), 0)
     , [metricsData]);
+
+    const dataByHour = useMemo(() => {
+        const grouped: Record<number, number> = {};
+        metricsData.forEach(m => {
+            const h = Number(m.hora || 0);
+            grouped[h] = (grouped[h] || 0) + Number(m.cantidad);
+        });
+        return Array.from({length: 24}).map((_, i) => ({
+            hora_str: `${i.toString().padStart(2, '0')}:00`,
+            cantidad: grouped[i] || 0
+        }));
+    }, [metricsData]);
 
     const handleExportCSV = () => {
         const headers = ["Fecha", "Local", "Visitas"];
@@ -575,6 +595,21 @@ export default function SuperAdminPage() {
                             </div>
                             
                             <div className="flex flex-wrap items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-3 px-4 border-r border-white/10">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Local</span>
+                                        <select 
+                                            value={selectedSucursalFilter} 
+                                            onChange={e => setSelectedSucursalFilter(e.target.value)}
+                                            className="bg-transparent text-white text-xs font-bold outline-none border-b border-white/10 focus:border-[#00B2FF] cursor-pointer"
+                                        >
+                                            <option value="all" className="bg-[#111]">Todos los Locales</option>
+                                            {sucursales.map(s => (
+                                                <option key={s.id} value={s.id} className="bg-[#111]">{s.nombre}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
                                 <div className="flex items-center gap-3 px-4">
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Desde</span>
@@ -680,6 +715,52 @@ export default function SuperAdminPage() {
                                                 </Bar>
                                             </BarChart>
                                         </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Nueva Gráfica de Horarios Pico */}
+                        <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl mt-8">
+                            <div className="flex items-center gap-3 mb-8">
+                                <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shadow-[0_0_20px_rgba(249,115,22,0.15)]">
+                                    <TrendingUp size={20} className="text-orange-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-white tracking-tight">Horarios Pico</h3>
+                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1">Acumulado Histórico por Hora</p>
+                                </div>
+                            </div>
+                            
+                            <div className="h-[300px] w-full">
+                                {metricsData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={dataByHour} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                            <defs>
+                                                <linearGradient id="colorHora" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/>
+                                                    <stop offset="95%" stopColor="#f97316" stopOpacity={0.1}/>
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                                            <XAxis dataKey="hora_str" stroke="rgba(255,255,255,0.4)" fontSize={10} fontWeight={700} axisLine={false} tickLine={false} />
+                                            <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} fontWeight={800} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#111', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}
+                                                itemStyle={{ color: '#fff', fontSize: '14px', fontWeight: '800' }}
+                                                labelStyle={{ color: '#00B2FF', fontSize: '12px', fontWeight: '800', marginBottom: '8px' }}
+                                                formatter={(value: any) => [`${value} visitas`, "Cantidad"]}
+                                                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                                            />
+                                            <Bar dataKey="cantidad" fill="url(#colorHora)" radius={[4, 4, 0, 0]} barSize={20} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500">
+                                        <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10 mb-4 animate-pulse">
+                                            <TrendingUp size={24} className="text-slate-600" />
+                                        </div>
+                                        <p className="text-sm font-semibold tracking-wide">NO HAY DATOS EN EL PERÍODO SELECCIONADO</p>
                                     </div>
                                 )}
                             </div>
