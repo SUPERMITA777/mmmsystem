@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ExternalLink, ChefHat, TrendingUp } from "lucide-react";
+import { ExternalLink, ChefHat, TrendingUp, ChevronDown, Check } from "lucide-react";
 import ImageCropperModal from "@/components/ui/ImageCropperModal";
 
 type Categoria = {
@@ -77,6 +77,7 @@ export function ProductoEditor({
   const [gruposAsignados, setGruposAsignados] = useState<string[]>([]);
   const [fichasTecnicas, setFichasTecnicas] = useState<FichaTecnica[]>([]);
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (isCreating) {
@@ -140,6 +141,17 @@ export function ProductoEditor({
       setGruposAsignados([...gruposAsignados, grupoId]);
     }
   }
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (isDropdownOpen && !(e.target as Element).closest(".adicionales-dropdown")) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isDropdownOpen]);
 
   if (!isCreating && (!producto || !formData)) {
     return (
@@ -382,20 +394,52 @@ export function ProductoEditor({
             {todosLosGrupos.length === 0 ? (
               <p className="text-xs text-gray-400">No hay grupos de adicionales creados.</p>
             ) : (
-              <div className="space-y-2">
-                {todosLosGrupos.map(g => (
-                  <label key={g.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={gruposAsignados.includes(g.id)}
-                      onChange={() => toggleGrupo(g.id)}
-                      className="w-4 h-4 accent-purple-600 rounded"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{g.titulo}</p>
+              <div className="relative adicionales-dropdown">
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 bg-white border rounded-xl text-sm transition-all shadow-sm hover:border-purple-300 ${isDropdownOpen ? 'border-purple-500 ring-2 ring-purple-100' : 'border-gray-200'}`}
+                >
+                  <span className={gruposAsignados.length > 0 ? "text-gray-900 font-medium" : "text-gray-400"}>
+                    {gruposAsignados.length === 0 
+                      ? "Seleccionar adicionales..." 
+                      : `${gruposAsignados.length} ${gruposAsignados.length === 1 ? 'grupo asignado' : 'grupos asignados'}`}
+                  </span>
+                  <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${isDropdownOpen ? 'rotate-180 text-purple-500' : ''}`} />
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="max-h-60 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                      {todosLosGrupos.map(g => {
+                        const isSelected = gruposAsignados.includes(g.id);
+                        return (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => toggleGrupo(g.id)}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left ${
+                              isSelected 
+                                ? 'bg-purple-50 text-purple-700' 
+                                : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                              isSelected 
+                                ? 'bg-purple-600 border-purple-600' 
+                                : 'bg-white border-gray-300'
+                            }`}>
+                              {isSelected && <Check size={14} className="text-white" />}
+                            </div>
+                            <span className={`text-sm font-medium ${isSelected ? 'text-purple-900' : 'text-gray-700'}`}>
+                              {g.titulo}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </label>
-                ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -60,6 +60,62 @@ export default function MenuPage() {
   const [editingCategoria, setEditingCategoria] = useState<Categoria | null>(null);
   const { sucursalId, tenantSlug, loading: tenantLoading } = useTenant();
 
+  // Estados para anchos de columnas (Resizable)
+  const [catWidth, setCatWidth] = useState(256);
+  const [prodWidth, setProdWidth] = useState(256);
+  const [isResizingCat, setIsResizingCat] = useState(false);
+  const [isResizingProd, setIsResizingProd] = useState(false);
+
+  // Cargar anchos desde LocalStorage si existen
+  useEffect(() => {
+    const savedCatWidth = localStorage.getItem("menu_cat_width");
+    const savedProdWidth = localStorage.getItem("menu_prod_width");
+    if (savedCatWidth) setCatWidth(parseInt(savedCatWidth));
+    if (savedProdWidth) setProdWidth(parseInt(savedProdWidth));
+  }, []);
+
+  const handleMouseDownCat = () => setIsResizingCat(true);
+  const handleMouseDownProd = () => setIsResizingProd(true);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingCat) {
+        const newWidth = Math.max(160, Math.min(400, e.clientX - 64)); // Ajuste por sidebar
+        setCatWidth(newWidth);
+      }
+      if (isResizingProd) {
+        const newWidth = Math.max(160, Math.min(400, e.clientX - catWidth - 72));
+        setProdWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isResizingCat) {
+        setIsResizingCat(false);
+        localStorage.setItem("menu_cat_width", catWidth.toString());
+      }
+      if (isResizingProd) {
+        setIsResizingProd(false);
+        localStorage.setItem("menu_prod_width", prodWidth.toString());
+      }
+    };
+
+    if (isResizingCat || isResizingProd) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } else {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingCat, isResizingProd, catWidth]);
+
   useEffect(() => {
     if (sucursalId) loadCategorias();
   }, [sucursalId]);
@@ -665,10 +721,10 @@ export default function MenuPage() {
         </div>
       </div>
 
-      {/* Contenido principal - tres columnas en cards */}
-      <div className="flex-1 flex overflow-hidden px-4 pb-4 gap-0">
+      {/* Contenido principal - tres columnas en cards con resizers */}
+      <div className="flex-1 flex overflow-hidden px-4 pb-4 gap-0 relative">
         {/* Columna 1: Categorías */}
-        <div className="w-64 flex-shrink-0">
+        <div style={{ width: catWidth }} className="flex-shrink-0 flex flex-col">
           <CategoriasList
             categorias={categorias}
             categoriaSeleccionada={categoriaSeleccionada}
@@ -682,8 +738,16 @@ export default function MenuPage() {
           />
         </div>
 
+        {/* Resizer 1 */}
+        <div
+          onMouseDown={handleMouseDownCat}
+          className={`w-1.5 cursor-col-resize hover:bg-purple-400/20 active:bg-purple-500/30 transition-colors z-10 flex items-center justify-center group ${isResizingCat ? 'bg-purple-500/30' : ''}`}
+        >
+          <div className="w-[1px] h-8 bg-gray-200 group-hover:bg-purple-300 transition-colors" />
+        </div>
+
         {/* Columna 2: Productos */}
-        <div className="w-64 flex-shrink-0">
+        <div style={{ width: prodWidth }} className="flex-shrink-0 flex flex-col">
           <ProductosList
             productos={productosLista}
             productoSeleccionado={productoSeleccionado}
@@ -698,8 +762,16 @@ export default function MenuPage() {
           />
         </div>
 
+        {/* Resizer 2 */}
+        <div
+          onMouseDown={handleMouseDownProd}
+          className={`w-1.5 cursor-col-resize hover:bg-purple-400/20 active:bg-purple-500/30 transition-colors z-10 flex items-center justify-center group ${isResizingProd ? 'bg-purple-500/30' : ''}`}
+        >
+          <div className="w-[1px] h-8 bg-gray-200 group-hover:bg-purple-300 transition-colors" />
+        </div>
+
         {/* Columna 3: Editor */}
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden h-full">
           <ProductoEditor
             producto={isCreatingProduct ? null : productoActual}
             categorias={categorias}
