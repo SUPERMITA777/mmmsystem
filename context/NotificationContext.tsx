@@ -360,10 +360,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             }
           }
         })
-        .subscribe(async (status) => {
-            console.log(`[NotificationContext] 📡 Realtime status: ${status}`);
+        .subscribe(async (status, err) => {
+            console.log(`[NotificationContext] 📡 Realtime status: ${status}`, err || "");
+            if (status === "CHANNEL_ERROR") {
+                console.warn("[NotificationContext] ⚠️ CHANNEL_ERROR: Probable problema de permisos RLS o tabla no publicada en Realtime.");
+            }
+            if (status === "TIMED_OUT") {
+                console.warn("[NotificationContext] ⚠️ TIMED_OUT: Conexión lenta o bloqueada.");
+            }
             if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-                console.warn("[NotificationContext] ⚠️ Realtime falló, el sistema usará POLLING como respaldo.");
+                console.info("[NotificationContext] 🛡️ Usando POLLING de seguridad como respaldo.");
             }
         });
       

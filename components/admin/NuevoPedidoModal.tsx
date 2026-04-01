@@ -512,27 +512,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
             let resolvedClienteId = null;
             if (!omitirCliente && cliente.telefono) {
-                const { data: existingClient } = await supabase
-                    .from("clientes")
-                    .select("id")
-                    .eq("sucursal_id", sucursalId)
-                    .eq("telefono", cliente.telefono)
-                    .maybeSingle();
+                // Robust client handling with retry to avoid 409
+                let clientAttempts = 0;
+                while (clientAttempts < 3 && !resolvedClienteId) {
+                    clientAttempts++;
+                    const { data: existingClient } = await supabase
+                        .from("clientes")
+                        .select("id")
+                        .eq("sucursal_id", sucursalId)
+                        .eq("telefono", cliente.telefono)
+                        .maybeSingle();
 
-                if (existingClient) {
-                    resolvedClienteId = existingClient.id;
-                    await supabase.from("clientes").update({
-                        nombre: cliente.nombre,
-                        direccion: tipo === "delivery" && cliente.direccion ? cliente.direccion : undefined
-                    }).eq("id", resolvedClienteId);
-                } else {
-                    const { data: newClient } = await supabase.from("clientes").insert({
-                        sucursal_id: sucursalId,
-                        telefono: cliente.telefono,
-                        nombre: cliente.nombre,
-                        direccion: tipo === "delivery" ? cliente.direccion : null
-                    }).select("id").single();
-                    if (newClient) resolvedClienteId = newClient.id;
+                    if (existingClient) {
+                        resolvedClienteId = existingClient.id;
+                        await supabase.from("clientes").update({
+                            nombre: cliente.nombre,
+                            direccion: tipo === "delivery" && cliente.direccion ? cliente.direccion : undefined
+                        }).eq("id", resolvedClienteId);
+                    } else {
+                        const { data: newClient, error: cError } = await supabase.from("clientes").insert({
+                            sucursal_id: sucursalId,
+                            telefono: cliente.telefono,
+                            nombre: cliente.nombre,
+                            direccion: tipo === "delivery" ? cliente.direccion : null
+                        }).select("id").maybeSingle();
+
+                        if (newClient) {
+                            resolvedClienteId = newClient.id;
+                        } else if (cError?.code === '23505') {
+                            // Race condition: someone else just created it. Retry to fetch it.
+                            continue;
+                        } else if (cError) {
+                            throw cError;
+                        }
+                    }
                 }
             }
 
@@ -567,55 +580,84 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (iError2) throw iError2;
                 pedidoFinalId = editPedido.id;
             } else {
-                // CREATE new order - daily sequential numbering
-                const now = new Date();
-                
-                // Formateador para zona horaria de Buenos Aires
-                const formatter = new Intl.DateTimeFormat('en-CA', { 
-                    timeZone: 'America/Argentina/Buenos_Aires', 
-                    year: 'numeric', 
-                    month: '2-digit', 
-                    day: '2-digit' 
-                });
-                const todayStr = formatter.format(now); // Formato YYYY-MM-DD
-                
-                const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
-                const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
+                // CREATE new order - daily sequential numbering with RETRY loop
+                let attempts = 0;
+                let createdPedido: any = null;
 
-                const { data: lastP } = await supabase
-                    .from("pedidos")
-                    .select("numero_pedido, created_at")
-                    .eq("sucursal_id", sucursalId)
-                    .like("numero_pedido", `%-${datePart}-%`)
-                    .gte("created_at", `${todayStr}T00:00:00-03:00`)
-                    .lte("created_at", `${todayStr}T23:59:59-03:00`)
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                let nextSeq = 1;
-                if (lastP?.numero_pedido) {
-                    const match = lastP.numero_pedido.match(/(\d+)$/);
-                    if (match) nextSeq = parseInt(match[1], 10) + 1;
+                while (attempts < 5 && !createdPedido) {
+                    attempts++;
+                    const now = new Date();
+                    const formatter = new Intl.DateTimeFormat('en-CA', { 
+                        timeZone: 'America/Argentina/Buenos_Aires', 
+                        year: 'numeric', month: '2-digit', day: '2-digit' 
+                    });
+                    const todayStr = formatter.format(now);
+                    const datePart = todayStr.replace(/-/g, '');
+                    const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
+
+                    const { data: lastP } = await supabase
+                        .from("pedidos")
+                        .select("numero_pedido, created_at")
+                        .eq("sucursal_id", sucursalId)
+                        .like("numero_pedido", `%-${datePart}-%`)
+                        .order("numero_pedido", { ascending: false }) // Use numero_pedido for sequence sorting
+                        .limit(1)
+                        .maybeSingle();
+
+                    let nextSeq = 1;
+                    if (lastP?.numero_pedido) {
+                        const match = lastP.numero_pedido.match(/(\d+)$/);
+                        if (match) nextSeq = parseInt(match[1], 10) + 1;
+                    }
+                    
+                    // If retrying, ensure we increment
+                    if (attempts > 1) {
+                        const { data: retryCheck } = await supabase
+                            .from("pedidos")
+                            .select("numero_pedido")
+                            .eq("sucursal_id", sucursalId)
+                            .like("numero_pedido", `%-${datePart}-%`)
+                            .order("numero_pedido", { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        if (retryCheck?.numero_pedido) {
+                            const match2 = retryCheck.numero_pedido.match(/(\d+)$/);
+                            if (match2) nextSeq = Math.max(nextSeq, parseInt(match2[1], 10) + 1);
+                        }
+                    }
+
+                    const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
+
+                    const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
+                        sucursal_id: sucursalId,
+                        numero_pedido: numeroPedido,
+                        cliente_id: resolvedClienteId,
+                        cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
+                        cliente_telefono: cliente.telefono,
+                        cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
+                        tipo, subtotal, costo_envio: costoEnvio, total,
+                        metodo_pago_id: metodoPagoId,
+                        metodo_pago_nombre: metodoPagoNombre,
+                        estado: "pendiente",
+                        notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
+                        cliente_lat: direccionGeocoded?.lat,
+                        cliente_lng: direccionGeocoded?.lng
+                    }).select().single();
+
+                    if (pError) {
+                        if (pError.code === '23505') {
+                            console.warn(`Colisión detectada para ${numeroPedido} en intento ${attempts}, reintentando...`);
+                            continue;
+                        }
+                        throw pError;
+                    }
+                    createdPedido = pedido;
                 }
-                const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                    sucursal_id: sucursalId,
-                    numero_pedido: `${tipoPrefix}-${datePart}-${nextSeq}`,
-                    cliente_id: resolvedClienteId,
-                    cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
-                    cliente_telefono: cliente.telefono,
-                    cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
-                    tipo, subtotal, costo_envio: costoEnvio, total,
-                    metodo_pago_id: metodoPagoId,
-                    metodo_pago_nombre: metodoPagoNombre,
-                    estado: "pendiente",
-                    notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
-                    cliente_lat: direccionGeocoded?.lat,
-                    cliente_lng: direccionGeocoded?.lng
-                }).select().single();
-                if (pError) throw pError;
+
+                if (!createdPedido) throw new Error("No se pudo generar un número de pedido único tras varios intentos.");
 
                 const items = carrito.map(item => ({
-                    pedido_id: pedido.id,
+                    pedido_id: createdPedido.id,
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
@@ -625,7 +667,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }));
                 const { error: iError3 } = await supabase.from("pedido_items").insert(items);
                 if (iError3) throw iError3;
-                pedidoFinalId = pedido.id;
+                pedidoFinalId = createdPedido.id;
             }
 
             onCreated();

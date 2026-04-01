@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { X, ShoppingBag, MapPin, Banknote, CreditCard, Tag, Receipt, Pencil, Minus, Plus, Trash2, CheckCircle, AlertCircle, Loader, LocateFixed, Gift } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { useTenant } from "@/context/TenantContext";
 import { supabase } from "@/lib/supabaseClient";
 import { pointInPolygon, getDistance, LatLng } from "@/lib/geoutils";
 
@@ -22,6 +23,7 @@ type ZonaEntrega = {
 
 export default function CartModal({ onClose, isOpen }: { onClose: () => void, isOpen: boolean }) {
     const { items, updateQty, removeItem, total, clearCart } = useCart();
+    const { sucursalId, sucursalData } = useTenant();
     const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "takeaway">("delivery");
     const [nombre, setNombre] = useState("");
     const [telefono, setTelefono] = useState("");
@@ -90,20 +92,19 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             setClienteCoords(clientePt);
 
             // 2. Cargar zonas activas con polígonos
-            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-            if (!suc) { setZonaError("Error interno."); setGeocodingState("error"); return; }
+            if (!sucursalId) { setZonaError("Error interno."); setGeocodingState("error"); return; }
 
             const { data: zonas } = await supabase
                 .from("zonas_entrega")
                 .select("*")
-                .eq("sucursal_id", suc.id)
+                .eq("sucursal_id", sucursalId)
                 .eq("activo", true);
 
             // 3. Cargar config del local
             const { data: cfg } = await supabase
                 .from("config_sucursal")
                 .select("local_lat, local_lng")
-                .eq("sucursal_id", suc.id)
+                .eq("sucursal_id", sucursalId)
                 .limit(1)
                 .maybeSingle();
 
@@ -219,12 +220,11 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
         setPromoValidating(true);
         setPromoResult(null);
         try {
-            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-            if (!suc) { setPromoResult({ valid: false, message: "Error interno" }); return; }
+            if (!sucursalId) { setPromoResult({ valid: false, message: "Error interno" }); return; }
             const res = await fetch("/api/promo/validate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ codigo: codigoPromo.trim().toUpperCase(), sucursalId: suc.id }),
+                body: JSON.stringify({ codigo: codigoPromo.trim().toUpperCase(), sucursalId: sucursalId }),
             });
             const data = await res.json();
             setPromoResult(data);
@@ -255,105 +255,151 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
         setSending(true);
         try {
-            // 1. Obtener Sucursal ID y número de WhatsApp
-            const { data: sucursal } = await supabase.from("sucursales").select("id, whatsapp_numero").limit(1).single();
-            if (!sucursal) throw new Error("No se encontró sucursal activa.");
+            if (!sucursalId) throw new Error("No se encontró sucursal activa.");
+
+            // 1. WhatsApp del local (usamos sucursalData del contexto)
+            let whatsappNum = sucursalData?.whatsapp_numero;
+            if (!whatsappNum) {
+                const { data: s } = await supabase.from("sucursales").select("whatsapp_numero").eq("id", sucursalId).single();
+                whatsappNum = s?.whatsapp_numero;
+            }
 
             // 2. Obtener Método de Pago ID
             const { data: mPago } = await supabase
                 .from("metodos_pago")
                 .select("id, nombre")
                 .eq("codigo", metodoPago)
-                .eq("sucursal_id", sucursal.id)
+                .eq("sucursal_id", sucursalId)
                 .single();
 
-            // 2b. Generar número de pedido diario (empieza en 1 cada día)
-            const now = new Date();
-            
-            // Formateador para zona horaria de Buenos Aires
-            const formatter = new Intl.DateTimeFormat('en-CA', { 
-                timeZone: 'America/Argentina/Buenos_Aires', 
-                year: 'numeric', 
-                month: '2-digit', 
-                day: '2-digit' 
-            });
-            const todayStr = formatter.format(now); // Formato YYYY-MM-DD
-            
-            const datePart = todayStr.replace(/-/g, ''); // YYYYMMDD
-            const tipoPrefix = tipoEntrega === "delivery" ? "DELIVERY" : "TAKE AWAY";
+            // 2b. Generar número de pedido con RETRY loop para evitar colisiones
+            let numeroPedido = "";
+            let resolvedPedido: any = null;
+            let attempts = 0;
+            const maxAttempts = 5;
 
-            const { data: lastPedido } = await supabase
-                .from("pedidos")
-                .select("numero_pedido, created_at")
-                .eq("sucursal_id", sucursal.id)
-                .like("numero_pedido", `%-${datePart}-%`)
-                .gte("created_at", `${todayStr}T00:00:00-03:00`)
-                .lte("created_at", `${todayStr}T23:59:59-03:00`)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            while (attempts < maxAttempts && !resolvedPedido) {
+                attempts++;
+                const now = new Date();
+                const formatter = new Intl.DateTimeFormat('en-CA', { 
+                    timeZone: 'America/Argentina/Buenos_Aires', 
+                    year: 'numeric', month: '2-digit', day: '2-digit' 
+                });
+                const todayStr = formatter.format(now);
+                const datePart = todayStr.replace(/-/g, '');
+                const tipoPrefix = tipoEntrega === "delivery" ? "DELIVERY" : "TAKE AWAY";
 
-            let nextSeq = 1;
-            if (lastPedido?.numero_pedido) {
-                const match = lastPedido.numero_pedido.match(/(\d+)$/);
-                if (match) nextSeq = parseInt(match[1], 10) + 1;
-            }
-            const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
-
-            // 2c. Buscar o crear cliente
-            let resolvedClienteId = null;
-            if (telefono) {
-                const { data: existingClient } = await supabase
-                    .from("clientes")
-                    .select("id")
-                    .eq("sucursal_id", sucursal.id)
-                    .eq("telefono", telefono)
+                // Query last order ONLY for this date part in numero_pedido
+                const { data: lastPedido } = await supabase
+                    .from("pedidos")
+                    .select("numero_pedido")
+                    .eq("sucursal_id", sucursalId)
+                    .like("numero_pedido", `%-${datePart}-%`)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
                     .maybeSingle();
 
-                if (existingClient) {
-                    resolvedClienteId = existingClient.id;
-                    await supabase.from("clientes").update({
-                        nombre: nombre,
-                        direccion: tipoEntrega === "delivery" && direccion ? direccion : undefined
-                    }).eq("id", resolvedClienteId);
-                } else {
-                    const { data: newClient } = await supabase.from("clientes").insert({
-                        sucursal_id: sucursal.id,
-                        telefono: telefono,
-                        nombre: nombre,
-                        direccion: tipoEntrega === "delivery" ? direccion : null
-                    }).select("id").single();
-                    if (newClient) resolvedClienteId = newClient.id;
+                let nextSeq = 1;
+                if (lastPedido?.numero_pedido) {
+                    const match = lastPedido.numero_pedido.match(/(\d+)$/);
+                    if (match) nextSeq = parseInt(match[1], 10) + 1;
                 }
+                
+                // Si estamos reintentando, asegurarnos de que la secuencia sea mayor
+                if (attempts > 1) {
+                    // Refrescar para estar seguros
+                    const { data: latestRaw } = await supabase
+                        .from("pedidos")
+                        .select("numero_pedido")
+                        .eq("sucursal_id", sucursalId)
+                        .like("numero_pedido", `%-${datePart}-%`)
+                        .order("numero_pedido", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+                    
+                    if (latestRaw?.numero_pedido) {
+                        const lastM = latestRaw.numero_pedido.match(/(\d+)$/);
+                        if (lastM) nextSeq = Math.max(nextSeq, parseInt(lastM[1], 10) + 1);
+                    }
+                }
+
+                numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
+
+                // 2c. Buscar o crear cliente (una sola vez)
+                let resolvedClienteId = null;
+                if (telefono) {
+                    const { data: existingClient } = await supabase
+                        .from("clientes")
+                        .select("id")
+                        .eq("sucursal_id", sucursalId)
+                        .eq("telefono", telefono)
+                        .maybeSingle();
+
+                    if (existingClient) {
+                        resolvedClienteId = existingClient.id;
+                        await supabase.from("clientes").update({
+                            nombre: nombre,
+                            direccion: tipoEntrega === "delivery" && direccion ? direccion : undefined
+                        }).eq("id", resolvedClienteId);
+                    } else {
+                        const { data: newClient, error: cError } = await supabase.from("clientes").insert({
+                            sucursal_id: sucursalId,
+                            telefono: telefono,
+                            nombre: nombre,
+                            direccion: tipoEntrega === "delivery" ? direccion : null
+                        }).select("id").maybeSingle();
+
+                        if (newClient) {
+                            resolvedClienteId = newClient.id;
+                        } else if (cError?.code === '23505') {
+                            // Race condition: someone else created it. 
+                            // The next iteration of the outer loop will find it via maybeSingle().
+                            console.warn("Cliente ya existe (race condition), reintentando en siguiente ciclo");
+                            continue; 
+                        } else if (cError) {
+                            throw cError;
+                        }
+                    }
+                }
+
+                // 3. Crear el Pedido en la base de datos
+                const { data: pedido, error: pedidoError } = await supabase
+                    .from("pedidos")
+                    .insert([{
+                        sucursal_id: sucursalId,
+                        numero_pedido: numeroPedido,
+                        cliente_id: resolvedClienteId,
+                        cliente_nombre: nombre,
+                        cliente_telefono: telefono,
+                        cliente_direccion: tipoEntrega === "delivery" ? direccion : null,
+                        cliente_lat: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lat : null,
+                        cliente_lng: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lng : null,
+                        tipo: tipoEntrega,
+                        estado: 'pendiente',
+                        origen: 'web',
+                        subtotal: total,
+                        costo_envio: COSTO_ENVIO,
+                        propina: propina,
+                        total: totalConPropina,
+                        metodo_pago_id: mPago?.id,
+                        metodo_pago_nombre: mPago?.nombre || (metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'),
+                        notas: conCuanto ? `Abona con: $${conCuanto}` : ""
+                    }])
+                    .select()
+                    .single();
+
+                if (pedidoError) {
+                    if (pedidoError.code === '23505') {
+                        console.warn(`Colisión detectada para ${numeroPedido}, reintentando...`);
+                        continue; // Reintentar con el siguiente número
+                    }
+                    throw pedidoError;
+                }
+                resolvedPedido = pedido;
             }
 
-            // 3. Crear el Pedido en la base de datos
-            const { data: pedido, error: pedidoError } = await supabase
-                .from("pedidos")
-                .insert([{
-                    sucursal_id: sucursal.id,
-                    numero_pedido: numeroPedido,
-                    cliente_id: resolvedClienteId,
-                    cliente_nombre: nombre,
-                    cliente_telefono: telefono,
-                    cliente_direccion: tipoEntrega === "delivery" ? direccion : null,
-                    cliente_lat: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lat : null,
-                    cliente_lng: tipoEntrega === "delivery" && clienteCoords ? clienteCoords.lng : null,
-                    tipo: tipoEntrega,
-                    estado: 'pendiente',
-                    origen: 'web',
-                    subtotal: total,
-                    costo_envio: COSTO_ENVIO,
-                    propina: propina,
-                    total: totalConPropina,
-                    metodo_pago_id: mPago?.id,
-                    metodo_pago_nombre: mPago?.nombre || (metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'),
-                    notas: conCuanto ? `Abona con: $${conCuanto}` : ""
-                }])
-                .select()
-                .single();
-
-            if (pedidoError) throw pedidoError;
+            if (!resolvedPedido) throw new Error("No se pudo generar un número de pedido único tras varios intentos.");
+            const pedido = resolvedPedido;
 
             // 4. Crear los ítems del pedido
             const itemsToInsert = items.map(i => ({
@@ -417,7 +463,7 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 `*Pago:* ${metodoPago === "efectivo" ? `Efectivo${conCuanto ? ` (con $${conCuanto})` : ""}` : "Transferencia"}`;
 
             // Formatear número: quitar todo salvo dígitos
-            const rawPhone = (sucursal.whatsapp_numero || "").replace(/\D/g, "");
+            const rawPhone = (whatsappNum || "").replace(/\D/g, "");
             // Si ya empieza con 54 usarlo tal cual, si no, agregar prefijo
             const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
             const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
