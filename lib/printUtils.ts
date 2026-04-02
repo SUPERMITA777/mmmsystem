@@ -133,11 +133,12 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
                   <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;${bw(c, 'fuente_adicionales')}">+${fmtARS(a.precio ?? 0)}</td>
                 </tr>`
       ).join("");
+      const itemNotas = item.notas ? `<tr><td colspan="2" style="font-size:${c.fuente_adicionales || (c.fuente_items - 2)}px;font-weight:bold;padding-left:10px;font-style:italic">📝 ${item.notas}</td></tr>` : "";
       return `
                 <tr>
                   <td style="padding:3px 0;font-size:${c.fuente_items}px">${item.cantidad} ${item.nombre_producto}</td>
                   <td style="text-align:right;padding:3px 0;font-size:${c.fuente_items}px;white-space:nowrap">${fmtARS(subtotal)}</td>
-                </tr>${ads}`;
+                </tr>${ads}${itemNotas}`;
     }).join("");
     return headerRow + catItemsRows;
   }).join("");
@@ -199,6 +200,14 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <table>${itemsRows}</table>
 
   <hr class="sep">
+
+  <!-- NOTAS DEL PEDIDO -->
+  ${pedido.notas ? `
+  <div style="font-size:16px;font-weight:bold;margin:10px 0;padding:8px;border:1px solid #000;border-radius:4px">
+    COMENTARIOS: <br>
+    ${pedido.notas.toUpperCase()}
+  </div>
+  <hr class="sep">` : ""}
 
   <!-- TOTALES -->
   <table style="font-size:${c.fuente_totales}px">
@@ -314,7 +323,13 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
 
   <hr class="sep">
 
-  <!-- PRODUCTOS -->
+  <!-- NOTAS GENERALES -->
+  ${pedido.notas ? `
+  <div style="font-size:18px;font-weight:bold;margin:4px 0;padding:6px;border:2px solid #000;text-align:center">
+    COMENTARIOS: ${pedido.notas.toUpperCase()}
+  </div>
+  <hr class="sep">` : ""}
+
   <!-- PRODUCTOS -->
   ${itemsHtml}
 
