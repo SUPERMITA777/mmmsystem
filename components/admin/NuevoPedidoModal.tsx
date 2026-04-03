@@ -602,22 +602,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     const datePart = todayStr.replace(/-/g, '');
                     const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
 
-                    const { data: lastP } = await supabase
-                        .from("pedidos")
-                        .select("numero_pedido")
-                        .eq("sucursal_id", sucursalId)
-                        .like("numero_pedido", `%-${datePart}-%`)
-                        .order("numero_pedido", { ascending: false }) // Usar numero_pedido para asegurar secuencia
-                        .limit(1)
-                        .maybeSingle();
+                    // LLamar al RPC para obtener el siguiente número (Atómico y numérico)
+                    const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', {
+                        p_sucursal_id: sucursalId,
+                        p_date_part: datePart
+                    });
 
-                    let nextSeq = 1;
-                    if (lastP?.numero_pedido) {
-                        const match = lastP.numero_pedido.match(/(\d+)$/);
-                        if (match) nextSeq = parseInt(match[1], 10) + 1;
+                    if (rpcError) {
+                        console.error("[NuevoPedidoModal] Error calling get_next_order_number:", rpcError);
+                        throw rpcError;
                     }
-                    
-                    const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
+
+                    const paddedSeq = String(nextSeq).padStart(4, '0');
+                    const numeroPedido = `${tipoPrefix}-${datePart}-${paddedSeq}`;
 
                     const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
                         sucursal_id: sucursalId,

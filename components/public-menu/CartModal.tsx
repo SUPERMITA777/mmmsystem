@@ -295,23 +295,19 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                 const datePart = todayStr.replace(/-/g, '');
                 const tipoPrefix = tipoEntrega === "delivery" ? "DELIVERY" : "TAKE AWAY";
 
-                // Query last order ONLY for this date part in numero_pedido
-                const { data: lastPedido } = await supabase
-                    .from("pedidos")
-                    .select("numero_pedido")
-                    .eq("sucursal_id", sucursalId)
-                    .like("numero_pedido", `%-${datePart}-%`)
-                    .order("numero_pedido", { ascending: false }) // Usar numero_pedido para asegurar secuencia
-                    .limit(1)
-                    .maybeSingle();
+                // 2b-bis. Llamar al RPC para obtener el siguiente número (Atómico y numérico)
+                const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', {
+                    p_sucursal_id: sucursalId,
+                    p_date_part: datePart
+                });
 
-                let nextSeq = 1;
-                if (lastPedido?.numero_pedido) {
-                    const match = lastPedido.numero_pedido.match(/(\d+)$/);
-                    if (match) nextSeq = parseInt(match[1], 10) + 1;
+                if (rpcError) {
+                    console.error("[CartModal] Error calling get_next_order_number:", rpcError);
+                    throw rpcError;
                 }
-                
-                numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
+
+                const paddedSeq = String(nextSeq).padStart(4, '0');
+                numeroPedido = `${tipoPrefix}-${datePart}-${paddedSeq}`;
 
                 // 2c. Buscar o crear cliente (una sola vez)
                 let resolvedClienteId = null;
