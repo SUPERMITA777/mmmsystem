@@ -26,12 +26,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (saved === "true") {
       setAudioEnabled(true);
       console.log("[NotificationContext] 🔄 Recordando estado de audio: ACTIVADO");
-      
-      // Inicializar AudioContext si ya estaba habilitado
-      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
-      if (AudioCtx && !audioContextRef.current) {
-          audioContextRef.current = new AudioCtx();
-      }
     }
   }, []);
 
@@ -61,17 +55,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
 
     const handleGlobalClick = () => {
-      if (audioEnabled && audioContextRef.current && audioContextRef.current.state === "suspended") {
-        console.log("[NotificationContext] 🖱️ Autoresumiendo AudioContext por interacción global...");
-        audioContextRef.current.resume().then(() => {
-          setIsAudioContextSuspended(false);
-          // Opcional: pequeño tono de confirmación al desbloquear
-          if (playNotificationSoundRef.current) {
-             console.log("[NotificationContext] ✅ Audio desbloqueado");
-             // trigger a small test sound to confirm
-             playNotificationSoundRef.current();
+      // Intentar inicializar/resumir AudioContext en el primer click
+      if (audioEnabled) {
+        if (!audioContextRef.current) {
+          const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext);
+          if (AudioCtx) {
+            audioContextRef.current = new AudioCtx();
+            console.log("[NotificationContext] 🎹 AudioContext inicializado por click global");
           }
-        });
+        }
+
+        if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+          console.log("[NotificationContext] 🖱️ Autoresumiendo AudioContext por interacción global...");
+          audioContextRef.current.resume().then(() => {
+            setIsAudioContextSuspended(false);
+            console.log("[NotificationContext] ✅ Audio desbloqueado");
+            // Opcional: pequeño tono de confirmación al desbloquear
+            if (playNotificationSoundRef.current) {
+              playNotificationSoundRef.current();
+            }
+          });
+        }
       }
     };
 

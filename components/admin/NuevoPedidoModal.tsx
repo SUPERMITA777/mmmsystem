@@ -583,9 +583,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 // CREATE new order - daily sequential numbering with RETRY loop
                 let attempts = 0;
                 let createdPedido: any = null;
+                const maxAttempts = 10;
 
-                while (attempts < 5 && !createdPedido) {
+                while (attempts < maxAttempts && !createdPedido) {
                     attempts++;
+
+                    // Si es un reintento, esperamos un poco
+                    if (attempts > 1) {
+                        await new Promise(r => setTimeout(r, 300 * (attempts - 1)));
+                    }
+
                     const now = new Date();
                     const formatter = new Intl.DateTimeFormat('en-CA', { 
                         timeZone: 'America/Argentina/Buenos_Aires', 
@@ -597,10 +604,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
                     const { data: lastP } = await supabase
                         .from("pedidos")
-                        .select("numero_pedido, created_at")
+                        .select("numero_pedido")
                         .eq("sucursal_id", sucursalId)
                         .like("numero_pedido", `%-${datePart}-%`)
-                        .order("numero_pedido", { ascending: false }) // Use numero_pedido for sequence sorting
+                        .order("numero_pedido", { ascending: false }) // Usar numero_pedido para asegurar secuencia
                         .limit(1)
                         .maybeSingle();
 
@@ -610,22 +617,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         if (match) nextSeq = parseInt(match[1], 10) + 1;
                     }
                     
-                    // If retrying, ensure we increment
-                    if (attempts > 1) {
-                        const { data: retryCheck } = await supabase
-                            .from("pedidos")
-                            .select("numero_pedido")
-                            .eq("sucursal_id", sucursalId)
-                            .like("numero_pedido", `%-${datePart}-%`)
-                            .order("numero_pedido", { ascending: false })
-                            .limit(1)
-                            .maybeSingle();
-                        if (retryCheck?.numero_pedido) {
-                            const match2 = retryCheck.numero_pedido.match(/(\d+)$/);
-                            if (match2) nextSeq = Math.max(nextSeq, parseInt(match2[1], 10) + 1);
-                        }
-                    }
-
                     const numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
 
                     const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
@@ -646,7 +637,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
                     if (pError) {
                         if (pError.code === '23505') {
-                            console.warn(`Colisión detectada para ${numeroPedido} en intento ${attempts}, reintentando...`);
+                            console.warn(`[NuevoPedidoModal] Colisión detectada para ${numeroPedido} en intento ${attempts}, reintentando...`);
                             continue;
                         }
                         throw pError;

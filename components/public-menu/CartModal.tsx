@@ -276,10 +276,16 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
             let numeroPedido = "";
             let resolvedPedido: any = null;
             let attempts = 0;
-            const maxAttempts = 5;
+            const maxAttempts = 10;
 
             while (attempts < maxAttempts && !resolvedPedido) {
                 attempts++;
+                
+                // Si es un reintento, esperamos un poco para que se asiente la DB
+                if (attempts > 1) {
+                    await new Promise(r => setTimeout(r, 300 * (attempts - 1)));
+                }
+
                 const now = new Date();
                 const formatter = new Intl.DateTimeFormat('en-CA', { 
                     timeZone: 'America/Argentina/Buenos_Aires', 
@@ -295,7 +301,7 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                     .select("numero_pedido")
                     .eq("sucursal_id", sucursalId)
                     .like("numero_pedido", `%-${datePart}-%`)
-                    .order("created_at", { ascending: false })
+                    .order("numero_pedido", { ascending: false }) // Usar numero_pedido para asegurar secuencia
                     .limit(1)
                     .maybeSingle();
 
@@ -305,24 +311,6 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                     if (match) nextSeq = parseInt(match[1], 10) + 1;
                 }
                 
-                // Si estamos reintentando, asegurarnos de que la secuencia sea mayor
-                if (attempts > 1) {
-                    // Refrescar para estar seguros
-                    const { data: latestRaw } = await supabase
-                        .from("pedidos")
-                        .select("numero_pedido")
-                        .eq("sucursal_id", sucursalId)
-                        .like("numero_pedido", `%-${datePart}-%`)
-                        .order("numero_pedido", { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    
-                    if (latestRaw?.numero_pedido) {
-                        const lastM = latestRaw.numero_pedido.match(/(\d+)$/);
-                        if (lastM) nextSeq = Math.max(nextSeq, parseInt(lastM[1], 10) + 1);
-                    }
-                }
-
                 numeroPedido = `${tipoPrefix}-${datePart}-${nextSeq}`;
 
                 // 2c. Buscar o crear cliente (una sola vez)
@@ -352,10 +340,8 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
                         if (newClient) {
                             resolvedClienteId = newClient.id;
                         } else if (cError?.code === '23505') {
-                            // Race condition: someone else created it. 
-                            // The next iteration of the outer loop will find it via maybeSingle().
-                            console.warn("Cliente ya existe (race condition), reintentando en siguiente ciclo");
-                            continue; 
+                            console.warn("Cliente ya existe (race condition), se recuperará en el siguiente intento de pedido");
+                            // No arrojamos, el loop de pedido reintentará y encontrará al cliente arriba
                         } else if (cError) {
                             throw cError;
                         }
@@ -390,8 +376,8 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
 
                 if (pedidoError) {
                     if (pedidoError.code === '23505') {
-                        console.warn(`Colisión detectada para ${numeroPedido}, reintentando...`);
-                        continue; // Reintentar con el siguiente número
+                        console.warn(`[CartModal] Colisión detectada para ${numeroPedido} en intento ${attempts}, reintentando...`);
+                        continue; 
                     }
                     throw pedidoError;
                 }
