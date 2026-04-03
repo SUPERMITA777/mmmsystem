@@ -20,7 +20,9 @@ export type CommandIntent =
     | "hide_menu"
     | "show_menu"
     | "disable_category"
-    | "enable_category";
+    | "enable_category"
+    | "disable_by_ingredient"
+    | "enable_by_ingredient";
 
 export interface ParsedCommand {
     intent: CommandIntent;
@@ -28,6 +30,7 @@ export interface ParsedCommand {
     value?: number;
     newName?: string;
     targetType: "producto" | "categoria";
+    ingredientName?: string;
 }
 
 export interface ParseResult {
@@ -47,10 +50,13 @@ REGLAS CRÍTICAS:
 1. "targetName" debe contener SOLO el nombre del producto o categoría, SIN calificadores ni instrucciones adicionales.
 2. Si el usuario agrega texto extra como "tanto productos como adicionales", "de todos los tipos", "que están activos", etc., IGNORALO — no es parte del nombre.
 3. Si el comando menciona varias acciones, enfocate en la acción principal.
+4. Si el usuario pide deshabilitar/habilitar productos que CONTENGAN o TENGAN un ingrediente en su receta, usá "disable_by_ingredient" o "enable_by_ingredient" y poné el nombre del ingrediente en "ingredientName".
 
 Intents posibles:
 - "disable_product": Desactivar producto
 - "enable_product": Activar producto
+- "disable_by_ingredient": Desactivar todos los productos que contengan un ingrediente en su receta
+- "enable_by_ingredient": Activar todos los productos que contengan un ingrediente en su receta
 - "price_increase_percent": Aumentar precio por porcentaje
 - "price_decrease_percent": Disminuir precio por porcentaje
 - "price_increase_fixed": Aumentar precio monto fijo ($)
@@ -64,7 +70,7 @@ Intents posibles:
 - "enable_category": Activar categoría
 
 Formato JSON:
-{"intent":"...","targetName":"...","targetType":"producto"|"categoria","value":number,"newName":"..."}
+{"intent":"...","targetName":"...","targetType":"producto"|"categoria","value":number,"newName":"...","ingredientName":"..."}
 
 Ejemplos:
 "baja el precio de las empanadas un 10%" -> {"intent":"price_decrease_percent","targetName":"empanadas","targetType":"producto","value":10}
@@ -75,6 +81,10 @@ Ejemplos:
 "cambia el nombre de coca a coca cola zero" -> {"intent":"rename","targetName":"coca","targetType":"producto","newName":"coca cola zero"}
 "deshabilita las empanadas de carne, tanto productos como adicionales" -> {"intent":"disable_product","targetName":"empanadas de carne","targetType":"producto"}
 "aumenta todo un 20%" -> {"intent":"price_increase_percent","targetName":"todo","targetType":"producto","value":20}
+"deshabilita todos los productos que tengan cebolla en su receta" -> {"intent":"disable_by_ingredient","targetName":"","targetType":"producto","ingredientName":"cebolla"}
+"habilita todos los productos que contengan albahaca" -> {"intent":"enable_by_ingredient","targetName":"","targetType":"producto","ingredientName":"albahaca"}
+"desactiva los productos con mozzarella" -> {"intent":"disable_by_ingredient","targetName":"","targetType":"producto","ingredientName":"mozzarella"}
+"activa los que tengan tomate en la receta" -> {"intent":"enable_by_ingredient","targetName":"","targetType":"producto","ingredientName":"tomate"}
 
 Responde SOLO el JSON, sin texto extra.`;
 
@@ -225,6 +235,35 @@ const patterns: PatternDef[] = [
         targetType: "producto",
         extractTarget: (m) => m[1],
     },
+    // ── DISABLE/ENABLE BY INGREDIENT (must come BEFORE generic disable/enable) ──
+    {
+        regex: /(?:deshabilita|desactiva|deshabilitá|desactivá|inhabilita|inhabilitá|apaga|apagá)\s+(?:todos?\s+)?(?:los?\s+)?(?:productos?\s+)?(?:que\s+)?(?:tengan|contengan|lleven|usen|incluyan|tienen|contienen)\s+(.+?)(?:\s+en\s+(?:su\s+)?(?:receta|ficha))?\s*$/i,
+        intent: "disable_by_ingredient",
+        targetType: "producto",
+        extractTarget: () => "",
+        extractNewName: (m) => m[1],
+    },
+    {
+        regex: /(?:deshabilita|desactiva|deshabilitá|desactivá|inhabilita|inhabilitá|apaga|apagá)\s+(?:todos?\s+)?(?:los?\s+)?(?:productos?\s+)?(?:con|que\s+usan)\s+(.+?)(?:\s+en\s+(?:su\s+)?(?:receta|ficha))?\s*$/i,
+        intent: "disable_by_ingredient",
+        targetType: "producto",
+        extractTarget: () => "",
+        extractNewName: (m) => m[1],
+    },
+    {
+        regex: /(?:habilita|activa|habilitá|activá|prende|prendé|enciende|encendé)\s+(?:todos?\s+)?(?:los?\s+)?(?:productos?\s+)?(?:que\s+)?(?:tengan|contengan|lleven|usen|incluyan|tienen|contienen)\s+(.+?)(?:\s+en\s+(?:su\s+)?(?:receta|ficha))?\s*$/i,
+        intent: "enable_by_ingredient",
+        targetType: "producto",
+        extractTarget: () => "",
+        extractNewName: (m) => m[1],
+    },
+    {
+        regex: /(?:habilita|activa|habilitá|activá|prende|prendé|enciende|encendé)\s+(?:todos?\s+)?(?:los?\s+)?(?:productos?\s+)?(?:con|que\s+usan)\s+(.+?)(?:\s+en\s+(?:su\s+)?(?:receta|ficha))?\s*$/i,
+        intent: "enable_by_ingredient",
+        targetType: "producto",
+        extractTarget: () => "",
+        extractNewName: (m) => m[1],
+    },
     // ── DISABLE/ENABLE PRODUCT ──
     {
         regex: /(?:deshabilita|desactiva|deshabilitá|desactivá|inhabilita|inhabilitá|apaga|apagá)\s+(?:el\s+producto\s+)?(?:las?\s+|los?\s+|la\s+|el\s+)?(.+)/i,
@@ -268,7 +307,11 @@ function parseWithRegex(input: string): ParseResult {
             if (pattern.extractValue) command.value = pattern.extractValue(match);
             if (pattern.extractNewName) {
                 const raw = pattern.extractNewName(match);
-                command.newName = raw ? cleanEntityName(raw) : undefined;
+                if (pattern.intent === "disable_by_ingredient" || pattern.intent === "enable_by_ingredient") {
+                    command.ingredientName = raw ? cleanEntityName(raw) : undefined;
+                } else {
+                    command.newName = raw ? cleanEntityName(raw) : undefined;
+                }
             }
 
             return { success: true, command };
@@ -331,6 +374,10 @@ export function describeCommand(cmd: ParsedCommand): string {
             return `Desactivar la categoría "${target}"`;
         case "enable_category":
             return `Activar la categoría "${target}"`;
+        case "disable_by_ingredient":
+            return `Desactivar todos los productos que contengan "${cmd.ingredientName}" en su receta`;
+        case "enable_by_ingredient":
+            return `Activar todos los productos que contengan "${cmd.ingredientName}" en su receta`;
         default:
             return `Ejecutar acción sobre "${target}"`;
     }

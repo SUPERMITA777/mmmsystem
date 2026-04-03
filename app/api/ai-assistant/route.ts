@@ -53,6 +53,82 @@ async function findCategories(name: string) {
     return data || [];
 }
 
+// Find products that contain a specific ingredient in their recipes (recetas + fichas técnicas)
+async function findProductsByIngredient(ingredientName: string) {
+    // 1. Find matching ingredients by name
+    const { data: matchingIngredients } = await supabaseAdmin
+        .from("ingredientes")
+        .select("id, nombre")
+        .ilike("nombre", `%${ingredientName}%`);
+
+    if (!matchingIngredients || matchingIngredients.length === 0) return { products: [], ingredientNames: [] };
+
+    const ingredientIds = matchingIngredients.map((i) => i.id);
+    const ingredientNames = matchingIngredients.map((i) => i.nombre);
+    const productIdSet = new Set<string>();
+
+    // 2. Search in "recetas" table (direct product → ingredient link)
+    for (const ingId of ingredientIds) {
+        const { data: recetas } = await supabaseAdmin
+            .from("recetas")
+            .select("producto_id")
+            .eq("ingrediente_id", ingId);
+        if (recetas) {
+            for (const r of recetas) {
+                if (r.producto_id) productIdSet.add(r.producto_id);
+            }
+        }
+    }
+
+    // 3. Search in "ficha_tecnica_items" → fichas_tecnicas → productos
+    //    Level 1: fichas that directly contain the ingredient
+    for (const ingId of ingredientIds) {
+        const { data: fichaItems } = await supabaseAdmin
+            .from("ficha_tecnica_items")
+            .select("ficha_tecnica_id")
+            .eq("tipo", "ingrediente")
+            .eq("ingrediente_id", ingId);
+        if (fichaItems) {
+            const fichaIds = fichaItems.map((fi) => fi.ficha_tecnica_id);
+            if (fichaIds.length > 0) {
+                // Find products linked to these fichas
+                const { data: prods } = await supabaseAdmin
+                    .from("productos")
+                    .select("id")
+                    .in("ficha_tecnica_id", fichaIds);
+                if (prods) prods.forEach((p) => productIdSet.add(p.id));
+
+                // Level 2: fichas that use these fichas as sub-recipes
+                const { data: parentFichaItems } = await supabaseAdmin
+                    .from("ficha_tecnica_items")
+                    .select("ficha_tecnica_id")
+                    .eq("tipo", "sub_receta")
+                    .in("sub_ficha_id", fichaIds);
+                if (parentFichaItems) {
+                    const parentFichaIds = parentFichaItems.map((pfi) => pfi.ficha_tecnica_id);
+                    if (parentFichaIds.length > 0) {
+                        const { data: prods2 } = await supabaseAdmin
+                            .from("productos")
+                            .select("id")
+                            .in("ficha_tecnica_id", parentFichaIds);
+                        if (prods2) prods2.forEach((p) => productIdSet.add(p.id));
+                    }
+                }
+            }
+        }
+    }
+
+    if (productIdSet.size === 0) return { products: [], ingredientNames };
+
+    // 4. Fetch full product data for all matched product IDs
+    const { data: products } = await supabaseAdmin
+        .from("productos")
+        .select("id, nombre, precio, activo, visible_en_menu, categoria_id, sucursal_id")
+        .in("id", Array.from(productIdSet));
+
+    return { products: products || [], ingredientNames };
+}
+
 // Log a change for rollback
 async function logChange(params: {
     sucursalId: string | null;
@@ -134,6 +210,62 @@ async function executeCommand(cmd: ParsedCommand, originalInput: string) {
         return {
             success: true,
             message: `✅ ${results.map((r) => `"${r.nombre}" → ${r.detalle}`).join(", ")}`,
+            interpreted: description,
+            affectedCount: results.length,
+        };
+    }
+
+    // ── Ingredient-based commands ──
+    if (cmd.intent === "disable_by_ingredient" || cmd.intent === "enable_by_ingredient") {
+        const ingName = cmd.ingredientName || cmd.targetName;
+        if (!ingName) {
+            return {
+                success: false,
+                message: `No se especificó un ingrediente para buscar.`,
+                interpreted: description,
+            };
+        }
+
+        const { products, ingredientNames } = await findProductsByIngredient(ingName);
+
+        if (ingredientNames.length === 0) {
+            return {
+                success: false,
+                message: `No encontré ningún ingrediente que coincida con "${ingName}"`,
+                interpreted: description,
+            };
+        }
+
+        if (products.length === 0) {
+            return {
+                success: false,
+                message: `Encontré el ingrediente "${ingredientNames.join(", ")}" pero ningún producto tiene ese ingrediente en su receta.`,
+                interpreted: description,
+            };
+        }
+
+        const newActivo = cmd.intent === "enable_by_ingredient";
+        const accion = newActivo ? "activado" : "desactivado";
+
+        for (const prod of products) {
+            await supabaseAdmin.from("productos").update({ activo: newActivo }).eq("id", prod.id);
+            await logChange({
+                sucursalId: prod.sucursal_id,
+                comandoOriginal: originalInput,
+                comandoInterpretado: description,
+                tablaAfectada: "productos",
+                registroId: prod.id,
+                registroNombre: prod.nombre,
+                campoModificado: "activo",
+                valorAnterior: String(prod.activo),
+                valorNuevo: String(newActivo),
+            });
+            results.push({ nombre: prod.nombre, detalle: accion });
+        }
+
+        return {
+            success: true,
+            message: `✅ Ingrediente(s): ${ingredientNames.join(", ")}\n${results.map((r) => `"${r.nombre}" → ${r.detalle}`).join("\n")}`,
             interpreted: description,
             affectedCount: results.length,
         };
