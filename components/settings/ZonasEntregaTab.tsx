@@ -230,16 +230,20 @@ export function ZonasEntregaTab() {
             const res = await fetch(`/api/geocode?q=${encodeURIComponent(localSearch)}`);
             const data = await res.json();
 
-            if (data.status === 'OK' && data.results?.[0]) {
-                const { lat, lng } = data.results[0].geometry.location;
+            // Nuestra API /api/geocode retorna un array de resultados directamente [{lat, lon, display_name...}]
+            if (data && data[0]) {
+                const first = data[0];
+                const lat = parseFloat(first.lat);
+                const lng = parseFloat(first.lon);
+
                 setConfig(prev => ({
                     ...prev,
                     local_lat: lat,
                     local_lng: lng,
-                    local_direccion: data.results[0].formatted_address || localSearch
+                    local_direccion: first.display_name || localSearch
                 }));
                 // Si la dirección formateada de Google es mejor, la actualizamos en el buscador
-                setLocalSearch(data.results[0].formatted_address || localSearch);
+                setLocalSearch(first.display_name || localSearch);
             } else {
                 alert("No se encontró la dirección. Intentá ser más específico.");
             }
