@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { X, Loader2 } from "lucide-react";
 import { GoogleMap, HeatmapLayer, useJsApiLoader } from "@react-google-maps/api";
 
-const libraries: ("geometry" | "visualization")[] = ["geometry", "visualization"];
+const libraries: ("geometry" | "visualization" | "marker")[] = ["geometry", "visualization", "marker"];
 
 export default function HeatmapModal({ sucursalId, onClose }: { sucursalId: string, onClose: () => void }) {
     const [pedidosCoords, setPedidosCoords] = useState<{lat: number, lng: number}[]>([]);

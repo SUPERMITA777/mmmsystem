@@ -17,6 +17,20 @@ export function getArgentinaDate(): string {
     day: '2-digit',
   }).format(now);
 }
+/**
+ * Returns yesterday's date in Argentina as a "YYYY-MM-DD" string.
+ */
+export function getArgentinaYesterday(): string {
+  const baDate = getArgentinaDate(); // "YYYY-MM-DD"
+  const date = new Date(baDate + 'T12:00:00'); // Midday to avoid boundary issues
+  date.setDate(date.getDate() - 1);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: ARGENTINA_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
 
 /**
  * Returns the first day of the current month in Argentina as a "YYYY-MM-DD" string.

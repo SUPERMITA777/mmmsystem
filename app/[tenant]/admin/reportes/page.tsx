@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
-import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
+import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina, getArgentinaYesterday } from "@/lib/dateUtils";
 
 // --- Components ---
 import AsignarCostoModal from "@/components/admin/reportes/AsignarCostoModal";
@@ -62,7 +62,7 @@ export default function ReportesPage() {
     const [selectedProductForCosto, setSelectedProductForCosto] = useState<any>(null);
 
     // Dates
-    const [startDate, setStartDate] = useState(getArgentinaFirstDayOfMonth());
+    const [startDate, setStartDate] = useState(getArgentinaDate());
     const [endDate, setEndDate] = useState(getArgentinaDate());
 
     useEffect(() => {
@@ -262,6 +262,30 @@ export default function ReportesPage() {
                             onChange={(e) => setEndDate(e.target.value)}
                             className="text-xs font-bold text-gray-700 outline-none uppercase bg-transparent"
                         />
+                    </div>
+
+                    {/* Quick Filters */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => {
+                                const hoy = getArgentinaDate();
+                                setStartDate(hoy);
+                                setEndDate(hoy);
+                            }}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-500 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
+                        >
+                            HOY
+                        </button>
+                        <button
+                            onClick={() => {
+                                const ayer = getArgentinaYesterday();
+                                setStartDate(ayer);
+                                setEndDate(ayer);
+                            }}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-400 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
+                        >
+                            AYER
+                        </button>
                     </div>
                     <button
                         onClick={exportToCSV}

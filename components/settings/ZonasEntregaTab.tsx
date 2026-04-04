@@ -45,7 +45,7 @@ const mapContainerStyle = {
     width: "100%",
 };
 
-const libraries: ("places" | "drawing" | "geometry" | "visualization")[] = ["geometry", "visualization"];
+const libraries: ("places" | "drawing" | "geometry" | "visualization" | "marker")[] = ["geometry", "visualization", "marker"];
 
 function MapaZonas({
     zonas,
