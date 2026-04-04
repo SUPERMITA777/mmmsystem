@@ -30,7 +30,7 @@ const mapContainerStyle = {
 const ZONA_COLORS = ["#8b5cf6", "#ef4444", "#f59e0b", "#10b981", "#3b82f6"];
 
 // Definimos las librerías necesarias fuera del componente para evitar re-cargas innecesarias
-const libraries: ("places" | "marker" | "drawing" | "geometry")[] = ["marker", "geometry"];
+const libraries: ("places" | "drawing" | "geometry" | "visualization")[] = ["geometry", "visualization"];
 
 export default function PanelPedidosMap({
     pedidos,

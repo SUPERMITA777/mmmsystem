@@ -3,16 +3,19 @@
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Loader2 } from "lucide-react";
-import { GoogleMap, useLoadScript, HeatmapLayer } from "@react-google-maps/api";
+import { GoogleMap, HeatmapLayer, useJsApiLoader } from "@react-google-maps/api";
 
-const libraries: ("visualization")[] = ["visualization"];
+const libraries: ("geometry" | "visualization")[] = ["geometry", "visualization"];
 
 export default function HeatmapModal({ sucursalId, onClose }: { sucursalId: string, onClose: () => void }) {
     const [pedidosCoords, setPedidosCoords] = useState<{lat: number, lng: number}[]>([]);
     const [loadingData, setLoadingData] = useState(true);
 
-    const { isLoaded, loadError } = useLoadScript({
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
         googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+        language: 'es',
+        region: 'ar',
         libraries,
     });
 
