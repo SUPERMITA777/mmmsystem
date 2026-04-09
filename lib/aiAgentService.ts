@@ -732,85 +732,97 @@ export async function processWhatsAppMessage(
     // 6. Filter tools based on allowed operations
     const allowedTools = filterToolsByPermissions(config.allowed_operations);
 
-    // 7. Call Gemini
-    try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            systemInstruction: systemPrompt,
-            tools: allowedTools.length > 0 ? allowedTools : undefined,
-        });
+    // 7. Call Gemini with Fallback
+    const modelCandidates = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"];
+    let lastError: any = null;
 
-        // Build chat history from recent messages
-        const chatHistory = recentMessages.map(msg => ({
-            role: msg.from_me ? "model" as const : "user" as const,
-            parts: [{ text: msg.from_me ? (msg.reply_text || "") : msg.message_text }],
-        })).filter(m => m.parts[0].text);
+    for (const modelId of modelCandidates) {
+        try {
+            console.log(`[Agent Gemini] Trying model: ${modelId}`);
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+            const model = genAI.getGenerativeModel({
+                model: modelId,
+                systemInstruction: systemPrompt,
+                tools: allowedTools.length > 0 ? allowedTools : undefined,
+            });
 
-        const chat = model.startChat({ history: chatHistory });
+            // Build chat history from recent messages
+            const chatHistory = recentMessages.map(msg => ({
+                role: msg.from_me ? "model" as const : "user" as const,
+                parts: [{ text: msg.from_me ? (msg.reply_text || "") : msg.message_text }],
+            })).filter(m => m.parts[0].text);
 
-        let response = await chat.sendMessage(text);
-        let result = response.response;
-        let actionPerformed: AgentResponse["action"] | undefined;
+            const chat = model.startChat({ history: chatHistory });
 
-        // Handle function calls (tool use)
-        let maxIterations = 5;
-        while (result.candidates?.[0]?.content?.parts?.some(p => p.functionCall) && maxIterations > 0) {
-            maxIterations--;
-            const functionCalls = result.candidates[0].content.parts.filter(p => p.functionCall);
+            let response = await chat.sendMessage(text);
+            let result = response.response;
+            let actionPerformed: AgentResponse["action"] | undefined;
 
-            const functionResponses = [];
-            for (const part of functionCalls) {
-                const fc = part.functionCall!;
-                const toolResult = await executeTool(fc.name, fc.args as Record<string, any>, sucursalId, config);
+            // Handle function calls (tool use)
+            let maxIterations = 5;
+            while (result.candidates?.[0]?.content?.parts?.some(p => p.functionCall) && maxIterations > 0) {
+                maxIterations--;
+                const functionCalls = result.candidates[0].content.parts.filter(p => p.functionCall);
 
-                functionResponses.push({
-                    functionResponse: {
-                        name: fc.name,
-                        response: JSON.parse(toolResult),
-                    },
-                });
+                const functionResponses = [];
+                for (const part of functionCalls) {
+                    const fc = part.functionCall!;
+                    const toolResult = await executeTool(fc.name, fc.args as Record<string, any>, sucursalId, config);
 
-                // Track the action
-                if (!actionPerformed && fc.name !== "get_products" && fc.name !== "get_product_price" && fc.name !== "get_categories" && fc.name !== "get_active_orders") {
-                    actionPerformed = {
-                        type: fc.name,
-                        details: fc.args as Record<string, any>,
-                        result: toolResult,
-                    };
+                    functionResponses.push({
+                        functionResponse: {
+                            name: fc.name,
+                            response: JSON.parse(toolResult),
+                        },
+                    });
+
+                    // Track the action
+                    if (!actionPerformed && fc.name !== "get_products" && fc.name !== "get_product_price" && fc.name !== "get_categories" && fc.name !== "get_active_orders") {
+                        actionPerformed = {
+                            type: fc.name,
+                            details: fc.args as Record<string, any>,
+                            result: toolResult,
+                        };
+                    }
                 }
+
+                response = await chat.sendMessage(functionResponses);
+                result = response.response;
             }
 
-            response = await chat.sendMessage(functionResponses);
-            result = response.response;
+            const replyText = result.text() || "No pude procesar tu mensaje. ¿Podrías reformularlo?";
+
+            console.log(`[Agent Gemini] Successfully generated reply with ${modelId}`);
+
+            // 8. Save messages
+            await saveMessage(conversation.id, sucursalId, senderPhone, text, replyText, false);
+
+            return {
+                reply: replyText,
+                action: actionPerformed,
+            };
+        } catch (err: any) {
+            lastError = err;
+            console.warn(`[Agent Gemini] Model ${modelId} failed:`, err.message || err);
+            
+            // If it's not a quota error, maybe don't bother trying other models?
+            // But usually 429 is the main reason to switch.
+            if (err.status !== 429 && !err.message?.includes("quota") && !err.message?.includes("429")) {
+                break; // Break loop if it's a different kind of error (like auth or safety)
+            }
+            // Continue to next model if 429
         }
-
-        const replyText = result.text() || "No pude procesar tu mensaje. ¿Podrías reformularlo?";
-
-        console.log(`[Agent Gemini] Generated Reply: "${replyText}"`);
-
-        // 8. Save messages
-        console.log(`[Agent Gemini] Saving message for conversation: ${conversation.id}`);
-        await saveMessage(conversation.id, sucursalId, senderPhone, text, replyText, false);
-
-        return {
-            reply: replyText,
-            action: actionPerformed,
-        };
-    } catch (err: any) {
-        console.error("[Agent Gemini Error CRITICO]:", err);
-        if (err.stack) console.error(err.stack);
-        
-        // No conversation id might be available if it failed very early
-        try {
-            // Optional: fallback save of error state if possible
-        } catch (e) {}
-
-        return {
-            reply: "😅 Perdón, tuve un problema técnico. ¿Podrías intentar de nuevo en unos segundos?",
-        };
     }
+
+    // If we get here, all models failed
+    console.error("[Agent Gemini Error FINAL]:", lastError);
+    if (lastError?.stack) console.error(lastError.stack);
+
+    return {
+        reply: "😅 Perdón, tuve un problema técnico con mi motor de IA. ¿Podrías intentar de nuevo en unos segundos?",
+    };
 }
+
 
 // ═══════════════════════════════════════════
 // TOOL FILTERING
