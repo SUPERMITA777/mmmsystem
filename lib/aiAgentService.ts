@@ -13,6 +13,14 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 // TYPES
 // ═══════════════════════════════════════════
 
+export interface PersonalityMode {
+    id: string;
+    name: string;
+    emoji: string;
+    description: string;
+    tone: string; // Instructions for the AI on how to communicate
+}
+
 export interface AgentConfig {
     enabled: boolean;
     whatsapp_enabled: boolean;
@@ -22,6 +30,13 @@ export interface AgentConfig {
     auto_reply: boolean;
     business_hours_only: boolean;
     max_tokens: number;
+    // New fields
+    agent_name: string;
+    personality_modes: PersonalityMode[];
+    active_personality: string; // ID of active mode
+    handoff_triggers: string[]; // phrases to hand off to human
+    resume_triggers: string[]; // phrases to resume the agent
+    handoff_timeout_seconds: number; // 0 = disabled
 }
 
 export interface TrainingSnippet {
@@ -37,7 +52,32 @@ export interface AgentResponse {
         details: Record<string, any>;
         result: string;
     };
+    handoff?: boolean; // true if the agent handed off to a human
 }
+
+const DEFAULT_PERSONALITIES: PersonalityMode[] = [
+    {
+        id: "friendly",
+        name: "Amigable",
+        emoji: "😊",
+        description: "Cálido, cercano y con humor. Ideal para negocios informales.",
+        tone: "Respondé de forma cálida, cercana y amigable. Usá humor suave y emojis para hacer la conversación amena. Tratá al cliente como si fuera un amigo. Si es posible, hacé comentarios simpáticos.",
+    },
+    {
+        id: "professional",
+        name: "Profesional",
+        emoji: "💼",
+        description: "Formal, eficiente y directo. Ideal para empresas serias.",
+        tone: "Respondé de forma profesional, eficiente y cortés. Sé directo y claro. Usá un tono respetuoso sin ser frío. Minimizá el uso de emojis. Priorizá la información precisa.",
+    },
+    {
+        id: "enthusiastic",
+        name: "Entusiasta",
+        emoji: "🚀",
+        description: "Energético, positivo y motivador. Ideal para marcas jóvenes.",
+        tone: "Respondé con mucha energía y entusiasmo. Usá emojis libremente, celebrá las decisiones del cliente, y mostrá pasión por los productos/servicios. Hacé que el cliente se sienta especial.",
+    },
+];
 
 const DEFAULT_CONFIG: AgentConfig = {
     enabled: false,
@@ -48,6 +88,12 @@ const DEFAULT_CONFIG: AgentConfig = {
     auto_reply: true,
     business_hours_only: false,
     max_tokens: 1000,
+    agent_name: "Asistente",
+    personality_modes: DEFAULT_PERSONALITIES,
+    active_personality: "friendly",
+    handoff_triggers: ["hablar con un humano", "hablar con una persona", "quiero hablar con", "operador", "agente humano"],
+    resume_triggers: ["volver al bot", "hablar con el bot", "hablar con el agente", "volver al asistente"],
+    handoff_timeout_seconds: 300, // 5 minutes
 };
 
 // ═══════════════════════════════════════════
@@ -227,17 +273,16 @@ export async function updateAgentConfig(
 // ═══════════════════════════════════════════
 
 async function getOrCreateConversation(sucursalId: string, senderPhone: string) {
-    // Try to find existing active conversation
+    // Try to find existing conversation (active or handed_off)
     const { data: existing } = await supabaseAdmin
         .from("whatsapp_conversations")
         .select("*")
         .eq("sucursal_id", sucursalId)
         .eq("sender_phone", senderPhone)
-        .eq("status", "active")
+        .in("status", ["active", "handed_off"])
         .maybeSingle();
 
     if (existing) {
-        // Update last_message_at
         await supabaseAdmin
             .from("whatsapp_conversations")
             .update({ last_message_at: new Date().toISOString() })
@@ -257,6 +302,47 @@ async function getOrCreateConversation(sucursalId: string, senderPhone: string) 
         .single();
 
     return newConv;
+}
+
+// ═══════════════════════════════════════════
+// HANDOFF MANAGEMENT
+// ═══════════════════════════════════════════
+
+function matchesTrigger(text: string, triggers: string[]): boolean {
+    const normalized = text.toLowerCase().trim();
+    return triggers.some(trigger => normalized.includes(trigger.toLowerCase()));
+}
+
+async function handOffConversation(conversationId: string, handedTo: string) {
+    await supabaseAdmin
+        .from("whatsapp_conversations")
+        .update({
+            status: "handed_off",
+            metadata: {
+                handed_off_at: new Date().toISOString(),
+                handed_off_to: handedTo,
+            },
+        })
+        .eq("id", conversationId);
+}
+
+async function resumeConversation(conversationId: string) {
+    await supabaseAdmin
+        .from("whatsapp_conversations")
+        .update({
+            status: "active",
+            metadata: {},
+        })
+        .eq("id", conversationId);
+}
+
+function isHandoffTimedOut(conversation: any, timeoutSeconds: number): boolean {
+    if (timeoutSeconds <= 0) return false;
+    if (conversation.status !== "handed_off") return false;
+    const handedOffAt = conversation.metadata?.handed_off_at;
+    if (!handedOffAt) return false;
+    const elapsed = (Date.now() - new Date(handedOffAt).getTime()) / 1000;
+    return elapsed >= timeoutSeconds;
 }
 
 async function saveMessage(
@@ -518,16 +604,26 @@ function buildSystemPrompt(config: AgentConfig, sucursalName: string): string {
         .map(op => operationDescriptions[op] || op)
         .join(", ");
 
-    let prompt = `Sos el asistente virtual de "${sucursalName}". 
-Tu rol es atender a los clientes por WhatsApp de manera amable, rápida y profesional.
+    // Get active personality
+    const personality = config.personality_modes.find(p => p.id === config.active_personality)
+        || config.personality_modes[0];
+
+    const agentName = config.agent_name || "Asistente";
+
+    let prompt = `Tu nombre es "${agentName}", sos el asistente virtual de "${sucursalName}". 
+Cuando un cliente te pregunte cómo te llamás o quién sos, presentate como ${agentName}.
+Tu rol es atender a los clientes por WhatsApp.
+
+PERSONALIDAD Y TONO:
+${personality.tone}
 
 REGLAS FUNDAMENTALES:
-1. Respondé siempre en español argentino informal pero respetuoso (usá "vos" en vez de "tú").
+1. Respondé siempre en español argentino (usá "vos" en vez de "tú").
 2. Sé conciso: las respuestas de WhatsApp deben ser cortas y directas.
-3. Usá emojis con moderación para hacer la conversación más amena.
-4. Si no sabés algo, decilo honestamente y ofrecé contactar al encargado.
-5. NUNCA inventes información sobre productos, precios o disponibilidad. Usá las herramientas disponibles.
-6. Si un cliente pide algo que no podés hacer, explicale amablemente por qué.
+3. Si no sabés algo, decilo honestamente y ofrecé contactar al encargado.
+4. NUNCA inventes información sobre productos, precios o disponibilidad. Usá las herramientas disponibles.
+5. Si un cliente pide algo que no podés hacer, explicale amablemente por qué.
+6. Si el cliente pide hablar con un humano, despedite amablemente e indicá que lo vas a derivar.
 
 OPERACIONES PERMITIDAS: ${allowedOps}.
 
@@ -573,6 +669,46 @@ export async function processWhatsAppMessage(
     const conversation = await getOrCreateConversation(sucursalId, senderPhone);
     if (!conversation) {
         return { reply: "⚠️ Error interno. Por favor intentá de nuevo." };
+    }
+
+    const agentName = config.agent_name || "Asistente";
+
+    // 3. HANDOFF LOGIC
+    // Check if user wants to resume the agent
+    if (conversation.status === "handed_off") {
+        if (matchesTrigger(text, config.resume_triggers)) {
+            await resumeConversation(conversation.id);
+            await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            return {
+                reply: `¡Hola de nuevo! 👋 Soy ${agentName}, tu asistente virtual. ¿En qué puedo ayudarte?`,
+            };
+        }
+        // Check if timeout has elapsed
+        if (isHandoffTimedOut(conversation, config.handoff_timeout_seconds)) {
+            await resumeConversation(conversation.id);
+            // Fall through to normal processing
+        } else {
+            // Still handed off, don't respond
+            await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            return { reply: "" };
+        }
+    }
+
+    // Check if user wants to talk to a human
+    if (matchesTrigger(text, config.handoff_triggers)) {
+        // Extract the name they want to talk to (if any)
+        const handedTo = text.replace(/quiero\s+hablar\s+con\s*/i, "").trim() || "operador";
+        await handOffConversation(conversation.id, handedTo);
+        await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+
+        const timeoutMsg = config.handoff_timeout_seconds > 0
+            ? ` Si no te responden en ${Math.round(config.handoff_timeout_seconds / 60)} minutos, vuelvo a estar disponible automáticamente.`
+            : "";
+
+        return {
+            reply: `Entendido, te voy a derivar con ${handedTo}. 🙌${timeoutMsg}\n\nSi querés volver a hablar conmigo, escribí "hablar con el bot".`,
+            handoff: true,
+        };
     }
 
     // 3. Get recent conversation history for context

@@ -36,6 +36,7 @@ export async function GET(request: Request) {
                         sender_name,
                         last_message_at,
                         status,
+                        metadata,
                         created_at
                     `)
                     .eq("sucursal_id", sucursalId)
@@ -85,11 +86,33 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
-        const { sucursal_id, config } = body;
+        const { sucursal_id, section, config, conversation_id } = body;
 
-        if (!sucursal_id || !config) {
+        if (!sucursal_id) {
             return NextResponse.json(
-                { error: "sucursal_id y config son requeridos" },
+                { error: "sucursal_id es requerido" },
+                { status: 400 }
+            );
+        }
+
+        // Handle special sections
+        if (section === "resume_conversation") {
+            if (!conversation_id) {
+                return NextResponse.json({ error: "conversation_id requerido" }, { status: 400 });
+            }
+            await supabaseAdmin
+                .from("whatsapp_conversations")
+                .update({ status: "active", metadata: {} })
+                .eq("id", conversation_id)
+                .eq("sucursal_id", sucursal_id);
+
+            return NextResponse.json({ success: true, message: "Conversación retomada por el agente" });
+        }
+
+        // Default: update agent config
+        if (!config) {
+            return NextResponse.json(
+                { error: "config es requerido" },
                 { status: 400 }
             );
         }

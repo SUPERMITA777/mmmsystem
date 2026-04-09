@@ -7,13 +7,22 @@ import {
     Plus, Trash2, Save, Loader2, ToggleLeft, ToggleRight,
     ChevronDown, ChevronRight, Phone, Clock, Zap,
     Eye, Pencil, X, AlertCircle, CheckCircle,
-    MessageCircle, Activity, Settings2, GraduationCap
+    MessageCircle, Activity, Settings2, GraduationCap,
+    UserCheck, Timer, SmilePlus, HandMetal, ArrowLeftRight
 } from "lucide-react";
 
 interface TrainingSnippet {
     id: string;
     title: string;
     content: string;
+}
+
+interface PersonalityMode {
+    id: string;
+    name: string;
+    emoji: string;
+    description: string;
+    tone: string;
 }
 
 interface AgentConfig {
@@ -25,6 +34,12 @@ interface AgentConfig {
     auto_reply: boolean;
     business_hours_only: boolean;
     max_tokens: number;
+    agent_name: string;
+    personality_modes: PersonalityMode[];
+    active_personality: string;
+    handoff_triggers: string[];
+    resume_triggers: string[];
+    handoff_timeout_seconds: number;
 }
 
 interface Conversation {
@@ -33,6 +48,7 @@ interface Conversation {
     sender_name: string;
     last_message_at: string;
     status: string;
+    metadata?: any;
     created_at: string;
 }
 
@@ -89,6 +105,13 @@ export default function AgenteIAPage() {
 
     // Actions
     const [actions, setActions] = useState<AgentAction[]>([]);
+
+    // Handoff triggers
+    const [newHandoffTrigger, setNewHandoffTrigger] = useState("");
+    const [newResumeTrigger, setNewResumeTrigger] = useState("");
+
+    // Personality editing
+    const [editingPersonality, setEditingPersonality] = useState<string | null>(null);
 
     // Load config
     const loadConfig = useCallback(async () => {
@@ -158,6 +181,23 @@ export default function AgenteIAPage() {
         if (data.success) setActions(data.actions);
     }
 
+    // Resume a conversation from handoff
+    async function handleResumeConversation(conversationId: string) {
+        if (!sucursalId) return;
+        try {
+            await fetch("/api/ai/agent-config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursal_id: sucursalId,
+                    section: "resume_conversation",
+                    conversation_id: conversationId,
+                }),
+            });
+            loadConversations();
+        } catch { }
+    }
+
     useEffect(() => {
         if (activeSection === "conversations") loadConversations();
         if (activeSection === "actions") loadActions();
@@ -197,6 +237,37 @@ export default function AgenteIAPage() {
             training_snippets: config.training_snippets.map(s => s.id === snippet.id ? snippet : s)
         });
         setEditingSnippet(null);
+    }
+
+    // Handoff trigger management
+    function addHandoffTrigger() {
+        if (!config || !newHandoffTrigger.trim()) return;
+        setConfig({ ...config, handoff_triggers: [...(config.handoff_triggers || []), newHandoffTrigger.trim().toLowerCase()] });
+        setNewHandoffTrigger("");
+    }
+    function removeHandoffTrigger(t: string) {
+        if (!config) return;
+        setConfig({ ...config, handoff_triggers: (config.handoff_triggers || []).filter(x => x !== t) });
+    }
+    function addResumeTrigger() {
+        if (!config || !newResumeTrigger.trim()) return;
+        setConfig({ ...config, resume_triggers: [...(config.resume_triggers || []), newResumeTrigger.trim().toLowerCase()] });
+        setNewResumeTrigger("");
+    }
+    function removeResumeTrigger(t: string) {
+        if (!config) return;
+        setConfig({ ...config, resume_triggers: (config.resume_triggers || []).filter(x => x !== t) });
+    }
+
+    // Personality management
+    function updatePersonality(id: string, field: string, value: string) {
+        if (!config) return;
+        setConfig({
+            ...config,
+            personality_modes: (config.personality_modes || []).map(p =>
+                p.id === id ? { ...p, [field]: value } : p
+            ),
+        });
     }
 
     if (loading) {
@@ -266,7 +337,7 @@ export default function AgenteIAPage() {
             )}
 
             {/* Navigation Tabs */}
-            <div className="flex gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+            <div className="flex gap-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100 overflow-x-auto">
                 {sections.map(s => {
                     const Icon = s.icon;
                     const active = activeSection === s.id;
@@ -274,7 +345,7 @@ export default function AgenteIAPage() {
                         <button
                             key={s.id}
                             onClick={() => setActiveSection(s.id as any)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                                 active ? "bg-white text-purple-700 shadow-sm border border-gray-200" : "text-gray-500 hover:text-gray-700 hover:bg-white/50"
                             }`}
                         >
@@ -293,6 +364,101 @@ export default function AgenteIAPage() {
             {/* ═══ SECTION: General Config ═══ */}
             {activeSection === "config" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+                    {/* Agent Identity */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <SmilePlus size={18} className="text-purple-500" /> Identidad del Agente
+                        </h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nombre del Agente</label>
+                                <input
+                                    value={config.agent_name || ""}
+                                    onChange={e => setConfig({ ...config, agent_name: e.target.value })}
+                                    placeholder="Ej: Luna, Asistente, María..."
+                                    className="w-full max-w-md border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-gray-50"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">El agente se presentará con este nombre ante los clientes</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Personality Modes */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                            <Sparkles size={18} className="text-purple-500" /> Personalidad
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-5">
+                            Elegí un modo de personalidad y personalizá el tono de comunicación de tu agente.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            {(config.personality_modes || []).map(p => {
+                                const isActive = config.active_personality === p.id;
+                                const isEditing = editingPersonality === p.id;
+                                return (
+                                    <div
+                                        key={p.id}
+                                        className={`relative rounded-2xl border-2 p-5 transition-all cursor-pointer ${
+                                            isActive
+                                                ? "border-purple-400 bg-purple-50/60 shadow-md shadow-purple-100"
+                                                : "border-gray-200 bg-gray-50/50 hover:border-gray-300"
+                                        }`}
+                                        onClick={() => !isEditing && setConfig({ ...config, active_personality: p.id })}
+                                    >
+                                        {isActive && (
+                                            <div className="absolute -top-2.5 right-3 bg-purple-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                                Activo
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl">{p.emoji}</span>
+                                                {isEditing ? (
+                                                    <input
+                                                        value={p.name}
+                                                        onChange={e => updatePersonality(p.id, "name", e.target.value)}
+                                                        onClick={e => e.stopPropagation()}
+                                                        className="font-bold text-gray-800 bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm w-28"
+                                                    />
+                                                ) : (
+                                                    <span className="font-bold text-gray-800">{p.name}</span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); setEditingPersonality(isEditing ? null : p.id); }}
+                                                className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-white rounded-lg transition-colors"
+                                            >
+                                                <Pencil size={13} />
+                                            </button>
+                                        </div>
+
+                                        {isEditing ? (
+                                            <div className="space-y-2" onClick={e => e.stopPropagation()}>
+                                                <input
+                                                    value={p.description}
+                                                    onChange={e => updatePersonality(p.id, "description", e.target.value)}
+                                                    className="w-full text-xs bg-white border border-gray-200 rounded-lg px-3 py-2"
+                                                    placeholder="Descripción corta..."
+                                                />
+                                                <textarea
+                                                    value={p.tone}
+                                                    onChange={e => updatePersonality(p.id, "tone", e.target.value)}
+                                                    rows={4}
+                                                    className="w-full text-xs bg-white border border-gray-200 rounded-lg px-3 py-2 resize-y"
+                                                    placeholder="Instrucciones de tono para la IA..."
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-gray-500 leading-relaxed">{p.description}</p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* Master Toggle */}
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                         <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -360,13 +526,117 @@ export default function AgenteIAPage() {
                         </div>
                     </div>
 
+                    {/* Handoff Configuration */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                            <ArrowLeftRight size={18} className="text-purple-500" /> Derivación a Humano
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-5">
+                            Configurá frases que activan la derivación a un operador humano y el retorno al agente.
+                        </p>
+
+                        {/* Timeout */}
+                        <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                                    <Timer size={18} className="text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="font-medium text-gray-800 text-sm">Timeout de Derivación</p>
+                                    <p className="text-xs text-gray-500">Si el operador no contesta, el agente retoma automáticamente</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 ml-[52px]">
+                                <select
+                                    value={config.handoff_timeout_seconds || 0}
+                                    onChange={e => setConfig({ ...config, handoff_timeout_seconds: Number(e.target.value) })}
+                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                >
+                                    <option value={0}>Desactivado (esperar indefinidamente)</option>
+                                    <option value={60}>1 minuto</option>
+                                    <option value={120}>2 minutos</option>
+                                    <option value={180}>3 minutos</option>
+                                    <option value={300}>5 minutos</option>
+                                    <option value={600}>10 minutos</option>
+                                    <option value={900}>15 minutos</option>
+                                    <option value={1800}>30 minutos</option>
+                                    <option value={3600}>1 hora</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Handoff Triggers */}
+                            <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                    <HandMetal size={14} className="text-orange-500" /> Frases para derivar a humano
+                                </h4>
+                                <div className="space-y-2 mb-3">
+                                    {(config.handoff_triggers || []).map(t => (
+                                        <div key={t} className="flex items-center gap-2 group">
+                                            <span className="flex-1 text-xs bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg border border-orange-100">
+                                                &quot;{t}&quot;
+                                            </span>
+                                            <button onClick={() => removeHandoffTrigger(t)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        value={newHandoffTrigger}
+                                        onChange={e => setNewHandoffTrigger(e.target.value)}
+                                        onKeyDown={e => e.key === "Enter" && addHandoffTrigger()}
+                                        placeholder="Ej: quiero hablar con Juan"
+                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                    />
+                                    <button onClick={addHandoffTrigger} disabled={!newHandoffTrigger.trim()} className="px-3 py-2 bg-orange-50 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-100 disabled:opacity-40 transition-colors">
+                                        <Plus size={14} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Resume Triggers */}
+                            <div>
+                                <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                    <UserCheck size={14} className="text-green-500" /> Frases para volver al agente
+                                </h4>
+                                <div className="space-y-2 mb-3">
+                                    {(config.resume_triggers || []).map(t => (
+                                        <div key={t} className="flex items-center gap-2 group">
+                                            <span className="flex-1 text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded-lg border border-green-100">
+                                                &quot;{t}&quot;
+                                            </span>
+                                            <button onClick={() => removeResumeTrigger(t)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        value={newResumeTrigger}
+                                        onChange={e => setNewResumeTrigger(e.target.value)}
+                                        onKeyDown={e => e.key === "Enter" && addResumeTrigger()}
+                                        placeholder="Ej: hablar con el bot"
+                                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                    />
+                                    <button onClick={addResumeTrigger} disabled={!newResumeTrigger.trim()} className="px-3 py-2 bg-green-50 text-green-600 rounded-lg text-xs font-medium hover:bg-green-100 disabled:opacity-40 transition-colors">
+                                        <Plus size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* System Prompt */}
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                         <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                            <Sparkles size={18} className="text-purple-500" /> Personalidad del Agente
+                            <BookOpen size={18} className="text-purple-500" /> Instrucciones Especiales
                         </h3>
                         <p className="text-xs text-gray-500 mb-4">
-                            Definí cómo debe comportarse tu agente, qué tono usar y qué reglas seguir.
+                            Instrucciones adicionales específicas de tu negocio.
                         </p>
 
                         {/* Templates */}
@@ -385,9 +655,9 @@ export default function AgenteIAPage() {
                         <textarea
                             value={config.system_prompt}
                             onChange={e => setConfig({ ...config, system_prompt: e.target.value })}
-                            rows={6}
+                            rows={5}
                             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 resize-y bg-gray-50 placeholder:text-gray-400"
-                            placeholder="Ej: Sos el asistente de nuestra pizzería. Atendé a los clientes con amabilidad, recomendá nuestros platos especiales y siempre confirmá la dirección de entrega..."
+                            placeholder="Ej: Siempre sugerí el combo del día. Los envíos se realizan dentro de un radio de 5 km..."
                         />
                     </div>
                 </div>
@@ -571,17 +841,39 @@ export default function AgenteIAPage() {
                                             }}
                                             className="w-full flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors text-left"
                                         >
-                                            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600 shrink-0">
-                                                <Phone size={16} />
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                                                conv.status === "handed_off"
+                                                    ? "bg-orange-50 text-orange-600"
+                                                    : "bg-green-50 text-green-600"
+                                            }`}>
+                                                {conv.status === "handed_off" ? <HandMetal size={16} /> : <Phone size={16} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-medium text-gray-800 text-sm">{conv.sender_name || conv.sender_phone.replace("@s.whatsapp.net", "")}</p>
                                                 <p className="text-xs text-gray-400">{new Date(conv.last_message_at).toLocaleString("es-AR")}</p>
                                             </div>
-                                            {selectedConversation === conv.id
-                                                ? <ChevronDown size={16} className="text-gray-400" />
-                                                : <ChevronRight size={16} className="text-gray-400" />
-                                            }
+                                            <div className="flex items-center gap-2">
+                                                {conv.status === "handed_off" && (
+                                                    <button
+                                                        onClick={e => { e.stopPropagation(); handleResumeConversation(conv.id); }}
+                                                        className="text-[10px] px-2.5 py-1 bg-green-50 text-green-700 rounded-lg font-bold border border-green-200 hover:bg-green-100 transition-colors"
+                                                        title="Devolver al agente IA"
+                                                    >
+                                                        ↩ Retomar IA
+                                                    </button>
+                                                )}
+                                                <span className={`text-[10px] px-2 py-1 rounded-lg font-bold uppercase tracking-wider ${
+                                                    conv.status === "handed_off"
+                                                        ? "bg-orange-50 text-orange-600"
+                                                        : "bg-green-50 text-green-600"
+                                                }`}>
+                                                    {conv.status === "handed_off" ? "Derivado" : "IA"}
+                                                </span>
+                                                {selectedConversation === conv.id
+                                                    ? <ChevronDown size={16} className="text-gray-400" />
+                                                    : <ChevronRight size={16} className="text-gray-400" />
+                                                }
+                                            </div>
                                         </button>
 
                                         {selectedConversation === conv.id && (
