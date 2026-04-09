@@ -138,7 +138,8 @@ async function setupWizard(): Promise<SavedConfig> {
     const tenantId = await ask(`Nombre de tu negocio (slug): `);
     if (!tenantId) {
         logError('El código de negocio no puede estar vacío.');
-        process.exit(1);
+        await waitAndExit();
+        return process.exit(1); 
     }
 
     console.log('');
@@ -317,10 +318,16 @@ async function connectToWhatsApp(config: SavedConfig) {
     });
 }
 
-function waitAndExit() {
+async function waitAndExit() {
     console.log(`  ${c.dim}Presioná ENTER para cerrar...${c.reset}`);
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.on('line', () => { rl.close(); process.exit(0); });
+    return new Promise<void>(resolve => {
+        rl.on('line', () => {
+            rl.close();
+            resolve();
+            process.exit(0);
+        });
+    });
 }
 
 // ═══════════════════════════════════════════
@@ -330,14 +337,28 @@ function waitAndExit() {
 async function main() {
     clearScreen();
     printBanner();
+    logInfo('Iniciando agente...');
 
     try {
         const config = await setupWizard();
         await connectToWhatsApp(config);
     } catch (error: any) {
-        logError(`Error fatal: ${error.message}`);
-        waitAndExit();
+        logError(`Error crítico en main: ${error.message}`);
+        console.error(error);
+        await waitAndExit();
     }
 }
+
+// Global error handlers
+process.on('uncaughtException', async (err) => {
+    logError(`Excepción no capturada: ${err.message}`);
+    console.error(err);
+    await waitAndExit();
+});
+
+process.on('unhandledRejection', async (reason) => {
+    logError(`Promesa rechazada no manejada: ${reason}`);
+    await waitAndExit();
+});
 
 main();
