@@ -408,7 +408,7 @@ async function executeTool(
                 }
                 let query = supabaseAdmin
                     .from("productos")
-                    .select("nombre, precio, activo, categorias(nombre)")
+                    .select("nombre, precio, activo, descripcion, categorias(nombre)")
                     .eq("sucursal_id", sucursalId);
                 if (args.active_only) query = query.eq("activo", true);
                 if (args.category) {
@@ -431,7 +431,7 @@ async function executeTool(
                 }
                 const { data } = await supabaseAdmin
                     .from("productos")
-                    .select("nombre, precio, activo")
+                    .select("nombre, precio, activo, descripcion")
                     .eq("sucursal_id", sucursalId)
                     .ilike("nombre", `%${args.product_name}%`)
                     .limit(5);
