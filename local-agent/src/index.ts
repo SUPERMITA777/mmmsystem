@@ -74,7 +74,7 @@ function printBanner() {
 ${c.magenta}${c.bold}  ╔══════════════════════════════════════════════════╗
   ║                                                  ║
   ║   ${c.white}🤖  MMM SYSTEM — Agente WhatsApp IA${c.magenta}           ║
-  ║   ${c.dim}${c.white}Conectá tu negocio con inteligencia artificial${c.reset}${c.magenta}${c.bold}  ║
+  ║   ${c.dim}${c.white}v2.1.0 — Conectá tu negocio con IA${c.reset}${c.magenta}${c.bold}            ║
   ║                                                  ║
   ╚══════════════════════════════════════════════════╝${c.reset}
 `);

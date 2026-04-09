@@ -787,7 +787,10 @@ export async function processWhatsAppMessage(
 
         const replyText = result.text() || "No pude procesar tu mensaje. ¿Podrías reformularlo?";
 
+        console.log(`[Agent Gemini] Generated Reply: "${replyText}"`);
+
         // 8. Save messages
+        console.log(`[Agent Gemini] Saving message for conversation: ${conversation.id}`);
         await saveMessage(conversation.id, sucursalId, senderPhone, text, replyText, false);
 
         return {
@@ -795,8 +798,14 @@ export async function processWhatsAppMessage(
             action: actionPerformed,
         };
     } catch (err: any) {
-        console.error("[Agent Gemini Error]:", err.message);
-        await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+        console.error("[Agent Gemini Error CRITICO]:", err);
+        if (err.stack) console.error(err.stack);
+        
+        // No conversation id might be available if it failed very early
+        try {
+            // Optional: fallback save of error state if possible
+        } catch (e) {}
+
         return {
             reply: "😅 Perdón, tuve un problema técnico. ¿Podrías intentar de nuevo en unos segundos?",
         };

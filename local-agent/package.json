@@ -9,8 +9,8 @@
     "start": "ts-node src/index.ts",
     "dev": "ts-node src/index.ts",
     "bundle": "ncc build src/index.ts -o dist --minify --target es2020",
-    "build:exe": "npm run bundle && caxa --input dist --output MMM-WhatsApp-Agent.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\"",
-    "build:exe:all": "npm run bundle && caxa --input dist --output MMM-WhatsApp-Agent.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\""
+    "build:exe": "npm run bundle && caxa --input dist --output Agente-MMM-WhatsApp-V2.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\"",
+    "build:exe:all": "npm run bundle && caxa --input dist --output Agente-MMM-WhatsApp-V2.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\""
   },
   "pkg": {
     "assets": [],
