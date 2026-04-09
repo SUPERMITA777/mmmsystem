@@ -707,8 +707,8 @@ export async function processWhatsAppMessage(
         };
     }
 
-    // 3. Get recent conversation history for context
-    const recentMessages = await getRecentMessages(sucursalId, senderPhone, 8);
+    // 3. Get recent conversation history for context (Increased to 12 for better fluidity)
+    const recentMessages = await getRecentMessages(sucursalId, senderPhone, 12);
 
     // 4. Get sucursal name
     const { data: sucursal } = await supabaseAdmin
@@ -785,7 +785,7 @@ export async function processWhatsAppMessage(
                 result = response.response;
             }
 
-            const replyText = result.text() || "No pude procesar tu mensaje. ¿Podrías reformularlo?";
+            const replyText = `🤖 ${result.text() || "No pude procesar tu mensaje. ¿Podrías reformularlo?"}`;
 
             console.log(`[Agent Gemini] Successfully generated reply with ${modelId}`);
 
@@ -921,7 +921,8 @@ async function processWithGroq(
     ];
 
     let actionPerformed: AgentResponse["action"] | undefined;
-    let maxIterations = 5;
+    let maxIterations = 8; // Increased to 8 for complex flows
+    let lastToolCallFingerprint = "";
 
     while (maxIterations > 0) {
         maxIterations--;
@@ -936,8 +937,9 @@ async function processWithGroq(
         messages.push(responseMessage);
 
         if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
+            const finalReply = `⚡ ${responseMessage.content || "No pude procesar tu mensaje."}`;
             return {
-                reply: responseMessage.content || "No pude procesar tu mensaje.",
+                reply: finalReply,
                 action: actionPerformed
             };
         }
@@ -947,6 +949,16 @@ async function processWithGroq(
             const functionName = toolCall.function.name;
             const functionArgs = JSON.parse(toolCall.function.arguments);
             
+            // Basic loop prevention: check if we are doing exactly the same thing
+            const fingerprint = `${functionName}:${toolCall.function.arguments}`;
+            if (fingerprint === lastToolCallFingerprint) {
+                console.warn(`[Agent Groq] Detected potential loop with ${functionName}. Breaking.`);
+                return { 
+                    reply: "⚡ Entendido. ¿Necesitás algo más con este pedido? Ya procesé la acción anterior." 
+                };
+            }
+            lastToolCallFingerprint = fingerprint;
+
             console.log(`[Agent Groq] Calling tool: ${functionName}`, functionArgs);
             const toolResult = await executeTool(functionName, functionArgs, sucursalId, config);
 
@@ -968,5 +980,5 @@ async function processWithGroq(
         }
     }
 
-    return { reply: "Lo siento, la operación tomó demasiados pasos." };
+    return { reply: "⚡ Perdón, la operación es un poco compleja. ¿Podrías decirme de nuevo qué necesitás?" };
 }
