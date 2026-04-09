@@ -707,8 +707,8 @@ export async function processWhatsAppMessage(
         };
     }
 
-    // 3. Get recent conversation history for context (Increased to 12 for better fluidity)
-    const recentMessages = await getRecentMessages(sucursalId, senderPhone, 12);
+    // 3. Get recent conversation history for context (Increased to 30 for maximum fluidity)
+    const recentMessages = await getRecentMessages(sucursalId, senderPhone, 30);
 
     // 4. Get sucursal name
     const { data: sucursal } = await supabaseAdmin
