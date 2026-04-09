@@ -547,21 +547,19 @@ export default function AgenteIAPage() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 ml-[52px]">
-                                <select
-                                    value={config.handoff_timeout_seconds || 0}
-                                    onChange={e => setConfig({ ...config, handoff_timeout_seconds: Number(e.target.value) })}
-                                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
-                                >
-                                    <option value={0}>Desactivado (esperar indefinidamente)</option>
-                                    <option value={60}>1 minuto</option>
-                                    <option value={120}>2 minutos</option>
-                                    <option value={180}>3 minutos</option>
-                                    <option value={300}>5 minutos</option>
-                                    <option value={600}>10 minutos</option>
-                                    <option value={900}>15 minutos</option>
-                                    <option value={1800}>30 minutos</option>
-                                    <option value={3600}>1 hora</option>
-                                </select>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        value={config.handoff_timeout_seconds || 0}
+                                        onChange={e => setConfig({ ...config, handoff_timeout_seconds: Number(e.target.value) })}
+                                        className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                        min="0"
+                                    />
+                                    <span className="text-sm text-gray-500 font-medium">segundos</span>
+                                </div>
+                                <p className="text-[10px] text-gray-400">
+                                    (0 = Desactivado, siempre esperar al humano)
+                                </p>
                             </div>
                         </div>
 

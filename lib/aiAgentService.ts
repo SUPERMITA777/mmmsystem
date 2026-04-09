@@ -701,9 +701,12 @@ export async function processWhatsAppMessage(
         await handOffConversation(conversation.id, handedTo);
         await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
 
-        const timeoutMsg = config.handoff_timeout_seconds > 0
-            ? ` Si no te responden en ${Math.round(config.handoff_timeout_seconds / 60)} minutos, vuelvo a estar disponible automáticamente.`
-            : "";
+        let timeoutMsg = "";
+        if (config.handoff_timeout_seconds > 0) {
+            const secs = config.handoff_timeout_seconds;
+            const timeStr = secs < 60 ? `${secs} segundos` : `${Math.round(secs / 60)} minutos`;
+            timeoutMsg = ` Si no te responden en ${timeStr}, vuelvo a estar disponible automáticamente.`;
+        }
 
         return {
             reply: `Entendido, te voy a derivar con ${handedTo}. 🙌${timeoutMsg}\n\nSi querés volver a hablar conmigo, escribí "hablar con el bot".`,
