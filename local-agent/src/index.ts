@@ -15,7 +15,17 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import pino from 'pino';
+// Silent logger mock (replaces pino to avoid native module issues in pkg)
+const silentLogger = {
+    level: 'silent',
+    fatal: () => {},
+    error: () => {},
+    warn: () => {},
+    info: () => {},
+    debug: () => {},
+    trace: () => {},
+    child: () => silentLogger,
+} as any;
 
 // ═══════════════════════════════════════════
 // COLORS (ANSI sin dependencias)
@@ -180,7 +190,7 @@ async function connectToWhatsApp(config: SavedConfig) {
         version,
         printQRInTerminal: false,
         browser: Browsers.macOS('Desktop'),
-        logger: pino({ level: 'silent' }) as any,
+        logger: silentLogger,
     });
 
     sock.ev.on('creds.update', saveCreds);
