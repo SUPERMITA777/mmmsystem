@@ -48,3 +48,8 @@ next-env.d.ts
 
 # OS
 Thumbs.db
+local-agent/node_modules/  
+local-agent/dist/  
+local-agent/auth_whatsapp/  
+local-agent/mmm-agent-config.json  
+local-agent/*.exe 

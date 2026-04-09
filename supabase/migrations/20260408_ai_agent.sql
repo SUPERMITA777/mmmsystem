@@ -77,11 +77,14 @@ ALTER TABLE whatsapp_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_agent_actions ENABLE ROW LEVEL SECURITY;
 
 -- Política: Service role puede hacer todo
-CREATE POLICY IF NOT EXISTS "Service role access" ON whatsapp_conversations
+DROP POLICY IF EXISTS "Service role access" ON whatsapp_conversations;
+CREATE POLICY "Service role access" ON whatsapp_conversations
   FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY IF NOT EXISTS "Service role access" ON whatsapp_messages
+DROP POLICY IF EXISTS "Service role access" ON whatsapp_messages;
+CREATE POLICY "Service role access" ON whatsapp_messages
   FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY IF NOT EXISTS "Service role access" ON ai_agent_actions
+DROP POLICY IF EXISTS "Service role access" ON ai_agent_actions;
+CREATE POLICY "Service role access" ON ai_agent_actions
   FOR ALL USING (true) WITH CHECK (true);
