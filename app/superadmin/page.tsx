@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { 
     Plus, Building2, ExternalLink, ShieldCheck, 
     Mail, LogOut, Loader2, BarChart3, Users as UsersIcon, 
-    TrendingUp, Eye, Search, Filter, MoreVertical, X, Pencil
+    TrendingUp, Eye, Search, Filter, MoreVertical, X, Pencil,
+    Bot, ToggleLeft, ToggleRight
 } from "lucide-react";
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -141,6 +142,7 @@ export default function SuperAdminPage() {
 
     const [extendingTenant, setExtendingTenant] = useState<string | null>(null);
     const [extendDays, setExtendDays] = useState("30");
+    const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
 
     async function fetchUsers() {
         const res = await fetch("/api/superadmin/users");
@@ -208,6 +210,35 @@ export default function SuperAdminPage() {
             setExtendingTenant(null);
         } catch(e: any) {
             alert(e.message);
+        }
+    }
+
+    async function handleToggleAgent(tenantId: string, currentlyEnabled: boolean) {
+        setTogglingAgent(tenantId);
+        try {
+            const res = await fetch("/api/ai/agent-config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursal_id: tenantId,
+                    config: { enabled: !currentlyEnabled }
+                })
+            });
+            if (!res.ok) throw new Error("Error al cambiar estado del agente");
+            // Update local state
+            setSucursales(prev => prev.map(s => {
+                if (s.id === tenantId) {
+                    return {
+                        ...s,
+                        _agent_enabled: !currentlyEnabled
+                    };
+                }
+                return s;
+            }));
+        } catch(e: any) {
+            alert(e.message);
+        } finally {
+            setTogglingAgent(null);
         }
     }
 
@@ -491,6 +522,33 @@ export default function SuperAdminPage() {
                                                         <button onClick={() => setExtendingTenant(s.id)} className="w-full text-xs text-[#00B2FF] hover:text-white font-black bg-[#00B2FF]/10 hover:bg-[#00B2FF] py-3 rounded-xl transition-all border border-[#00B2FF]/20 uppercase tracking-widest">Extender Licencia</button>
                                                     )}
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Agent IA Toggle */}
+                                        <div className="mt-6 p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                                                        <Bot size={18} className="text-purple-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-white uppercase tracking-wider">Agente IA</p>
+                                                        <p className="text-[10px] text-slate-500 mt-0.5">WhatsApp + Administración Autónoma</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleToggleAgent(s.id, s._agent_enabled || false)}
+                                                    disabled={togglingAgent === s.id}
+                                                    className={`p-1 rounded-full transition-colors ${s._agent_enabled ? 'text-purple-400' : 'text-slate-600'}`}
+                                                >
+                                                    {togglingAgent === s.id
+                                                        ? <Loader2 size={32} className="animate-spin text-purple-400" />
+                                                        : s._agent_enabled
+                                                            ? <ToggleRight size={32} strokeWidth={1.5} />
+                                                            : <ToggleLeft size={32} strokeWidth={1.5} />
+                                                    }
+                                                </button>
                                             </div>
                                         </div>
 

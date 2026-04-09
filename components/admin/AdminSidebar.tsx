@@ -20,7 +20,8 @@ import {
   QrCode,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Bot
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
@@ -41,6 +42,7 @@ const items = [
   { id: "clientes", href: "/admin/clientes", icon: Users, label: "Clientes" },
   { id: "descuentos", href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
   { id: "promo-qr", href: "/admin/promo-qr", icon: QrCode, label: "Promo QR" },
+  { id: "agente-ia", href: "/admin/agente-ia", icon: Bot, label: "Agente IA" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
   { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
   { id: "permisos", href: "/admin/permisos", icon: Shield, label: "Permisos" },

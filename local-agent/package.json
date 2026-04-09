@@ -1,0 +1,29 @@
+{
+  "name": "mmm-local-agent",
+  "version": "1.0.0",
+  "description": "Agente local WhatsApp para MMM System - Conecta tu negocio con WhatsApp",
+  "main": "dist/index.js",
+  "bin": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": ["whatsapp", "bot", "mmm-system"],
+  "author": "MMM System",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.14.0",
+    "dotenv": "^17.4.1",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/qrcode-terminal": "^0.12.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
