@@ -8,9 +8,9 @@
     "build": "tsc",
     "start": "ts-node src/index.ts",
     "dev": "ts-node src/index.ts",
-    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/bundle.cjs --format=cjs --external:sharp",
-    "build:exe": "npm run bundle && pkg dist/bundle.cjs --targets node18-win-x64 --output MMM-WhatsApp-Agent.exe --compress GZip",
-    "build:exe:all": "npm run bundle && pkg dist/bundle.cjs --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --out-path ./release --compress GZip"
+    "bundle": "ncc build src/index.ts -o dist --minify --target es2020",
+    "build:exe": "npm run bundle && caxa --input dist --output MMM-WhatsApp-Agent.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\"",
+    "build:exe:all": "npm run bundle && caxa --input dist --output MMM-WhatsApp-Agent.exe -- \"{{caxa}}/node_modules/.bin/node\" \"{{caxa}}/index.js\""
   },
   "pkg": {
     "assets": [],
@@ -36,6 +36,8 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/qrcode-terminal": "^0.12.2",
+    "@vercel/ncc": "^0.38.4",
+    "caxa": "^3.0.1",
     "esbuild": "^0.28.0",
     "pkg": "^5.8.1",
     "ts-node": "^10.9.2",
