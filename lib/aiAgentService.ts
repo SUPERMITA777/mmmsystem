@@ -1,12 +1,5 @@
-/**
- * aiAgentService.ts
- * 
- * Servicio central del Agente IA Autónomo.
- * Usa Gemini (Google Generative AI) con function calling para
- * procesar mensajes de WhatsApp y ejecutar acciones administrativas.
- */
-
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 // ═══════════════════════════════════════════
@@ -732,11 +725,13 @@ export async function processWhatsAppMessage(
     // 6. Filter tools based on allowed operations
     const allowedTools = filterToolsByPermissions(config.allowed_operations);
 
-    // 7. Call Gemini with Fallback
-    const modelCandidates = ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest"];
+    // 7. Call AI Providers with Fallback
+    const geminiCandidates = ["gemini-2.0-flash", "gemini-1.5-flash-latest"];
+    const groqCandidates = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
     let lastError: any = null;
 
-    for (const modelId of modelCandidates) {
+    // A. First try Gemini
+    for (const modelId of geminiCandidates) {
         try {
             console.log(`[Agent Gemini] Trying model: ${modelId}`);
             const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -804,18 +799,41 @@ export async function processWhatsAppMessage(
         } catch (err: any) {
             lastError = err;
             console.warn(`[Agent Gemini] Model ${modelId} failed:`, err.message || err);
-            
-            // If it's not a quota error, maybe don't bother trying other models?
-            // But usually 429 is the main reason to switch.
             if (err.status !== 429 && !err.message?.includes("quota") && !err.message?.includes("429")) {
-                break; // Break loop if it's a different kind of error (like auth or safety)
+                break; 
             }
-            // Continue to next model if 429
+        }
+    }
+
+    // B. Fallback to Groq if Gemini fails
+    console.warn("[Agent] Gemini failed or quota exceeded. Failing over to Groq...");
+    for (const modelId of groqCandidates) {
+        try {
+            console.log(`[Agent Groq] Trying model: ${modelId}`);
+            const result = await processWithGroq(
+                modelId,
+                systemPrompt,
+                text,
+                recentMessages,
+                allowedTools,
+                sucursalId,
+                config
+            );
+
+            console.log(`[Agent Groq] Successfully generated reply with ${modelId}`);
+
+            // Save messages
+            await saveMessage(conversation.id, sucursalId, senderPhone, text, result.reply, false);
+
+            return result;
+        } catch (err: any) {
+            lastError = err;
+            console.error(`[Agent Groq] Model ${modelId} failed:`, err.message || err);
         }
     }
 
     // If we get here, all models failed
-    console.error("[Agent Gemini Error FINAL]:", lastError);
+    console.error("[Agent AI Error FINAL]:", lastError);
     if (lastError?.stack) console.error(lastError.stack);
 
     return {
@@ -849,4 +867,106 @@ function filterToolsByPermissions(allowedOps: string[]) {
             ),
         },
     ];
+}
+
+// ═══════════════════════════════════════════
+// GROQ INTEGRATION
+// ═══════════════════════════════════════════
+
+function convertToolsToGroq(geminiTools: any[]) {
+    if (!geminiTools || geminiTools.length === 0) return undefined;
+    
+    const groqTools: any[] = [];
+    
+    // Map Gemini functionDeclarations to Groq/OpenAI tool format
+    const declarations = geminiTools[0].functionDeclarations || [];
+    
+    for (const fd of declarations) {
+        groqTools.push({
+            type: "function",
+            function: {
+                name: fd.name,
+                description: fd.description,
+                parameters: {
+                    type: "object",
+                    properties: fd.parameters.properties,
+                    required: fd.parameters.required || [],
+                }
+            }
+        });
+    }
+    
+    return groqTools.length > 0 ? groqTools : undefined;
+}
+
+async function processWithGroq(
+    modelId: string,
+    systemPrompt: string,
+    text: string,
+    recentMessages: any[],
+    allowedTools: any[],
+    sucursalId: string,
+    config: AgentConfig
+): Promise<AgentResponse> {
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+    const groqTools = convertToolsToGroq(allowedTools);
+
+    let messages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...recentMessages.map(msg => ({
+            role: msg.from_me ? "assistant" : "user",
+            content: msg.from_me ? (msg.reply_text || "") : msg.message_text
+        })).filter(m => m.content),
+        { role: "user", content: text }
+    ];
+
+    let actionPerformed: AgentResponse["action"] | undefined;
+    let maxIterations = 5;
+
+    while (maxIterations > 0) {
+        maxIterations--;
+        const response = await groq.chat.completions.create({
+            model: modelId,
+            messages: messages,
+            tools: groqTools,
+            tool_choice: "auto",
+        });
+
+        const responseMessage = response.choices[0].message;
+        messages.push(responseMessage);
+
+        if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
+            return {
+                reply: responseMessage.content || "No pude procesar tu mensaje.",
+                action: actionPerformed
+            };
+        }
+
+        // Process tool calls
+        for (const toolCall of responseMessage.tool_calls) {
+            const functionName = toolCall.function.name;
+            const functionArgs = JSON.parse(toolCall.function.arguments);
+            
+            console.log(`[Agent Groq] Calling tool: ${functionName}`, functionArgs);
+            const toolResult = await executeTool(functionName, functionArgs, sucursalId, config);
+
+            messages.push({
+                tool_call_id: toolCall.id,
+                role: "tool",
+                name: functionName,
+                content: toolResult,
+            });
+
+            // Track action for status updates
+            if (!actionPerformed && !["get_products", "get_product_price", "get_categories", "get_active_orders"].includes(functionName)) {
+                actionPerformed = {
+                    type: functionName,
+                    details: functionArgs,
+                    result: toolResult,
+                };
+            }
+        }
+    }
+
+    return { reply: "Lo siento, la operación tomó demasiados pasos." };
 }
