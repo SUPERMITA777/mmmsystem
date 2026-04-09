@@ -8,7 +8,7 @@ import {
     ChevronDown, ChevronRight, Phone, Clock, Zap,
     Eye, Pencil, X, AlertCircle, CheckCircle,
     MessageCircle, Activity, Settings2, GraduationCap,
-    UserCheck, Timer, SmilePlus, HandMetal, ArrowLeftRight
+    UserCheck, Timer, SmilePlus, HandMetal, ArrowLeftRight, Send
 } from "lucide-react";
 
 interface TrainingSnippet {
@@ -91,7 +91,7 @@ export default function AgenteIAPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
-    const [activeSection, setActiveSection] = useState<"config" | "training" | "permissions" | "conversations" | "actions">("config");
+    const [activeSection, setActiveSection] = useState<"config" | "training" | "permissions" | "conversations" | "actions" | "simulator">("config");
 
     // Training snippets edit
     const [editingSnippet, setEditingSnippet] = useState<TrainingSnippet | null>(null);
@@ -112,6 +112,19 @@ export default function AgenteIAPage() {
 
     // Personality editing
     const [editingPersonality, setEditingPersonality] = useState<string | null>(null);
+
+    // Simulator State
+    const [simulatorMessages, setSimulatorMessages] = useState<{ role: "user" | "assistant", content: string, action?: any }[]>([]);
+    const [simInput, setSimInput] = useState("");
+    const [simLoading, setSimLoading] = useState(false);
+
+    // Auto-scroll simulator
+    useEffect(() => {
+        if (activeSection === "simulator") {
+            const el = document.getElementById("sim-bottom");
+            if (el) el.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [simulatorMessages, simLoading, activeSection]);
 
     // Load config
     const loadConfig = useCallback(async () => {
@@ -270,6 +283,54 @@ export default function AgenteIAPage() {
         });
     }
 
+    // Simulator logic
+    async function handleSimSend() {
+        if (!simInput.trim() || !sucursalId || simLoading) return;
+
+        const userMsg = simInput.trim();
+        setSimInput("");
+        setSimulatorMessages(prev => [...prev, { role: "user", content: userMsg }]);
+        setSimLoading(true);
+
+        try {
+            const res = await fetch("/api/ai/test-agent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursalId,
+                    text: userMsg,
+                    // We could send history here if needed
+                }),
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                setSimulatorMessages(prev => [...prev, { 
+                    role: "assistant", 
+                    content: data.reply,
+                    action: data.action
+                }]);
+            } else {
+                setSimulatorMessages(prev => [...prev, { 
+                    role: "assistant", 
+                    content: "❌ Error: " + (data.error || "No se pudo conectar con el agente.")
+                }]);
+            }
+        } catch (err) {
+            setSimulatorMessages(prev => [...prev, { 
+                role: "assistant", 
+                content: "❌ Error de conexión al simular."
+            }]);
+        } finally {
+            setSimLoading(false);
+        }
+    }
+
+    function clearSimulator() {
+        setSimulatorMessages([]);
+        setSimInput("");
+    }
+
     if (loading) {
         return (
             <div className="flex-1 flex items-center justify-center p-12">
@@ -297,6 +358,7 @@ export default function AgenteIAPage() {
 
     const sections = [
         { id: "config", label: "General", icon: Settings2, badge: config.enabled ? "ON" : "OFF" },
+        { id: "simulator", label: "Simulador", icon: MessageSquare, badge: "Test" },
         { id: "training", label: "Entrenamiento", icon: GraduationCap, badge: String(config.training_snippets.length) },
         { id: "permissions", label: "Permisos", icon: Shield, badge: String(config.allowed_operations.length) },
         { id: "conversations", label: "Conversaciones", icon: MessageCircle },
@@ -803,6 +865,123 @@ export default function AgenteIAPage() {
                                 );
                             })}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ SECTION: Simulator ═══ */}
+            {activeSection === "simulator" && (
+                <div className="flex flex-col h-[600px] bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {/* Header */}
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                                <Bot size={20} className="text-purple-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-800 text-sm">Simulador de Agente IA</h3>
+                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Entorno de prueba (Dry-run)</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={clearSimulator}
+                            className="text-xs text-gray-400 hover:text-gray-600 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                            Limpiar Chat
+                        </button>
+                    </div>
+
+                    {/* Chat Area */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30 custom-scrollbar">
+                        {simulatorMessages.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center space-y-4 px-12">
+                                <div className="w-16 h-16 rounded-3xl bg-white border border-gray-100 shadow-sm flex items-center justify-center">
+                                    <Sparkles size={28} className="text-purple-400" />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-gray-700">¡Empezá a entrenar a tu agente!</p>
+                                    <p className="text-xs text-gray-400">Escribí un mensaje como si fueses un cliente para ver cómo responde la IA y qué acciones detecta.</p>
+                                </div>
+                                <div className="flex flex-wrap justify-center gap-2 mt-4">
+                                    {["¡Hola!", "¿Qué tienen para comer?", "Quiero pedir una pizza", "¿Aceptan tarjeta?"].map(p => (
+                                        <button 
+                                            key={p} 
+                                            onClick={() => { setSimInput(p); }}
+                                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs text-gray-500 hover:border-purple-300 hover:text-purple-600 transition-all shadow-sm"
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {simulatorMessages.map((msg, i) => (
+                                    <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start animate-in fade-in slide-in-from-left-2"}`}>
+                                        <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm shadow-sm ${
+                                            msg.role === "user"
+                                                ? "bg-purple-600 text-white rounded-tr-none"
+                                                : "bg-white text-gray-700 border border-gray-100 rounded-tl-none"
+                                        }`}>
+                                            <p className="whitespace-pre-line leading-relaxed">{msg.content}</p>
+                                        </div>
+                                        
+                                        {msg.action && (
+                                            <div className="mt-2 w-full max-w-[85%] bg-emerald-50 border border-emerald-100 rounded-xl p-3 animate-in zoom-in-95 duration-300">
+                                                <div className="flex items-center gap-2 text-emerald-700 font-bold text-[10px] mb-2 uppercase tracking-tight">
+                                                    <Zap size={12} fill="currentColor" /> Acción Detectada (En Pausa)
+                                                </div>
+                                                <div className="bg-white/80 rounded-lg p-2 font-mono text-[10px] text-gray-600 border border-emerald-50">
+                                                    <p className="text-emerald-800 font-bold mb-1">{msg.action.type}()</p>
+                                                    <pre className="overflow-x-auto">
+                                                        {JSON.stringify(msg.action.details, null, 2)}
+                                                    </pre>
+                                                </div>
+                                                <p className="mt-2 text-[9px] text-emerald-600/70 leading-tight">
+                                                    * En modo simulador, las acciones de base de datos están desactivadas para seguridad.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {simLoading && (
+                                    <div className="flex items-start gap-2 animate-pulse">
+                                        <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+                                            <div className="flex gap-1">
+                                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                                <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div id="sim-bottom"></div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Footer / Input */}
+                    <div className="p-4 bg-white border-t border-gray-100">
+                        <div className="relative flex items-center">
+                            <input 
+                                value={simInput}
+                                onChange={e => setSimInput(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && handleSimSend()}
+                                placeholder="Escribí un mensaje aquí..."
+                                disabled={simLoading}
+                                className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 focus:bg-white transition-all disabled:opacity-50"
+                            />
+                            <button 
+                                onClick={handleSimSend}
+                                disabled={!simInput.trim() || simLoading}
+                                className="absolute right-2 p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-40 disabled:hover:bg-purple-600 transition-all shadow-md active:scale-95"
+                            >
+                                {simLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                            </button>
+                        </div>
+                        <p className="text-[9px] text-center text-gray-400 mt-2 font-medium italic">
+                            Los mensajes enviados aquí NO son visibles para los clientes de WhatsApp.
+                        </p>
                     </div>
                 </div>
             )}

@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { pointInPolygon, getDistance, LatLng } from "@/lib/geoutils";
+
 
 // ═══════════════════════════════════════════
 // TYPES
@@ -186,7 +188,7 @@ const AGENT_TOOLS: any[] = [
             },
             {
                 name: "create_order",
-                description: "Crear un nuevo pedido para un cliente",
+                description: "Crear un nuevo pedido. El sistema capturará automáticamente el WhatsApp del remitente y validará la dirección de entrega contra las zonas de cobertura.",
                 parameters: {
                     type: SchemaType.OBJECT,
                     properties: {
@@ -196,24 +198,25 @@ const AGENT_TOOLS: any[] = [
                         },
                         customer_phone: {
                             type: SchemaType.STRING,
-                            description: "Teléfono del cliente",
+                            description: "Teléfono del cliente (Opcional, se captura el WhatsApp actual por defecto)",
                         },
                         items: {
                             type: SchemaType.STRING,
-                            description: "Descripción de los items del pedido, separados por coma",
+                            description: "Lista de productos y cantidades (Ej: 2 muzzarella, 1 napolitana)",
                         },
                         delivery_address: {
                             type: SchemaType.STRING,
-                            description: "Dirección de entrega (opcional para retiro en local)",
+                            description: "Dirección completa (Calle y Altura). Opcional si es retiro en local. Se verificará automáticamente contra las zonas de entrega.",
                         },
                         notes: {
                             type: SchemaType.STRING,
-                            description: "Notas o comentarios del pedido",
+                            description: "Notas adicionales (ej: 'sin cebolla', 'tocar timbre B')",
                         },
                     },
                     required: ["customer_name", "items"],
                 },
             },
+
         ],
     },
 ];
@@ -266,6 +269,18 @@ export async function updateAgentConfig(
 // ═══════════════════════════════════════════
 
 async function getOrCreateConversation(sucursalId: string, senderPhone: string) {
+    // Simulator dummy conversation
+    if (senderPhone === "simulador-admin") {
+        return {
+            id: "simulator-id",
+            sucursal_id: sucursalId,
+            sender_phone: senderPhone,
+            status: "active",
+            metadata: {},
+            last_message_at: new Date().toISOString(),
+        };
+    }
+
     // Try to find existing conversation (active or handed_off)
     const { data: existing } = await supabaseAdmin
         .from("whatsapp_conversations")
@@ -381,8 +396,10 @@ async function executeTool(
     toolName: string,
     args: Record<string, any>,
     sucursalId: string,
-    config: AgentConfig
+    config: AgentConfig,
+    senderPhone: string
 ): Promise<string> {
+
     try {
         switch (toolName) {
             case "get_products": {
@@ -518,18 +535,46 @@ async function executeTool(
                 if (!config.allowed_operations.includes("create_orders")) {
                     return JSON.stringify({ error: "No tenés permisos para crear pedidos. Contactá al administrador." });
                 }
-                // For now, create a basic pending order
+
+                const finalPhone = args.customer_phone || senderPhone;
+                const isDelivery = !!args.delivery_address;
+
+                let deliveryCost = 0;
+                let zoneName = "";
+
+                if (isDelivery) {
+                    const coords = await geocodeAddress(args.delivery_address);
+                    if (!coords) {
+                        return JSON.stringify({ 
+                            error: `No pude encontrar la ubicación de "${args.delivery_address}". Por favor, asegúrate de que la dirección sea correcta y completa (calle y número).` 
+                        });
+                    }
+
+                    // Validar zona y calcular costo
+                    const validation = await validateAddressInZones(sucursalId, coords, 0); // Total 0 para no aplicar envio gratis aún si no sabemos el total
+                    if (!validation.valid) {
+                        return JSON.stringify({ error: validation.error });
+                    }
+                    deliveryCost = validation.costoEnvio || 0;
+                    zoneName = validation.zonaName || "";
+                }
+
+                // Generar número de pedido (Simplificado para el bot, el trigger o el código lo hará prolijo)
+                // En el sistema actual, se usa un RPC. Aquí insertamos lo básico.
+                
                 const { data: order, error } = await supabaseAdmin
                     .from("pedidos")
                     .insert({
                         sucursal_id: sucursalId,
                         cliente_nombre: args.customer_name,
-                        cliente_telefono: args.customer_phone || "",
+                        cliente_telefono: finalPhone,
                         estado: "pendiente",
-                        tipo_entrega: args.delivery_address ? "delivery" : "retiro",
-                        direccion: args.delivery_address || "",
-                        comentarios: `[IA WhatsApp] Items: ${args.items}${args.notes ? ` | Notas: ${args.notes}` : ""}`,
-                        total: 0,
+                        tipo: isDelivery ? "delivery" : "takeaway",
+                        cliente_direccion: args.delivery_address || null,
+                        costo_envio: deliveryCost,
+                        origen: "whatsapp",
+                        notas: `[IA] Items: ${args.items}${args.notes ? ` | Notas: ${args.notes}` : ""}${zoneName ? ` | Zona: ${zoneName}` : ""}`,
+                        total: 0, // El administrador o un proceso posterior calculará el total real basado en los productos
                     })
                     .select("numero_pedido, id")
                     .single();
@@ -541,14 +586,22 @@ async function executeTool(
                 await logAgentAction(sucursalId, "create_order", {
                     order_id: order?.id,
                     customer: args.customer_name,
+                    phone: finalPhone,
                     items: args.items,
-                }, "whatsapp");
+                    delivery_cost: deliveryCost,
+                }, "whatsapp", senderPhone);
+
+                let successMsg = `¡Pedido creado con éxito! (#${order?.numero_pedido || "nuevo"}) para ${args.customer_name}.`;
+                if (isDelivery) {
+                    successMsg += `\n📍 Zona: ${zoneName}\n🚚 Costo de envío: ${deliveryCost === 0 ? "¡GRATIS!" : `$${deliveryCost}`}`;
+                }
 
                 return JSON.stringify({
                     success: true,
-                    message: `Pedido creado exitosamente (#${order?.numero_pedido || "nuevo"}) para ${args.customer_name}`,
+                    message: successMsg,
                 });
             }
+
 
             default:
                 return JSON.stringify({ error: "Función no reconocida." });
@@ -581,10 +634,113 @@ async function logAgentAction(
 }
 
 // ═══════════════════════════════════════════
+// GEOLOCATION HELPERS
+// ═══════════════════════════════════════════
+
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+async function geocodeAddress(address: string): Promise<LatLng | null> {
+    if (!GOOGLE_MAPS_API_KEY) {
+        console.error("[Geocode] Missing API Key");
+        return null;
+    }
+    const fullQuery = address.toLowerCase().includes('argentina') ? address : `${address}, Argentina`;
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullQuery)}&key=${GOOGLE_MAPS_API_KEY}&language=es&region=ar`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.status === 'OK' && data.results.length > 0) {
+            const loc = data.results[0].geometry.location;
+            return { lat: loc.lat, lng: loc.lng };
+        }
+        return null;
+    } catch (err) {
+        console.error("[Geocode] Error:", err);
+        return null;
+    }
+}
+
+interface ValidationResult {
+    valid: boolean;
+    zonaName?: string;
+    costoEnvio?: number;
+    error?: string;
+}
+
+async function validateAddressInZones(sucursalId: string, clientePt: LatLng, currentTotal: number = 0): Promise<ValidationResult> {
+    // 1. Cargar zonas activas
+    const { data: zonas } = await supabaseAdmin
+        .from("zonas_entrega")
+        .select("*")
+        .eq("sucursal_id", sucursalId)
+        .eq("activo", true);
+
+    if (!zonas || zonas.length === 0) {
+        return { valid: true, zonaName: "Sin zonas configuradas (Abierto)" };
+    }
+
+    // 2. Cargar config del local
+    const { data: cfg } = await supabaseAdmin
+        .from("config_sucursal")
+        .select("local_lat, local_lng")
+        .eq("sucursal_id", sucursalId)
+        .maybeSingle();
+
+    const localPt: LatLng | null = cfg?.local_lat && cfg?.local_lng
+        ? { lat: cfg.local_lat, lng: cfg.local_lng }
+        : null;
+
+    // 3. Verificar en qué zona está
+    const zonasConPoligono = zonas.filter(z => z.polygon_coords && Array.isArray(z.polygon_coords) && z.polygon_coords.length >= 3);
+    
+    let zonaEncontrada: any = null;
+    for (const zona of zonasConPoligono) {
+        if (pointInPolygon(clientePt, zona.polygon_coords as LatLng[])) {
+            zonaEncontrada = zona;
+            break;
+        }
+    }
+
+    if (!zonaEncontrada) {
+        return { valid: false, error: "Me parece que no llegamos hasta esa dirección, pero déjame chequearlo con el cadete" };
+    }
+
+    // 4. Calcular costo de envío
+    let costoFinal = zonaEncontrada.costo_envio || 0;
+    if (zonaEncontrada.tipo_precio === "por_km" && localPt) {
+        const distKm = getDistance(localPt, clientePt);
+        const rate = zonaEncontrada.precio_por_km > 0 ? zonaEncontrada.precio_por_km : 850;
+        costoFinal = Math.round(distKm * rate);
+    }
+
+    // Envio gratis desde
+    if (zonaEncontrada.envio_gratis_desde && currentTotal >= zonaEncontrada.envio_gratis_desde) {
+        costoFinal = 0;
+    }
+
+    // Minimo compra
+    if (zonaEncontrada.minimo_compra > 0 && currentTotal > 0 && currentTotal < zonaEncontrada.minimo_compra) {
+        return { 
+            valid: false, 
+            error: `El pedido mínimo para tu zona (${zonaEncontrada.nombre}) es de $${new Intl.NumberFormat("es-AR").format(zonaEncontrada.minimo_compra)}.` 
+        };
+    }
+
+    return {
+        valid: true,
+        zonaName: zonaEncontrada.nombre,
+        costoEnvio: costoFinal
+    };
+}
+
+// ═══════════════════════════════════════════
 // SYSTEM PROMPT BUILDER
 // ═══════════════════════════════════════════
 
-function buildSystemPrompt(config: AgentConfig, sucursalName: string): string {
+
+function buildSystemPrompt(config: AgentConfig, sucursalName: string, customerName?: string): string {
+
     const operationDescriptions: Record<string, string> = {
         view_products: "consultar productos, precios y categorías del menú",
         view_orders: "ver pedidos activos y su estado",
@@ -606,6 +762,8 @@ function buildSystemPrompt(config: AgentConfig, sucursalName: string): string {
     let prompt = `Tu nombre es "${agentName}", sos el asistente virtual de "${sucursalName}". 
 Cuando un cliente te pregunte cómo te llamás o quién sos, presentate como ${agentName}.
 Tu rol es atender a los clientes por WhatsApp.
+${customerName ? `ESTÁS HABLANDO CON: ${customerName}. Salúdalo/a por su nombre de forma natural.` : "No conocemos el nombre de este cliente todavía, pregúntaselo si es necesario para el pedido."}
+
 
 PERSONALIDAD Y TONO:
 ${personality.tone}
@@ -620,7 +778,19 @@ REGLAS FUNDAMENTALES:
 
 OPERACIONES PERMITIDAS: ${allowedOps}.
 
+PROTOCOLO DE PEDIDOS (MUY IMPORTANTE):
+Si el cliente quiere hacer un pedido, seguí este flujo:
+1. RECOPILACIÓN: Preguntale su Nombre y su Pedido (items/cantidades).
+2. ENTREGA: Preguntale si prefiere "Delivery" o "Retirar por el local".
+3. DIRECCIÓN (Si es Delivery): Pedile la dirección exacta (Calle y Altura). Informale que vas a verificar si llegamos a su zona.
+4. VALIDACIÓN: Usá 'create_order'. Si la dirección está fuera de zona o hay un error, el sistema te lo dirá. Informale al cliente el resultado.
+5. PRECIOS: Si te preguntan precios, usá 'get_products' o 'get_product_price'. No los inventes.
+6. CONFIRMACIÓN: Una vez que tengas todo, confirmale que el pedido fue ingresado y los detalles del envío si corresponden.
+
+IMPORTANTE: No necesitás pedir el número de teléfono, el sistema lo toma automáticamente del WhatsApp. NUNCA lo preguntes.
 `;
+
+
 
     if (config.system_prompt) {
         prompt += `\nINSTRUCCIONES ESPECIALES DEL NEGOCIO:\n${config.system_prompt}\n\n`;
@@ -644,7 +814,8 @@ export async function processWhatsAppMessage(
     sucursalId: string,
     senderPhone: string,
     text: string,
-    fromMe: boolean = false
+    fromMe: boolean = false,
+    dryRun: boolean = false
 ): Promise<AgentResponse> {
     // 1. Load agent config
     const config = await getAgentConfig(sucursalId);
@@ -671,7 +842,9 @@ export async function processWhatsAppMessage(
     if (conversation.status === "handed_off") {
         if (matchesTrigger(text, config.resume_triggers)) {
             await resumeConversation(conversation.id);
-            await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            if (!dryRun) {
+                await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            }
             return {
                 reply: `¡Hola de nuevo! 👋 Soy ${agentName}, tu asistente virtual. ¿En qué puedo ayudarte?`,
             };
@@ -682,7 +855,9 @@ export async function processWhatsAppMessage(
             // Fall through to normal processing
         } else {
             // Still handed off, don't respond
-            await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            if (!dryRun) {
+                await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+            }
             return { reply: "" };
         }
     }
@@ -692,7 +867,9 @@ export async function processWhatsAppMessage(
         // Extract the name they want to talk to (if any)
         const handedTo = text.replace(/quiero\s+hablar\s+con\s*/i, "").trim() || "operador";
         await handOffConversation(conversation.id, handedTo);
-        await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+        if (!dryRun) {
+            await saveMessage(conversation.id, sucursalId, senderPhone, text, null, false);
+        }
 
         let timeoutMsg = "";
         if (config.handoff_timeout_seconds > 0) {
@@ -719,14 +896,22 @@ export async function processWhatsAppMessage(
 
     const sucursalName = sucursal?.nombre || "Nuestro Negocio";
 
-    // 5. Build Gemini prompt with context
-    const systemPrompt = buildSystemPrompt(config, sucursalName);
+    // 5. Check if customer exists to greet by name
+    const { data: customer } = await supabaseAdmin
+        .from("clientes")
+        .select("nombre")
+        .eq("sucursal_id", sucursalId)
+        .eq("telefono", senderPhone)
+        .maybeSingle();
+
+    // 6. Build Gemini prompt with context
+    const systemPrompt = buildSystemPrompt(config, sucursalName, customer?.nombre);
 
     // 6. Filter tools based on allowed operations
     const allowedTools = filterToolsByPermissions(config.allowed_operations);
 
     // 7. Call AI Providers with Fallback
-    const geminiCandidates = ["gemini-2.0-flash", "gemini-1.5-flash-latest"];
+    const geminiCandidates = ["gemini-2.5-flash", "gemini-2.5-pro"];
     const groqCandidates = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
     let lastError: any = null;
 
@@ -762,7 +947,8 @@ export async function processWhatsAppMessage(
                 const functionResponses = [];
                 for (const part of functionCalls) {
                     const fc = part.functionCall!;
-                    const toolResult = await executeTool(fc.name, fc.args as Record<string, any>, sucursalId, config);
+                    const toolResult = await executeTool(fc.name, fc.args as Record<string, any>, sucursalId, config, senderPhone);
+
 
                     functionResponses.push({
                         functionResponse: {
@@ -790,7 +976,9 @@ export async function processWhatsAppMessage(
             console.log(`[Agent Gemini] Successfully generated reply with ${modelId}`);
 
             // 8. Save messages
-            await saveMessage(conversation.id, sucursalId, senderPhone, text, replyText, false);
+            if (!dryRun) {
+                await saveMessage(conversation.id, sucursalId, senderPhone, text, replyText, false);
+            }
 
             return {
                 reply: replyText,
@@ -817,13 +1005,17 @@ export async function processWhatsAppMessage(
                 recentMessages,
                 allowedTools,
                 sucursalId,
-                config
+                config,
+                senderPhone
             );
+
 
             console.log(`[Agent Groq] Successfully generated reply with ${modelId}`);
 
             // Save messages
-            await saveMessage(conversation.id, sucursalId, senderPhone, text, result.reply, false);
+            if (!dryRun) {
+                await saveMessage(conversation.id, sucursalId, senderPhone, text, result.reply, false);
+            }
 
             return result;
         } catch (err: any) {
@@ -906,8 +1098,10 @@ async function processWithGroq(
     recentMessages: any[],
     allowedTools: any[],
     sucursalId: string,
-    config: AgentConfig
+    config: AgentConfig,
+    senderPhone: string
 ): Promise<AgentResponse> {
+
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
     const groqTools = convertToolsToGroq(allowedTools);
 
@@ -960,7 +1154,8 @@ async function processWithGroq(
             lastToolCallFingerprint = fingerprint;
 
             console.log(`[Agent Groq] Calling tool: ${functionName}`, functionArgs);
-            const toolResult = await executeTool(functionName, functionArgs, sucursalId, config);
+            const toolResult = await executeTool(functionName, functionArgs, sucursalId, config, senderPhone);
+
 
             messages.push({
                 tool_call_id: toolCall.id,
