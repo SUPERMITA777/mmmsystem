@@ -30,14 +30,14 @@ export default function ClientesPage() {
     const [showHeatmap, setShowHeatmap] = useState(false);
 
     // Loyalty Filters
-    const [loyaltyFilter, setLoyaltyFilter] = useState<"todos" | "con_ventas" | "sin_ventas">("todos");
+    const [loyaltyFilter, setLoyaltyFilter] = useState<"todos" | "con_compras" | "sin_compras">("todos");
     const [fechaDesde, setFechaDesde] = useState<string>(() => {
         const d = new Date();
         d.setMonth(d.getMonth() - 1);
         return d.toISOString().split("T")[0];
     });
     const [fechaHasta, setFechaHasta] = useState<string>(new Date().toISOString().split("T")[0]);
-    const [productoFiltro, setProductoFiltro] = useState("TODOS");
+    const [productoFiltro, setProductoFiltro] = useState<string[]>([]);
     const [listaProductos, setListaProductos] = useState<string[]>([]);
 
     useEffect(() => {
@@ -92,10 +92,10 @@ export default function ClientesPage() {
                 if (pedidosData) {
                     let filteredTelephones = pedidosData;
                     
-                    // Filter by product if not TODOS
-                    if (productoFiltro !== "TODOS") {
+                    // Filter by products if array is not empty
+                    if (productoFiltro.length > 0) {
                         filteredTelephones = pedidosData.filter(p => 
-                            p.pedido_items?.some((item: any) => item.nombre_producto === productoFiltro)
+                            p.pedido_items?.some((item: any) => productoFiltro.includes(item.nombre_producto))
                         );
                     }
 
@@ -117,7 +117,7 @@ export default function ClientesPage() {
                 query = query.ilike("nombre", `%${busqueda}%`);
             }
 
-            if (loyaltyFilter === "con_ventas") {
+            if (loyaltyFilter === "con_compras") {
                 if (filteredClientPhones) {
                     query = query.in("telefono", filteredClientPhones);
                 } else {
@@ -127,7 +127,7 @@ export default function ClientesPage() {
                     setLoading(false);
                     return;
                 }
-            } else if (loyaltyFilter === "sin_ventas") {
+            } else if (loyaltyFilter === "sin_compras") {
                 if (filteredClientPhones && filteredClientPhones.length > 0) {
                     query = query.not("telefono", "in", `(${filteredClientPhones.map(p => `"${p}"`).join(",")})`);
                 }
@@ -160,16 +160,16 @@ export default function ClientesPage() {
                             TODOS
                         </button>
                         <button 
-                            onClick={() => { setLoyaltyFilter("con_ventas"); setPage(1); }}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "con_ventas" ? "bg-emerald-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                            onClick={() => { setLoyaltyFilter("con_compras"); setPage(1); }}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "con_compras" ? "bg-emerald-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                         >
-                            CON VENTAS
+                            CON COMPRAS
                         </button>
                         <button 
-                            onClick={() => { setLoyaltyFilter("sin_ventas"); setPage(1); }}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "sin_ventas" ? "bg-amber-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                            onClick={() => { setLoyaltyFilter("sin_compras"); setPage(1); }}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "sin_compras" ? "bg-amber-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                         >
-                            SIN VENTAS
+                            SIN COMPRAS
                         </button>
                     </div>
 
@@ -215,24 +215,52 @@ export default function ClientesPage() {
                                 className="bg-transparent outline-none text-sm text-slate-900 w-full" 
                             />
                         </fieldset>
-                        <fieldset className="border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-500 min-w-[220px]">
+                        <fieldset className="border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-500 min-w-[220px] relative group/select">
                             <legend className="text-[10px] text-slate-500 px-1 font-bold uppercase tracking-wider flex items-center gap-1">
-                                <Filter size={10} /> Producto
+                                <Filter size={10} /> Productos ({productoFiltro.length === 0 ? "Todos" : productoFiltro.length})
                             </legend>
-                            <select 
-                                value={productoFiltro} 
-                                onChange={e => { setProductoFiltro(e.target.value); setPage(1); }}
-                                className="bg-transparent outline-none text-sm text-slate-900 w-full font-semibold appearance-none cursor-pointer"
-                            >
-                                <option value="TODOS">TODOS LOS PRODUCTOS</option>
-                                {listaProductos.map(p => (
-                                    <option key={p} value={p}>{p}</option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <button className="w-full text-left bg-transparent outline-none text-sm text-slate-900 font-semibold flex justify-between items-center py-1">
+                                    <span className="truncate max-w-[180px]">
+                                        {productoFiltro.length === 0 ? "TODOS LOS PRODUCTOS" : productoFiltro.join(", ")}
+                                    </span>
+                                    <ChevronRight size={14} className="group-hover/select:rotate-90 transition-transform" />
+                                </button>
+                                
+                                <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-2 hidden group-hover/select:block max-h-60 overflow-y-auto">
+                                    <label className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-100 mb-1">
+                                        <input 
+                                            type="checkbox" 
+                                            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                                            checked={productoFiltro.length === 0}
+                                            onChange={() => setProductoFiltro([])}
+                                        />
+                                        TODOS LOS PRODUCTOS
+                                    </label>
+                                    {listaProductos.map(p => (
+                                        <label key={p} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded-lg cursor-pointer text-xs text-slate-600 font-medium">
+                                            <input 
+                                                type="checkbox" 
+                                                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4"
+                                                checked={productoFiltro.includes(p)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setProductoFiltro([...productoFiltro, p]);
+                                                    } else {
+                                                        setProductoFiltro(productoFiltro.filter(item => item !== p));
+                                                    }
+                                                    setPage(1);
+                                                }}
+                                            />
+                                            {p}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         </fieldset>
                         <div className="flex-1 text-[11px] text-slate-500 mb-2 leading-tight">
                             <span className="font-bold text-slate-700 block mb-0.5">Campaña de Fidelización</span>
-                            Mostrando clientes {loyaltyFilter === "con_ventas" ? "activos" : "inactivos"} {productoFiltro !== "TODOS" ? `para ${productoFiltro}` : "en general"} durante el periodo.
+                            Mostrando clientes {loyaltyFilter === "con_compras" ? "activos" : "inactivos"} {productoFiltro.length > 0 ? `que compraron ${productoFiltro.length} productos específicos` : "en general"} durante el periodo.
                         </div>
                     </div>
                 )}
