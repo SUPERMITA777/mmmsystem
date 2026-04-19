@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import ClienteDetailModal from "@/components/admin/ClienteDetailModal";
 import HeatmapModal from "@/components/admin/HeatmapModal";
@@ -29,28 +29,118 @@ export default function ClientesPage() {
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [showHeatmap, setShowHeatmap] = useState(false);
 
+    // Loyalty Filters
+    const [loyaltyFilter, setLoyaltyFilter] = useState<"todos" | "con_ventas" | "sin_ventas">("todos");
+    const [fechaDesde, setFechaDesde] = useState<string>(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 1);
+        return d.toISOString().split("T")[0];
+    });
+    const [fechaHasta, setFechaHasta] = useState<string>(new Date().toISOString().split("T")[0]);
+    const [productoFiltro, setProductoFiltro] = useState("TODOS");
+    const [listaProductos, setListaProductos] = useState<string[]>([]);
+
     useEffect(() => {
-        if (sucursalId) fetchClientes();
-    }, [page, perPage, busqueda, sucursalId]);
+        if (sucursalId) {
+            fetchClientes();
+            fetchListaProductos();
+        }
+    }, [page, perPage, busqueda, sucursalId, loyaltyFilter, fechaDesde, fechaHasta, productoFiltro]);
+
+    async function fetchListaProductos() {
+        if (!sucursalId) return;
+        const { data } = await supabase
+            .from("productos")
+            .select("nombre")
+            .eq("sucursal_id", sucursalId)
+            .eq("activo", true)
+            .order("nombre");
+        
+        if (data) {
+            const unique = Array.from(new Set(data.map(p => p.nombre)));
+            setListaProductos(unique);
+        }
+    }
 
     async function fetchClientes() {
         if (!sucursalId) return;
         setLoading(true);
-        let query = supabase
-            .from("clientes")
-            .select("*", { count: "exact" })
-            .eq("sucursal_id", sucursalId)
-            .order("total_pedidos", { ascending: false })
-            .range((page - 1) * perPage, page * perPage - 1);
 
-        if (busqueda) {
-            query = query.ilike("nombre", `%${busqueda}%`);
+        try {
+            let filteredClientPhones: string[] | null = null;
+
+            // Handle Loyalty filtering
+            if (loyaltyFilter !== "todos") {
+                let pQuery = supabase
+                    .from("pedidos")
+                    .select("cliente_telefono, pedido_items(nombre_producto)")
+                    .eq("sucursal_id", sucursalId);
+
+                if (fechaDesde) {
+                    const d = new Date(fechaDesde);
+                    d.setHours(0, 0, 0, 0);
+                    pQuery = pQuery.gte("created_at", d.toISOString());
+                }
+                if (fechaHasta) {
+                    const h = new Date(fechaHasta);
+                    h.setHours(23, 59, 59, 999);
+                    pQuery = pQuery.lte("created_at", h.toISOString());
+                }
+
+                const { data: pedidosData } = await pQuery;
+
+                if (pedidosData) {
+                    let filteredTelephones = pedidosData;
+                    
+                    // Filter by product if not TODOS
+                    if (productoFiltro !== "TODOS") {
+                        filteredTelephones = pedidosData.filter(p => 
+                            p.pedido_items?.some((item: any) => item.nombre_producto === productoFiltro)
+                        );
+                    }
+
+                    const phones = Array.from(new Set(filteredTelephones.map(p => p.cliente_telefono).filter(Boolean)));
+                    filteredClientPhones = phones as string[];
+                } else {
+                    filteredClientPhones = [];
+                }
+            }
+
+            let query = supabase
+                .from("clientes")
+                .select("*", { count: "exact" })
+                .eq("sucursal_id", sucursalId)
+                .order("total_pedidos", { ascending: false })
+                .range((page - 1) * perPage, page * perPage - 1);
+
+            if (busqueda) {
+                query = query.ilike("nombre", `%${busqueda}%`);
+            }
+
+            if (loyaltyFilter === "con_ventas") {
+                if (filteredClientPhones) {
+                    query = query.in("telefono", filteredClientPhones);
+                } else {
+                    // No sales found in that period
+                    setClientes([]);
+                    setTotal(0);
+                    setLoading(false);
+                    return;
+                }
+            } else if (loyaltyFilter === "sin_ventas") {
+                if (filteredClientPhones && filteredClientPhones.length > 0) {
+                    query = query.not("telefono", "in", `(${filteredClientPhones.map(p => `"${p}"`).join(",")})`);
+                }
+            }
+
+            const { data, count } = await query;
+            setClientes(data || []);
+            setTotal(count || 0);
+        } catch (error) {
+            console.error("Error fetching clientes:", error);
+        } finally {
+            setLoading(false);
         }
-
-        const { data, count } = await query;
-        setClientes(data || []);
-        setTotal(count || 0);
-        setLoading(false);
     }
 
     const totalPages = Math.ceil(total / perPage);
@@ -60,26 +150,92 @@ export default function ClientesPage() {
             <h2 className="text-xl font-bold text-gray-900 mb-6">Clientes</h2>
 
             {/* Filters */}
-            <div className="flex gap-3 mb-4 items-center">
-                <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white flex-1 max-w-xs">
-                    <legend className="text-[10px] text-gray-500 px-1">Buscar cliente</legend>
-                    <div className="flex items-center gap-2">
-                        <Search size={14} className="text-gray-400" />
-                        <input type="text" value={busqueda} onChange={e => { setBusqueda(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 w-full" placeholder="" />
+            <div className="flex flex-col gap-4 mb-6">
+                <div className="flex gap-3 items-center flex-wrap">
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                        <button 
+                            onClick={() => { setLoyaltyFilter("todos"); setPage(1); }}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "todos" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                        >
+                            TODOS
+                        </button>
+                        <button 
+                            onClick={() => { setLoyaltyFilter("con_ventas"); setPage(1); }}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "con_ventas" ? "bg-emerald-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                        >
+                            CON VENTAS
+                        </button>
+                        <button 
+                            onClick={() => { setLoyaltyFilter("sin_ventas"); setPage(1); }}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${loyaltyFilter === "sin_ventas" ? "bg-amber-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                        >
+                            SIN VENTAS
+                        </button>
                     </div>
-                </fieldset>
-                <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white">
-                    <legend className="text-[10px] text-gray-500 px-1">Fecha de pedido</legend>
-                    <input type="text" readOnly value={`1/1/2026 – ${new Date().toLocaleDateString("es-AR")}`} className="bg-transparent outline-none text-sm text-gray-900 w-40" />
-                </fieldset>
-                <div className="ml-auto flex gap-2">
-                    <button onClick={() => setShowHeatmap(true)} className="flex items-center gap-1 text-purple-600 text-sm font-medium hover:underline">
-                        <MapPin size={14} /> Mapa de calor
-                    </button>
-                    <button className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
-                        <Download size={14} /> Exportar
-                    </button>
+
+                    <fieldset className="border border-gray-300 rounded-lg px-3 py-1.5 bg-white min-w-[200px]">
+                        <legend className="text-[10px] text-gray-500 px-1 font-semibold uppercase tracking-wider">Buscar cliente</legend>
+                        <div className="flex items-center gap-2">
+                            <Search size={14} className="text-gray-400" />
+                            <input type="text" value={busqueda} onChange={e => { setBusqueda(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 w-full" placeholder="Nombre o teléfono..." />
+                        </div>
+                    </fieldset>
+
+                    <div className="ml-auto flex gap-2">
+                        <button onClick={() => setShowHeatmap(true)} className="flex items-center gap-1 text-purple-600 text-sm font-medium hover:underline px-3 py-2">
+                            <MapPin size={14} /> Mapa de calor
+                        </button>
+                        <button className="flex items-center gap-1 bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-800 transition-colors">
+                            <Download size={14} /> Exportar
+                        </button>
+                    </div>
                 </div>
+
+                {loyaltyFilter !== "todos" && (
+                    <div className="flex gap-4 items-end p-5 bg-[#F8FAFC] rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+                        <fieldset className="border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-500">
+                            <legend className="text-[10px] text-slate-500 px-1 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Calendar size={10} /> Desde
+                            </legend>
+                            <input 
+                                type="date" 
+                                value={fechaDesde} 
+                                onChange={e => { setFechaDesde(e.target.value); setPage(1); }}
+                                className="bg-transparent outline-none text-sm text-slate-900 w-full" 
+                            />
+                        </fieldset>
+                        <fieldset className="border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-500">
+                            <legend className="text-[10px] text-slate-500 px-1 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Calendar size={10} /> Hasta
+                            </legend>
+                            <input 
+                                type="date" 
+                                value={fechaHasta} 
+                                onChange={e => { setFechaHasta(e.target.value); setPage(1); }}
+                                className="bg-transparent outline-none text-sm text-slate-900 w-full" 
+                            />
+                        </fieldset>
+                        <fieldset className="border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-sm transition-all focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-500 min-w-[220px]">
+                            <legend className="text-[10px] text-slate-500 px-1 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Filter size={10} /> Producto
+                            </legend>
+                            <select 
+                                value={productoFiltro} 
+                                onChange={e => { setProductoFiltro(e.target.value); setPage(1); }}
+                                className="bg-transparent outline-none text-sm text-slate-900 w-full font-semibold appearance-none cursor-pointer"
+                            >
+                                <option value="TODOS">TODOS LOS PRODUCTOS</option>
+                                {listaProductos.map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
+                            </select>
+                        </fieldset>
+                        <div className="flex-1 text-[11px] text-slate-500 mb-2 leading-tight">
+                            <span className="font-bold text-slate-700 block mb-0.5">Campaña de Fidelización</span>
+                            Mostrando clientes {loyaltyFilter === "con_ventas" ? "activos" : "inactivos"} {productoFiltro !== "TODOS" ? `para ${productoFiltro}` : "en general"} durante el periodo.
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Table */}
@@ -97,22 +253,56 @@ export default function ClientesPage() {
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={6} className="text-center py-10 text-gray-400">Cargando...</td></tr>
+                            <tr><td colSpan={6} className="text-center py-10 text-gray-400">Cargando clientes...</td></tr>
                         ) : clientes.length === 0 ? (
-                            <tr><td colSpan={6} className="text-center py-10 text-gray-400">No hay clientes</td></tr>
+                            <tr><td colSpan={6} className="text-center py-10 text-gray-400">No se encontraron clientes con estos filtros.</td></tr>
                         ) : clientes.map(c => (
-                            <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
-                                <td className="px-4 py-3 text-gray-900 font-medium">{c.nombre}</td>
+                            <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 group">
                                 <td className="px-4 py-3">
-                                    <a href={`https://wa.me/${c.telefono}`} target="_blank" className="text-purple-600 hover:underline">{c.telefono || "—"}</a>
+                                    <div className="text-gray-900 font-bold">{c.nombre}</div>
+                                    <div className="text-[10px] text-gray-400">ID: {c.id.slice(0, 8)}</div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="flex flex-col">
+                                        <span className="text-gray-900 font-medium">{c.telefono || "—"}</span>
+                                        {c.telefono && (
+                                            <a 
+                                                href={`https://wa.me/${c.telefono.replace(/\D/g, '')}`} 
+                                                target="_blank" 
+                                                className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-bold text-xs mt-0.5"
+                                            >
+                                                <MessageCircle size={12} /> WhatsApp
+                                            </a>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-3 text-gray-600">{c.email || "—"}</td>
                                 <td className="px-4 py-3">
-                                    <a href={`https://maps.google.com/?q=${encodeURIComponent(c.direccion || "")}`} target="_blank" className="text-purple-600 hover:underline">{c.direccion || "—"}</a>
+                                    <a href={`https://maps.google.com/?q=${encodeURIComponent(c.direccion || "")}`} target="_blank" className="text-purple-600 hover:underline flex items-center gap-1">
+                                        <MapPin size={12} /> {c.direccion || "—"}
+                                    </a>
                                 </td>
-                                <td className="px-4 py-3 text-center font-bold text-gray-900">{c.total_pedidos}</td>
+                                <td className="px-4 py-3 text-center">
+                                    <div className="bg-gray-100 rounded-lg py-1 px-2 inline-block">
+                                        <div className="font-bold text-gray-900 text-xs">{c.total_pedidos}</div>
+                                        <div className="text-[9px] text-gray-500 uppercase font-semibold">Pedidos</div>
+                                    </div>
+                                </td>
                                 <td className="px-4 py-3">
-                                    <button onClick={() => setSelectedCliente(c)} className="text-purple-600 text-xs font-medium hover:underline">Más info</button>
+                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => setSelectedCliente(c)} className="bg-purple-50 text-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-200">
+                                            Ver detalle
+                                        </button>
+                                        {c.telefono && (
+                                            <a 
+                                                href={`https://wa.me/${c.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`¡Hola ${c.nombre}! Tenemos una promo para vos...`)}`} 
+                                                target="_blank" 
+                                                className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-1"
+                                            >
+                                                Contactar
+                                            </a>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
