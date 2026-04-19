@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter } from "lucide-react";
+import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter, ChevronUp, ChevronDown } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import ClienteDetailModal from "@/components/admin/ClienteDetailModal";
 import { getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
@@ -26,6 +26,10 @@ export default function ClientesPage() {
     const [perPage, setPerPage] = useState(10);
     const [total, setTotal] = useState(0);
     const { sucursalId } = useTenant();
+
+    // Sorting State
+    const [sortColumn, setSortColumn] = useState<string>("total_pedidos");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [showHeatmap, setShowHeatmap] = useState(false);
@@ -46,7 +50,22 @@ export default function ClientesPage() {
             fetchClientes();
             fetchListaProductos();
         }
-    }, [page, perPage, busqueda, sucursalId, loyaltyFilter, fechaDesde, fechaHasta, productoFiltro]);
+    }, [page, perPage, busqueda, sucursalId, loyaltyFilter, fechaDesde, fechaHasta, productoFiltro, sortColumn, sortDirection]);
+
+    const handleSort = (column: string) => {
+        if (sortColumn === column) {
+            setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+        } else {
+            setSortColumn(column);
+            setSortDirection("desc");
+        }
+        setPage(1);
+    };
+
+    const SortIcon = ({ column }: { column: string }) => {
+        if (sortColumn !== column) return <ChevronDown size={12} className="opacity-20 flex-shrink-0" />;
+        return sortDirection === "asc" ? <ChevronUp size={12} className="text-purple-600 flex-shrink-0" /> : <ChevronDown size={12} className="text-purple-600 flex-shrink-0" />;
+    };
 
     async function fetchListaProductos() {
         if (!sucursalId) return;
@@ -109,7 +128,7 @@ export default function ClientesPage() {
                 .from("clientes")
                 .select("*", { count: "exact" })
                 .eq("sucursal_id", sucursalId)
-                .order("total_pedidos", { ascending: false })
+                .order(sortColumn, { ascending: sortDirection === "asc" })
                 .range((page - 1) * perPage, page * perPage - 1);
 
             if (busqueda) {
@@ -286,11 +305,21 @@ export default function ClientesPage() {
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="text-gray-500 text-xs uppercase tracking-wider border-b border-gray-100">
-                            <th className="px-4 py-3 text-left font-semibold">Nombre</th>
-                            <th className="px-4 py-3 text-left font-semibold">WhatsApp</th>
-                            <th className="px-4 py-3 text-left font-semibold">Email</th>
-                            <th className="px-4 py-3 text-left font-semibold">Dirección</th>
-                            <th className="px-4 py-3 text-center font-semibold">Pedidos</th>
+                            <th className="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => handleSort("nombre")}>
+                                <div className="flex items-center gap-1">Nombre <SortIcon column="nombre" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => handleSort("telefono")}>
+                                <div className="flex items-center gap-1">WhatsApp <SortIcon column="telefono" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => handleSort("email")}>
+                                <div className="flex items-center gap-1">Email <SortIcon column="email" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => handleSort("direccion")}>
+                                <div className="flex items-center gap-1">Dirección <SortIcon column="direccion" /></div>
+                            </th>
+                            <th className="px-4 py-3 text-center font-semibold cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => handleSort("total_pedidos")}>
+                                <div className="flex items-center justify-center gap-1">Pedidos <SortIcon column="total_pedidos" /></div>
+                            </th>
                             <th className="px-4 py-3 text-left font-semibold">Acciones</th>
                         </tr>
                     </thead>
