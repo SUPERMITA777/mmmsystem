@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Calendar, Filter, X, ChevronLeft, ChevronRight, User, MapPin, Phone, Clock, Trash2 } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
+import { getArgentinaDate, getArgentinaYesterday, getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
 
 type Pedido = {
     id: string;
@@ -79,26 +80,19 @@ export default function PedidosPage() {
         if (filtroMetodoPago) query = query.eq("metodo_pago_nombre", filtroMetodoPago);
 
         if (filtroFecha === "hoy") {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            query = query.gte("created_at", today.toISOString());
+            const hoyStr = getArgentinaDate();
+            query = query.gte("created_at", getStartOfDayArgentina(hoyStr));
         } else if (filtroFecha === "ayer") {
-            const ayer = new Date();
-            ayer.setDate(ayer.getDate() - 1);
-            ayer.setHours(0, 0, 0, 0);
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-            query = query.gte("created_at", ayer.toISOString()).lt("created_at", hoy.toISOString());
+            const ayerStr = getArgentinaYesterday();
+            const hoyStr = getArgentinaDate();
+            query = query.gte("created_at", getStartOfDayArgentina(ayerStr))
+                         .lt("created_at", getStartOfDayArgentina(hoyStr));
         } else if (filtroFecha === "rango") {
             if (fechaDesde) {
-                const d = new Date(fechaDesde);
-                d.setHours(0, 0, 0, 0);
-                query = query.gte("created_at", d.toISOString());
+                query = query.gte("created_at", getStartOfDayArgentina(fechaDesde));
             }
             if (fechaHasta) {
-                const h = new Date(fechaHasta);
-                h.setHours(23, 59, 59, 999);
-                query = query.lte("created_at", h.toISOString());
+                query = query.lte("created_at", getEndOfDayArgentina(fechaHasta));
             }
         }
 

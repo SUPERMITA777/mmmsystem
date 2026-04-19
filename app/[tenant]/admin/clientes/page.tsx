@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import ClienteDetailModal from "@/components/admin/ClienteDetailModal";
+import { getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
 import HeatmapModal from "@/components/admin/HeatmapModal";
 
 type Cliente = {
@@ -78,14 +79,10 @@ export default function ClientesPage() {
                     .eq("sucursal_id", sucursalId);
 
                 if (fechaDesde) {
-                    const d = new Date(fechaDesde);
-                    d.setHours(0, 0, 0, 0);
-                    pQuery = pQuery.gte("created_at", d.toISOString());
+                    pQuery = pQuery.gte("created_at", getStartOfDayArgentina(fechaDesde));
                 }
                 if (fechaHasta) {
-                    const h = new Date(fechaHasta);
-                    h.setHours(23, 59, 59, 999);
-                    pQuery = pQuery.lte("created_at", h.toISOString());
+                    pQuery = pQuery.lte("created_at", getEndOfDayArgentina(fechaHasta));
                 }
 
                 const { data: pedidosData } = await pQuery;
