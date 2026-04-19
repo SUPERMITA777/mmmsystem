@@ -31,12 +31,12 @@ export default function ClienteDetailModal({ cliente, sucursalId, onClose }: Cli
     async function fetchHistorico() {
         setLoading(true);
         try {
-            // Fetch by phone to include retroactive orders that might missing cliente_id
+            // Fetch by phone and ID to ensure all orders are captured
             const { data, error } = await supabase
                 .from("pedidos")
                 .select("numero_pedido, created_at, total, estado, tipo")
                 .eq("sucursal_id", sucursalId)
-                .eq("cliente_telefono", cliente.telefono)
+                .or(`cliente_id.eq.${cliente.id},cliente_telefono.eq.${cliente.telefono}`)
                 .order("created_at", { ascending: false });
 
             if (error) throw error;

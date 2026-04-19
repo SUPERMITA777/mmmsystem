@@ -68,12 +68,13 @@ export default function ClientesPage() {
 
         try {
             let filteredClientPhones: string[] | null = null;
+            let filteredClientIds: string[] | null = null;
 
             // Handle Loyalty filtering
             if (loyaltyFilter !== "todos") {
                 let pQuery = supabase
                     .from("pedidos")
-                    .select("cliente_telefono, pedido_items(nombre_producto)")
+                    .select("cliente_id, cliente_telefono, pedido_items(nombre_producto)")
                     .eq("sucursal_id", sucursalId);
 
                 if (fechaDesde) {
@@ -90,19 +91,20 @@ export default function ClientesPage() {
                 const { data: pedidosData } = await pQuery;
 
                 if (pedidosData) {
-                    let filteredTelephones = pedidosData;
+                    let filteredData = pedidosData;
                     
                     // Filter by products if array is not empty
                     if (productoFiltro.length > 0) {
-                        filteredTelephones = pedidosData.filter(p => 
+                        filteredData = pedidosData.filter(p => 
                             p.pedido_items?.some((item: any) => productoFiltro.includes(item.nombre_producto))
                         );
                     }
 
-                    const phones = Array.from(new Set(filteredTelephones.map(p => p.cliente_telefono).filter(Boolean)));
-                    filteredClientPhones = phones as string[];
+                    filteredClientPhones = Array.from(new Set(filteredData.map(p => p.cliente_telefono).filter(Boolean))) as string[];
+                    filteredClientIds = Array.from(new Set(filteredData.map(p => p.cliente_id).filter(Boolean))) as string[];
                 } else {
                     filteredClientPhones = [];
+                    filteredClientIds = [];
                 }
             }
 
@@ -118,16 +120,32 @@ export default function ClientesPage() {
             }
 
             if (loyaltyFilter === "con_compras") {
-                if (filteredClientPhones) {
-                    query = query.in("telefono", filteredClientPhones);
+                if (filteredClientIds && filteredClientPhones) {
+                    const idFilter = filteredClientIds.length > 0 ? `id.in.(${filteredClientIds.map(id => `"${id}"`).join(",")})` : "";
+                    const phoneFilter = filteredClientPhones.length > 0 ? `telefono.in.(${filteredClientPhones.map(p => `"${p}"`).join(",")})` : "";
+                    
+                    if (idFilter && phoneFilter) {
+                        query = query.or(`${idFilter},${phoneFilter}`);
+                    } else if (idFilter) {
+                        query = query.or(idFilter);
+                    } else if (phoneFilter) {
+                        query = query.or(phoneFilter);
+                    } else {
+                        setClientes([]);
+                        setTotal(0);
+                        setLoading(false);
+                        return;
+                    }
                 } else {
-                    // No sales found in that period
                     setClientes([]);
                     setTotal(0);
                     setLoading(false);
                     return;
                 }
             } else if (loyaltyFilter === "sin_compras") {
+                if (filteredClientIds && filteredClientIds.length > 0) {
+                    query = query.not("id", "in", `(${filteredClientIds.map(id => `"${id}"`).join(",")})`);
+                }
                 if (filteredClientPhones && filteredClientPhones.length > 0) {
                     query = query.not("telefono", "in", `(${filteredClientPhones.map(p => `"${p}"`).join(",")})`);
                 }
