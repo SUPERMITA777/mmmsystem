@@ -379,14 +379,7 @@ export default function PromosPage() {
 
       {activeTab === "ruleta" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-           {/* RUELA MANAGER COMPONENT WILL GO HERE */}
-           <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
-             <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-               <Gift size={32} className="text-purple-600" />
-             </div>
-             <h3 className="text-lg font-bold text-gray-900">Próximamente: Ruleta de Premios</h3>
-             <p className="text-gray-500 max-w-sm mx-auto mt-2 italic">Implementando el módulo creativo...</p>
-           </div>
+           <RuletaManager />
         </div>
       )}
     </section>
