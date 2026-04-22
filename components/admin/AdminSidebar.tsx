@@ -41,7 +41,7 @@ const items = [
   { id: "stock", href: "/admin/stock", icon: Package, label: "Stock" },
   { id: "clientes", href: "/admin/clientes", icon: Users, label: "Clientes" },
   { id: "descuentos", href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
-  { id: "promo-qr", href: "/admin/promo-qr", icon: QrCode, label: "Promo QR" },
+  { id: "promo-qr", href: "/admin/promos", icon: QrCode, label: "Promos" },
   { id: "agente-ia", href: "/admin/agente-ia", icon: Bot, label: "Agente IA" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
   { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
