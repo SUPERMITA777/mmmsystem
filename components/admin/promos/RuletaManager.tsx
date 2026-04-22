@@ -7,7 +7,8 @@ import {
   ToggleLeft, ToggleRight, Gift, 
   Image as ImageIcon, Loader2,
   ChevronDown, ChevronUp, ExternalLink,
-  MessageSquare
+  MessageSquare, User, Phone, Calendar,
+  RefreshCcw, Filter, X
 } from "lucide-react";
 
 interface Ruleta {
@@ -32,6 +33,17 @@ interface Segmento {
   validez?: string;
 }
 
+interface Lead {
+  id: string;
+  ruleta_id: string;
+  nombre_cliente: string;
+  whatsapp_cliente: string;
+  premio_id: string;
+  premio_nombre: string;
+  created_at: string;
+  ruletas?: { nombre: string };
+}
+
 export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tenant: string }) {
   const [ruletas, setRuletas] = useState<Ruleta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,10 +52,21 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
   const [segments, setSegments] = useState<Segmento[]>([]);
   const [loadingSegments, setLoadingSegments] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // Leads states
+  const [activeTab, setActiveTab] = useState<"ruletas" | "leads">("ruletas");
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loadingLeads, setLoadingLeads] = useState(false);
+  const [searchLeads, setSearchLeads] = useState("");
+  const [sortField, setSortField] = useState<keyof Lead>("created_at");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
-    if (sucursalId) fetchRuletas();
-  }, [sucursalId]);
+    if (sucursalId) {
+      fetchRuletas();
+      if (activeTab === "leads") fetchLeads();
+    }
+  }, [sucursalId, activeTab]);
 
   async function fetchRuletas() {
     setLoading(true);
@@ -76,6 +99,33 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
     setSegments(data || []);
     setLoadingSegments(false);
   }
+
+  async function fetchLeads() {
+    setLoadingLeads(true);
+    const { data, error } = await supabase
+      .from("ruleta_leads")
+      .select(`
+        *,
+        ruletas!inner(id, nombre, sucursal_id)
+      `)
+      .eq("ruletas.sucursal_id", sucursalId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching leads:", error);
+    } else {
+      setLeads(data || []);
+    }
+    setLoadingLeads(false);
+  }
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm("¿Resetear a este participante? Podrá volver a girar la ruleta.")) return;
+    const { error } = await supabase.from("ruleta_leads").delete().eq("id", leadId);
+    if (!error) {
+      setLeads(leads.filter(l => l.id !== leadId));
+    }
+  };
 
   const handleEdit = (ruleta: Ruleta) => {
     setEditingId(ruleta.id);
@@ -188,10 +238,52 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
       </div>
     );
   }
+
+  // Sorting and Filtering Leads
+  const filteredLeads = leads
+    .filter(l => 
+      l.nombre_cliente.toLowerCase().includes(searchLeads.toLowerCase()) ||
+      l.whatsapp_cliente.includes(searchLeads) ||
+      l.premio_nombre?.toLowerCase().includes(searchLeads.toLowerCase())
+    )
+    .sort((a, b) => {
+      const aVal = a[sortField] || "";
+      const bVal = b[sortField] || "";
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const toggleSort = (field: keyof Lead) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
   return (
     <div className="space-y-6">
-      {/* List of Roulettes */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
+      {/* Sub-tabs for Ruleta Manager */}
+      <div className="flex gap-4 border-b border-gray-200">
+        <button 
+          onClick={() => setActiveTab("ruletas")}
+          className={`pb-3 text-sm font-bold transition-all border-b-2 ${activeTab === "ruletas" ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          Campañas
+        </button>
+        <button 
+          onClick={() => setActiveTab("leads")}
+          className={`pb-3 text-sm font-bold transition-all border-b-2 ${activeTab === "leads" ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+        >
+          Participantes y Ganadores
+        </button>
+      </div>
+
+      {activeTab === "ruletas" ? (
+        <>
+          {/* List of Roulettes */}
+          <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200">
         <div>
           <h3 className="font-bold text-gray-900">Mis Ruletas</h3>
           <p className="text-xs text-gray-500">Gestiona múltiples campañas interactivas</p>
@@ -440,6 +532,128 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
           </div>
         )}
       </div>
+      </>
+      ) : (
+        /* Leads View */
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+           {/* Search and Header */}
+           <div className="bg-white p-5 rounded-2xl border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="relative flex-1">
+                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                 <input 
+                   type="text" 
+                   placeholder="Buscar por nombre, WhatsApp o premio..."
+                   value={searchLeads}
+                   onChange={e => setSearchLeads(e.target.value)}
+                   className="w-full bg-gray-50 border border-gray-100 rounded-xl py-2.5 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-purple-100 transition-all"
+                 />
+                 {searchLeads && (
+                   <button onClick={() => setSearchLeads("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                     <X size={14} />
+                   </button>
+                 )}
+              </div>
+              <div className="flex items-center gap-2">
+                 <button 
+                   onClick={fetchLeads} 
+                   disabled={loadingLeads}
+                   className="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-colors"
+                 >
+                   <RefreshCcw size={18} className={loadingLeads ? 'animate-spin' : ''} />
+                 </button>
+                 <div className="bg-purple-50 text-purple-700 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest">
+                   {filteredLeads.length} Participantes
+                 </div>
+              </div>
+           </div>
+
+           {/* Leads Table */}
+           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                      <th onClick={() => toggleSort('nombre_cliente')} className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:text-purple-600 transition-colors">
+                        <div className="flex items-center gap-1">
+                          Participante {sortField === 'nombre_cliente' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">WhatsApp</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Campaña</th>
+                      <th onClick={() => toggleSort('premio_nombre')} className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:text-purple-600 transition-colors">
+                        <div className="flex items-center gap-1">
+                          Premio Ganado {sortField === 'premio_nombre' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                        </div>
+                      </th>
+                      <th onClick={() => toggleSort('created_at')} className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest cursor-pointer hover:text-purple-600 transition-colors">
+                        <div className="flex items-center gap-1">
+                          Fecha {sortField === 'created_at' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-right"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredLeads.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-gray-50/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-bold text-xs uppercase">
+                              {lead.nombre_cliente.charAt(0)}
+                            </div>
+                            <span className="text-sm font-bold text-gray-900">{lead.nombre_cliente}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <a 
+                            href={`https://wa.me/${lead.whatsapp_cliente}`} 
+                            target="_blank"
+                            className="text-xs font-medium text-gray-600 hover:text-green-600 flex items-center gap-1.5"
+                          >
+                            <Phone size={12} /> {lead.whatsapp_cliente}
+                          </a>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded uppercase">
+                            {lead.ruletas?.nombre || 'Ruleta'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-sm">
+                             <Gift size={14} className="text-purple-500" />
+                             <span className="font-black text-gray-900 uppercase tracking-tight">{lead.premio_nombre || 'Sin premio'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-700 font-medium">{new Date(lead.created_at).toLocaleDateString()}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(lead.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => handleDeleteLead(lead.id)}
+                            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Resetear participante (Podrá girar de nuevo)"
+                          >
+                            <RefreshCcw size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredLeads.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic text-sm">
+                          {searchLeads ? 'No se encontraron resultados para tu búsqueda' : 'Aún no hay participantes en esta sucursal'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }
