@@ -52,6 +52,7 @@ export const RuletaWheel: React.FC<RuletaWheelProps> = ({
   }, [spinning, winnerIndex]);
 
   const startSpin = () => {
+    if (winnerIndex === null) return;
     setIsAnimating(true);
     
     const segmentAngle = 360 / segments.length;
