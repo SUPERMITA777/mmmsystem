@@ -379,7 +379,7 @@ export default function PromosPage() {
 
       {activeTab === "ruleta" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-           <RuletaManager />
+            <RuletaManager sucursalId={sucursalId || ""} tenant={tenant} />
         </div>
       )}
     </section>
