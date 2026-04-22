@@ -35,6 +35,7 @@ interface Segmento {
 export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tenant: string }) {
   const [ruletas, setRuletas] = useState<Ruleta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [segments, setSegments] = useState<Segmento[]>([]);
   const [loadingSegments, setLoadingSegments] = useState(false);
@@ -46,12 +47,22 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
 
   async function fetchRuletas() {
     setLoading(true);
-    const { data } = await supabase
+    setError(null);
+    const { data, error } = await supabase
       .from("ruletas")
       .select("*")
       .eq("sucursal_id", sucursalId)
       .order("created_at", { ascending: false });
-    setRuletas(data || []);
+    
+    if (error) {
+      if (error.code === 'PGRST205' || error.code === '42P01') {
+        setError("MIGRATION_REQUIRED");
+      } else {
+        setError(error.message);
+      }
+    } else {
+      setRuletas(data || []);
+    }
     setLoading(false);
   }
 
@@ -146,6 +157,37 @@ export function RuletaManager({ sucursalId, tenant }: { sucursalId: string, tena
 
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-purple-600" /></div>;
 
+  if (error === "MIGRATION_REQUIRED") {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-3xl p-8 text-center animate-in fade-in zoom-in duration-300">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+          <Gift size={32} />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Se requiere configuración de base de datos</h3>
+        <p className="text-gray-600 max-w-md mx-auto mb-6 text-sm">
+          Faltan las tablas de la ruleta en tu base de datos de Supabase. 
+          Por favor, ejecutá el script de migración manual para activar esta funcionalidad.
+        </p>
+        <div className="flex justify-center gap-3">
+          <button 
+            onClick={fetchRuletas}
+            className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-all"
+          >
+            Reintentar conexión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-3xl p-8 text-center">
+        <p className="text-amber-800 font-bold mb-4">Error: {error}</p>
+        <button onClick={fetchRuletas} className="bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold">Reintentar</button>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       {/* List of Roulettes */}

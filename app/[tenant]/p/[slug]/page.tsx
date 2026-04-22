@@ -1,5 +1,6 @@
 import { RuletaClientView } from "@/components/promo/RuletaClientView";
 
-export default function PublicPromoPage({ params }: { params: { tenant: string, slug: string } }) {
-  return <RuletaClientView slug={params.slug} tenant={params.tenant} />;
+export default async function PublicPromoPage({ params }: { params: Promise<{ tenant: string, slug: string }> }) {
+  const { tenant, slug } = await params;
+  return <RuletaClientView slug={slug} tenant={tenant} />;
 }
