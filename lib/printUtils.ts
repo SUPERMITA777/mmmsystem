@@ -225,6 +225,11 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
       <td style="color:#333">Propina</td>
       <td style="text-align:right;color:#333">${fmtARS(pedido.propina)}</td>
     </tr>` : ""}
+    ${(pedido.descuento ?? 0) > 0 ? `
+    <tr>
+      <td style="color:#1a7a3f;font-weight:bold">🏷️ Descuento${pedido.notas_internas ? ` (${pedido.notas_internas})` : ""}</td>
+      <td style="text-align:right;color:#1a7a3f;font-weight:bold">- ${fmtARS(pedido.descuento)}</td>
+    </tr>` : ""}
     <tr>
       <td style="font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:4px">${metodoPago}</td>
       <td style="text-align:right;font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:4px">${fmtARS(pedido.total ?? 0)}</td>
