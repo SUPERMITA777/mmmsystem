@@ -52,6 +52,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [promoCode, setPromoCode] = useState("");
     const [promoValidating, setPromoValidating] = useState(false);
     const [promoResult, setPromoResult] = useState<null | { valid: boolean; message?: string; codigo?: any }>(null);
+    const [codigoDescuentoId, setCodigoDescuentoId] = useState("");
 
     // Order metadata
     const [tipo, setTipo] = useState<"delivery" | "takeaway">("delivery");
@@ -133,6 +134,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setSeAbona("");
                 setPromoCode("");
                 setPromoResult(null);
+                setCodigoDescuentoId("");
                 setValidacionDelivery({ valid: false, costo: 0, loading: false });
                 setDireccionGeocoded(null);
                 setAlternativas([]);
@@ -479,7 +481,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         return 0;
     })();
 
-    const total = subtotal + costoEnvio - promoDescuento;
+    // Descuento por código de descuento seleccionado
+    const descuentoSeleccionado = descuentos.find(d => d.id === codigoDescuentoId) || null;
+    const codigoDescuento = (() => {
+        if (!descuentoSeleccionado) return 0;
+        if (descuentoSeleccionado.tipo === "porcentaje") return Math.round(subtotal * descuentoSeleccionado.valor / 100);
+        if (descuentoSeleccionado.tipo === "fijo") return Math.min(descuentoSeleccionado.valor, subtotal);
+        return 0;
+    })();
+
+    const total = subtotal + costoEnvio - promoDescuento - codigoDescuento;
 
     const isGroupValid = (grp: any) => {
         if (!productoCustom) return true;
@@ -765,6 +776,32 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 </div>
                             </div>
                         ))}
+                    </div>
+
+                    {/* Código de descuento (tabla descuentos) */}
+                    <div className="px-3 pt-3 border-t border-gray-200">
+                        <label className="text-[10px] text-gray-400 font-medium block mb-1">🏷️ Código de descuento</label>
+                        <select
+                            value={codigoDescuentoId}
+                            onChange={e => setCodigoDescuentoId(e.target.value)}
+                            className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs font-medium outline-none focus:border-purple-500 bg-white text-gray-700"
+                        >
+                            <option value="">— Sin descuento —</option>
+                            {descuentos
+                                .filter(d => d.codigo)
+                                .map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.codigo} — {d.nombre} ({d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`} OFF)
+                                    </option>
+                                ))
+                            }
+                        </select>
+                        {descuentoSeleccionado && (
+                            <div className="mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 bg-green-50 text-green-700 border border-green-200">
+                                ✅ {descuentoSeleccionado.nombre} — Ahorro: ${fmt(codigoDescuento)}
+                                <button onClick={() => setCodigoDescuentoId("")} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Código Promo QR */}
@@ -1160,6 +1197,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         {tipo === "delivery" && costoEnvio > 0 && (
                             <div className="flex justify-between text-xs text-gray-500">
                                 <span>Envío</span><span className="font-bold">$ {fmt(costoEnvio)}</span>
+                            </div>
+                        )}
+                        {promoDescuento > 0 && (
+                            <div className="flex justify-between text-xs text-green-600 font-bold">
+                                <span>🎁 Promo QR</span><span>- $ {fmt(promoDescuento)}</span>
+                            </div>
+                        )}
+                        {codigoDescuento > 0 && (
+                            <div className="flex justify-between text-xs text-green-600 font-bold">
+                                <span>🏷️ {descuentoSeleccionado?.codigo}</span><span>- $ {fmt(codigoDescuento)}</span>
                             </div>
                         )}
                         <div className="flex justify-between text-sm font-black text-gray-900 pt-2 border-t border-gray-200">
