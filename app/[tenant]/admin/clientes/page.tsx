@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Download, MapPin, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, Calendar, Filter, ChevronUp, ChevronDown, Edit3, Users, AlertTriangle } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import ClienteDetailModal from "@/components/admin/ClienteDetailModal";
 import { getStartOfDayArgentina, getEndOfDayArgentina } from "@/lib/dateUtils";
@@ -17,6 +17,19 @@ type Cliente = {
     total_pedidos: number;
     total_gastado: number;
 };
+
+// Normalize phone number: strips non-digits, removes leading country codes (549, 54, etc.)
+function normalizePhone(phone: string): string {
+    let digits = phone.replace(/\D/g, '');
+    // Remove Argentina country code variations
+    if (digits.startsWith('549')) digits = digits.slice(3);
+    else if (digits.startsWith('54')) digits = digits.slice(2);
+    // Remove leading 0 for area codes like 011 -> 11
+    if (digits.startsWith('0')) digits = digits.slice(1);
+    // Remove leading 15 (old mobile prefix)
+    if (digits.startsWith('15') && digits.length > 8) digits = digits.slice(2);
+    return digits;
+}
 
 export default function ClientesPage() {
     const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -33,6 +46,13 @@ export default function ClientesPage() {
     
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [showHeatmap, setShowHeatmap] = useState(false);
+
+    // WhatsApp message template
+    const [waTemplate, setWaTemplate] = useState('¡Hola {nombre}! Tenemos una promo para vos...');
+    const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+
+    // Phone dedup
+    const [showDuplicates, setShowDuplicates] = useState(false);
 
     // Loyalty Filters
     const [loyaltyFilter, setLoyaltyFilter] = useState<"todos" | "con_compras" | "sin_compras">("todos");
@@ -179,6 +199,34 @@ export default function ClientesPage() {
 
     const totalPages = Math.ceil(total / perPage);
 
+    // Build a map of normalized phone -> count for duplicate detection
+    const duplicatePhoneMap = (() => {
+        const map: Record<string, string[]> = {};
+        clientes.forEach(c => {
+            if (!c.telefono) return;
+            const norm = normalizePhone(c.telefono);
+            if (!norm) return;
+            if (!map[norm]) map[norm] = [];
+            map[norm].push(c.id);
+        });
+        return map;
+    })();
+
+    const isDuplicate = (phone: string) => {
+        if (!phone) return false;
+        const norm = normalizePhone(phone);
+        return norm ? (duplicatePhoneMap[norm]?.length || 0) > 1 : false;
+    };
+
+    // Filter to only show duplicates if toggle is on
+    const clientesMostrados = showDuplicates
+        ? clientes.filter(c => c.telefono && isDuplicate(c.telefono))
+        : clientes;
+
+    function buildWhatsAppMessage(nombre: string) {
+        return waTemplate.replace(/\{nombre\}/gi, nombre);
+    }
+
     return (
         <section className="p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Clientes</h2>
@@ -216,6 +264,26 @@ export default function ClientesPage() {
                     </fieldset>
 
                     <div className="ml-auto flex gap-2">
+                        <button 
+                            onClick={() => setShowDuplicates(!showDuplicates)} 
+                            className={`flex items-center gap-1.5 text-sm font-bold px-3 py-2 rounded-xl border transition-all ${
+                                showDuplicates 
+                                    ? 'bg-amber-50 text-amber-700 border-amber-300 shadow-sm' 
+                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Users size={14} /> Duplicados
+                        </button>
+                        <button 
+                            onClick={() => setShowTemplateEditor(!showTemplateEditor)} 
+                            className={`flex items-center gap-1.5 text-sm font-bold px-3 py-2 rounded-xl border transition-all ${
+                                showTemplateEditor 
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm' 
+                                    : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Edit3 size={14} /> Mensaje WA
+                        </button>
                         <button onClick={() => setShowHeatmap(true)} className="flex items-center gap-1 text-purple-600 text-sm font-medium hover:underline px-3 py-2">
                             <MapPin size={14} /> Mapa de calor
                         </button>
@@ -224,6 +292,52 @@ export default function ClientesPage() {
                         </button>
                     </div>
                 </div>
+
+                {/* WhatsApp Template Editor */}
+                {showTemplateEditor && (
+                    <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-200 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <MessageCircle size={16} className="text-emerald-600" />
+                                <span className="text-sm font-bold text-emerald-900">Personalizar mensaje de WhatsApp</span>
+                            </div>
+                            <button onClick={() => setShowTemplateEditor(false)} className="text-gray-400 hover:text-gray-600 text-xs font-bold">Cerrar ×</button>
+                        </div>
+                        <div className="flex gap-3 items-start">
+                            <div className="flex-1">
+                                <textarea
+                                    rows={2}
+                                    value={waTemplate}
+                                    onChange={e => setWaTemplate(e.target.value)}
+                                    className="w-full border border-emerald-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500 bg-white shadow-sm transition-all resize-none"
+                                    placeholder="Escribí tu mensaje..."
+                                />
+                                <p className="text-[10px] text-emerald-600 mt-1.5 font-medium">
+                                    💡 Usá <code className="bg-emerald-100 px-1 py-0.5 rounded font-bold">{'{nombre}'}</code> para insertar el nombre del cliente automáticamente.
+                                </p>
+                            </div>
+                            <div className="bg-white rounded-xl border border-emerald-200 p-3 min-w-[200px] shadow-sm">
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Vista previa</p>
+                                <p className="text-xs text-gray-700 leading-relaxed">{waTemplate.replace(/\{nombre\}/gi, 'Juan')}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Duplicates info banner */}
+                {showDuplicates && (
+                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 shadow-sm flex items-center gap-3">
+                        <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-sm font-bold text-amber-900">Filtro de duplicados activo</p>
+                            <p className="text-xs text-amber-700 mt-0.5">
+                                Mostrando clientes con teléfonos duplicados (normalización inteligente: ignora guiones, +54, 549, 0, 15). 
+                                Se encontraron <span className="font-bold">{clientesMostrados.length}</span> registros potencialmente duplicados.
+                            </p>
+                        </div>
+                        <button onClick={() => setShowDuplicates(false)} className="text-amber-600 hover:text-amber-800 text-xs font-bold shrink-0">Desactivar</button>
+                    </div>
+                )}
 
                 {loyaltyFilter !== "todos" && (
                     <div className="flex gap-4 items-end p-5 bg-[#F8FAFC] rounded-2xl border border-slate-200 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
@@ -328,7 +442,7 @@ export default function ClientesPage() {
                             <tr><td colSpan={6} className="text-center py-10 text-gray-400">Cargando clientes...</td></tr>
                         ) : clientes.length === 0 ? (
                             <tr><td colSpan={6} className="text-center py-10 text-gray-400">No se encontraron clientes con estos filtros.</td></tr>
-                        ) : clientes.map(c => (
+                        ) : clientesMostrados.map(c => (
                             <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50 group">
                                 <td className="px-4 py-3">
                                     <div className="text-gray-900 font-bold">{c.nombre}</div>
@@ -336,7 +450,15 @@ export default function ClientesPage() {
                                 </td>
                                 <td className="px-4 py-3">
                                     <div className="flex flex-col">
-                                        <span className="text-gray-900 font-medium">{c.telefono || "—"}</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-gray-900 font-medium">{c.telefono || "—"}</span>
+                                            {showDuplicates && isDuplicate(c.telefono) && (
+                                                <span className="bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-amber-200">DUPLICADO</span>
+                                            )}
+                                        </div>
+                                        {showDuplicates && c.telefono && (
+                                            <span className="text-[10px] text-gray-400 font-mono">→ {normalizePhone(c.telefono)}</span>
+                                        )}
                                         {c.telefono && (
                                             <a 
                                                 href={`https://wa.me/${c.telefono.replace(/\D/g, '')}`} 
@@ -367,7 +489,7 @@ export default function ClientesPage() {
                                         </button>
                                         {c.telefono && (
                                             <a 
-                                                href={`https://wa.me/${c.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`¡Hola ${c.nombre}! Tenemos una promo para vos...`)}`} 
+                                                href={`https://wa.me/${c.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(buildWhatsAppMessage(c.nombre))}`} 
                                                 target="_blank" 
                                                 className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-1"
                                             >
