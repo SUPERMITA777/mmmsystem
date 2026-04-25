@@ -485,8 +485,36 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const descuentoSeleccionado = descuentos.find(d => d.id === codigoDescuentoId) || null;
     const codigoDescuento = (() => {
         if (!descuentoSeleccionado) return 0;
-        if (descuentoSeleccionado.tipo === "porcentaje") return Math.round(subtotal * descuentoSeleccionado.valor / 100);
-        if (descuentoSeleccionado.tipo === "fijo") return Math.min(descuentoSeleccionado.valor, subtotal);
+
+        // Calculate the eligible subtotal based on the discount's scope
+        let subtotalElegible = subtotal; // default for "general"
+
+        if (descuentoSeleccionado.aplicar_a === "categoria") {
+            const catIds = descuentoSeleccionado.categorias_ids || (descuentoSeleccionado.categoria_id ? [descuentoSeleccionado.categoria_id] : []);
+            if (catIds.length > 0) {
+                subtotalElegible = carrito.reduce((sum, item) => {
+                    const prod = productos.find(p => p.id === item.producto_id);
+                    if (prod && catIds.includes(prod.categoria_id)) {
+                        return sum + item.precioOverride * item.cantidad;
+                    }
+                    return sum;
+                }, 0);
+            }
+        } else if (descuentoSeleccionado.aplicar_a === "producto") {
+            const prodIds = descuentoSeleccionado.productos_ids || (descuentoSeleccionado.producto_id ? [descuentoSeleccionado.producto_id] : []);
+            if (prodIds.length > 0) {
+                subtotalElegible = carrito.reduce((sum, item) => {
+                    if (item.producto_id && prodIds.includes(item.producto_id)) {
+                        return sum + item.precioOverride * item.cantidad;
+                    }
+                    return sum;
+                }, 0);
+            }
+        }
+
+        if (subtotalElegible <= 0) return 0;
+        if (descuentoSeleccionado.tipo === "porcentaje") return Math.round(subtotalElegible * descuentoSeleccionado.valor / 100);
+        if (descuentoSeleccionado.tipo === "fijo") return Math.min(descuentoSeleccionado.valor, subtotalElegible);
         return 0;
     })();
 
