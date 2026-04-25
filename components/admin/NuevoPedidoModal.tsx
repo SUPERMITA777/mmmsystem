@@ -203,7 +203,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setAdicionales(ads || []);
         const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
         setProductoGrupos(pg || []);
-        const { data: descs } = await supabase.from("descuentos").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
+        const { data: descs } = await supabase.from("descuentos").select("*").eq("sucursal_id", sucursalId).order("activo", { ascending: false }).order("nombre");
         setDescuentos(descs || []);
     }
 
@@ -792,10 +792,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         >
                             <option value="">— Sin descuento —</option>
                             {descuentos
-                                .filter(d => d.codigo)
                                 .map(d => (
                                     <option key={d.id} value={d.id}>
-                                        {d.codigo} — {d.nombre} ({d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`} OFF)
+                                        {!d.activo ? "⚫ [INACTIVO] " : "🟢 "}{d.nombre} — {d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`} OFF{d.codigo ? ` (${d.codigo})` : ""}
                                     </option>
                                 ))
                             }
