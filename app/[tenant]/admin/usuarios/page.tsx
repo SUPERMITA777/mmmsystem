@@ -71,7 +71,13 @@ export default function UsuariosPage() {
 
     async function fetchUsuarios() {
         if (!sucursalId) return;
-        const { data } = await supabase.from("usuarios").select("*").eq("sucursal_id", sucursalId).order("nombre");
+        const { data, error } = await supabase.from("usuarios").select("*").eq("sucursal_id", sucursalId).order("nombre");
+        if (error) {
+            console.error("Error fetching users:", error);
+            alert("Error al cargar usuarios: " + error.message);
+            setLoading(false);
+            return;
+        }
         setUsuarios(data || []);
         setLoading(false);
     }
