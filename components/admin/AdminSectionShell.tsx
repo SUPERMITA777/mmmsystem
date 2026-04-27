@@ -1,9 +1,11 @@
 export function AdminSectionShell({
   title,
-  subtitle
+  subtitle,
+  children
 }: {
   title: string;
   subtitle?: string;
+  children?: React.ReactNode;
 }) {
   return (
     <section className="p-8">
@@ -14,9 +16,7 @@ export function AdminSectionShell({
         )}
       </header>
       <div className="bg-white rounded-xl border border-slate-200 p-6 min-h-[300px]">
-        <p className="text-sm text-slate-400">
-          Próximamente interfaz completa para {title.toLowerCase()}.
-        </p>
+        {children}
       </div>
     </section>
   );
