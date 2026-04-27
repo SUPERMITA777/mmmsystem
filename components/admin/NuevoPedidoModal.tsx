@@ -555,7 +555,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     async function crearPedido() {
         if (carrito.length === 0) return;
-        if (!omitirCliente && !cliente.nombre) { alert("Ingresá el nombre del cliente"); return; }
+        if (!omitirCliente && !cliente.nombre && tipo !== "salon") { alert("Ingresá el nombre del cliente"); return; }
         setLoading(true);
         let pedidoFinalId: string | null = null;
         try {
@@ -1182,6 +1182,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             <option key={m.id} value={m.id}>{m.nombre} (Cap: {m.capacidad}) - {m.estado}</option>
                                         ))}
                                     </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Nombre del Cliente (Opcional)</label>
+                                    <input 
+                                        type="text" 
+                                        value={cliente.nombre} 
+                                        onChange={e => setCliente({ ...cliente, nombre: e.target.value })} 
+                                        placeholder="Nombre para identificar la mesa"
+                                        className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 bg-white" 
+                                    />
                                 </div>
                                 <div className="flex gap-3">
                                     <div className="flex-1">
