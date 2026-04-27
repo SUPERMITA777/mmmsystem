@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 import { Plus, Save, Edit3, Trash2, X } from "lucide-react";
-import { Responsive, WidthProvider } from "react-grid-layout";
+import RGL, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+const GridLayout = WidthProvider(RGL);
 
 type Mesa = {
     id: string;
@@ -206,7 +206,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             </div>
 
             <div className="flex-1 overflow-auto p-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-opacity-20">
-                <ResponsiveGridLayout
+                <GridLayout
                     className="layout border border-dashed border-gray-300 min-h-[600px] bg-white/50 rounded-2xl shadow-inner relative"
                     layout={layout}
                     cols={24}
@@ -253,7 +253,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                             </div>
                         );
                     })}
-                </ResponsiveGridLayout>
+                </GridLayout>
             </div>
 
             {isModalOpen && selectedMesa && (
