@@ -47,8 +47,7 @@ const items = [
   { id: "promo-qr", href: "/admin/promos", icon: QrCode, label: "Promos" },
   { id: "agente-ia", href: "/admin/agente-ia", icon: Bot, label: "Agente IA" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
-  { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios" },
-  { id: "permisos", href: "/admin/permisos", icon: Shield, label: "Permisos" },
+  { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios y Permisos" },
   { id: "monitor-cocina", href: "/admin/monitor-cocina", icon: MonitorPlay, label: "Monitor cocina" },
 ];
 
