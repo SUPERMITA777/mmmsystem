@@ -12,37 +12,51 @@ const supabaseAdmin = createClient(
     }
 );
 
-export async function POST() {
+export async function POST(req: Request) {
     try {
-        const { data: { users }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+        const { sucursal_id } = await req.json();
+
+        if (!sucursal_id) return NextResponse.json({ error: 'Sucursal ID is required' }, { status: 400 });
         
-        if (authError) {
-            console.error('Auth List Error:', authError);
-            return NextResponse.json({ error: authError.message }, { status: 400 });
-        }
+        console.log(`[Sync] Iniciando sincronización para sucursal: ${sucursal_id}`);
 
-        const { data: sucursales } = await supabaseAdmin.from('sucursales').select('id').limit(1);
-        const sucursalId = sucursales?.[0]?.id || null;
+        // 1. Get all auth users
+        const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+        if (authError) throw authError;
 
-        for (const user of users) {
+        console.log(`[Sync] Encontrados ${authUsers.length} usuarios en Auth`);
+
+        // 2. Prepare data for upsert
+        // We will map all Auth users to the 'usuarios' table for THIS sucursal
+        const usersToUpsert = authUsers.map(u => ({
+            id: u.id,
+            email: u.email,
+            nombre: u.user_metadata?.nombre || u.email?.split('@')[0] || 'Usuario',
+            rol: u.user_metadata?.rol || 'empleado',
+            sucursal_id: sucursal_id,
+            activo: true
+        }));
+
+        console.log(`[Sync] Realizando UPSERT de ${usersToUpsert.length} usuarios`);
+
+        if (usersToUpsert.length > 0) {
             const { error: upsertError } = await supabaseAdmin
                 .from('usuarios')
-                .upsert({
-                    id: user.id,
-                    email: user.email,
-                    nombre: user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario',
-                    rol: user.user_metadata?.rol || 'empleado',
-                    sucursal_id: sucursalId,
-                    activo: true
-                }, { onConflict: 'id' });
-
+                .upsert(usersToUpsert, { onConflict: 'id' });
+            
             if (upsertError) {
-                console.error(`Error syncing user ${user.id}:`, upsertError);
+                console.error('[Sync] Error en upsert:', upsertError);
+                throw upsertError;
             }
         }
 
-        return NextResponse.json({ success: true, count: users.length });
+        return NextResponse.json({ 
+            success: true, 
+            synced: usersToUpsert.length,
+            totalAuth: authUsers.length 
+        });
     } catch (error: any) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('[Sync] Sync Error:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

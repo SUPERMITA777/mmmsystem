@@ -33,7 +33,10 @@ export async function GET() {
 
         // 1. Get all auth users using Admin API
         const { data: authUsers, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
-        if (usersError) return NextResponse.json({ error: usersError.message }, { status: 400 });
+        if (usersError) {
+            console.error('SuperAdmin Users Error:', usersError);
+            return NextResponse.json({ error: `Auth Admin Error: ${usersError.message}` }, { status: 400 });
+        }
 
         // 2. Get all roles and sucursales info
         const { data: roles } = await supabaseAdmin.from("user_roles").select("*");

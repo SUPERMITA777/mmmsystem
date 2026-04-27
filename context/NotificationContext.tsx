@@ -308,16 +308,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           } else {
             // Si no es la primera vez (polling fallback), buscamos nuevos
             for (const id of ids) {
-              if (id && id !== "undefined" && !knownIdsRef.current.has(id)) {
+              // Robust guard against undefined or non-string IDs
+              if (id && typeof id === "string" && id !== "undefined" && !knownIdsRef.current.has(id)) {
                 console.log("[NotificationContext] 🔍 Detectado nuevo pedido por POLLING:", id);
                 knownIdsRef.current.add(id);
-                // Buscar el objeto completo para la notificación del sistema
-                const { data: fullPedido } = await supabase.from("pedidos").select("*").eq("id", id).single();
-                if (fullPedido) {
-                    showSystemNotification(fullPedido);
-                    if (playNotificationSoundRef.current) {
-                        playNotificationSoundRef.current(false, fullPedido.cliente_nombre);
-                    }
+                
+                try {
+                  const { data: fullPedido, error: fetchErr } = await supabase
+                    .from("pedidos")
+                    .select("*")
+                    .eq("id", id)
+                    .maybeSingle();
+
+                  if (fetchErr) throw fetchErr;
+                  
+                  if (fullPedido) {
+                      showSystemNotification(fullPedido);
+                      if (playNotificationSoundRef.current) {
+                          playNotificationSoundRef.current(false, fullPedido.cliente_nombre);
+                      }
+                  }
+                } catch (fetchE) {
+                  console.warn("[NotificationContext] Error al cargar detalle del pedido:", id, fetchE);
                 }
               }
             }

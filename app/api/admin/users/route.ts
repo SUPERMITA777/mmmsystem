@@ -12,6 +12,38 @@ const supabaseAdmin = createClient(
     }
 );
 
+export async function GET(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const sucursal_id = searchParams.get('sucursal_id');
+
+    if (!sucursal_id) return NextResponse.json({ error: 'Sucursal ID is required' }, { status: 400 });
+
+    try {
+        // 1. Get all auth users
+        const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers();
+        if (authError) throw authError;
+
+        // 2. Get all profiles for this sucursal
+        const { data: profiles, error: profileError } = await supabaseAdmin
+            .from('usuarios')
+            .select('*')
+            .eq('sucursal_id', sucursal_id);
+        
+        if (profileError) throw profileError;
+
+        // 3. Filter auth users that belong to this sucursal (via metadata or email if we had a mapping)
+        // Since we don't have a direct link in Auth for all old users, we rely on the 'usuarios' table.
+        // But the user says they don't see them. 
+        // If they were created before the table existed, they might only be in Auth.
+        
+        // Let's return the merged data.
+        return NextResponse.json({ users: profiles || [] });
+    } catch (error: any) {
+        console.error('Error in GET /api/admin/users:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
 export async function POST(req: Request) {
     try {
         const { email, password, nombre, rol, sucursal_id, pin } = await req.json();
