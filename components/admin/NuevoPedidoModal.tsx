@@ -12,6 +12,7 @@ interface NuevoPedidoModalProps {
     onClose: () => void;
     onCreated: () => void;
     editPedido?: any;
+    camareroMode?: boolean;
 }
 
 type CartItem = {
@@ -26,7 +27,7 @@ type CartItem = {
     adicionales?: { nombre: string; precio: number; cantidad: number }[];
 };
 
-export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedido }: NuevoPedidoModalProps) {
+export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedido, camareroMode = false }: NuevoPedidoModalProps) {
     // Data
     const [productos, setProductos] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
@@ -55,7 +56,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [codigoDescuentoId, setCodigoDescuentoId] = useState("");
 
     // Order metadata
-    const [tipo, setTipo] = useState<"delivery" | "takeaway">("delivery");
+    const [tipo, setTipo] = useState<"delivery" | "takeaway" | "salon">("delivery");
     const [metodoPagoId, setMetodoPagoId] = useState("");
     const [omitirCliente, setOmitirCliente] = useState(false);
     const [cliente, setCliente] = useState({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
@@ -66,6 +67,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [zonas, setZonas] = useState<any[]>([]);
     const [configSucursal, setConfigSucursal] = useState<any>(null);
     const [validacionDelivery, setValidacionDelivery] = useState<{ valid: boolean; zona?: string; costo: number; loading: boolean; error?: string }>({ valid: false, costo: 0, loading: false });
+    const [mesas, setMesas] = useState<any[]>([]);
+    const [mesaId, setMesaId] = useState("");
+    const [comensales, setComensales] = useState<number>(1);
+    const [cubiertoCobrado, setCubiertoCobrado] = useState(false);
     const { sucursalId } = useTenant();
     const isLoadingEditPedido = useRef(false);
     
@@ -107,9 +112,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     entreCalles: "",
                     instrucciones: "",
                 });
-                setTipo(editPedido.tipo || "delivery");
+                setTipo((editPedido.tipo as any) || "delivery");
                 setNotaPedido(editPedido.notas || "");
                 setSeAbona("");
+                setMesaId(editPedido.mesa_id || "");
+                setComensales(editPedido.comensales || 1);
+                setCubiertoCobrado(editPedido.cubierto_cobrado || false);
                 // Preserve original payment method
                 if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
                 // Restore delivery validation if previously verified
@@ -132,6 +140,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
                 setNotaPedido("");
                 setSeAbona("");
+                setMesaId("");
+                setComensales(1);
+                setCubiertoCobrado(false);
                 setPromoCode("");
                 setPromoResult(null);
                 setCodigoDescuentoId("");
@@ -205,6 +216,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setProductoGrupos(pg || []);
         const { data: descs } = await supabase.from("descuentos").select("*").eq("sucursal_id", sucursalId).order("activo", { ascending: false }).order("nombre");
         setDescuentos(descs || []);
+        const { data: mss } = await supabase.from("mesas").select("*").eq("sucursal_id", sucursalId).order("numero");
+        setMesas(mss || []);
     }
 
     function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number, id?: string, no_acumulable?: boolean, has_discount: boolean } {
@@ -594,7 +607,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     cliente_id: resolvedClienteId,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
-                    cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
+                    cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                     tipo, subtotal, costo_envio: costoEnvio, total,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                     notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
@@ -602,7 +615,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
                     cliente_lat: direccionGeocoded?.lat,
-                    cliente_lng: direccionGeocoded?.lng
+                    cliente_lng: direccionGeocoded?.lng,
+                    mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                    comensales: tipo === "salon" ? comensales : null,
+                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
@@ -663,7 +679,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         cliente_id: resolvedClienteId,
                         cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                         cliente_telefono: cliente.telefono,
-                        cliente_direccion: tipo === "delivery" ? cliente.direccion : "Take Away",
+                        cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                         tipo, subtotal, costo_envio: costoEnvio, total,
                         descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                         notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
@@ -672,7 +688,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         estado: "pendiente",
                         notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
                         cliente_lat: direccionGeocoded?.lat,
-                        cliente_lng: direccionGeocoded?.lng
+                        cliente_lng: direccionGeocoded?.lng,
+                        mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                        comensales: tipo === "salon" ? comensales : null,
+                        cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
                     }).select().single();
 
                     if (pError) {
@@ -811,34 +830,37 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     </div>
 
                     {/* Código de descuento (tabla descuentos) */}
-                    <div className="px-3 pt-3 border-t border-gray-200">
-                        <label className="text-[10px] text-gray-400 font-medium block mb-1">🏷️ Código de descuento</label>
-                        <select
-                            value={codigoDescuentoId}
-                            onChange={e => setCodigoDescuentoId(e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs font-medium outline-none focus:border-purple-500 bg-white text-gray-700"
-                        >
-                            <option value="">— Sin descuento —</option>
-                            {descuentos
-                                .map(d => (
-                                    <option key={d.id} value={d.id}>
-                                        {!d.activo ? "⚫ [INACTIVO] " : "🟢 "}{d.nombre} — {d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`} OFF{d.codigo ? ` (${d.codigo})` : ""}
-                                    </option>
-                                ))
-                            }
-                        </select>
-                        {descuentoSeleccionado && (
-                            <div className="mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 bg-green-50 text-green-700 border border-green-200">
-                                ✅ {descuentoSeleccionado.nombre} — Ahorro: ${fmt(codigoDescuento)}
-                                <button onClick={() => setCodigoDescuentoId("")} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
-                            </div>
-                        )}
-                    </div>
+                    {!camareroMode && (
+                        <div className="px-3 pt-3 border-t border-gray-200">
+                            <label className="text-[10px] text-gray-400 font-medium block mb-1">🏷️ Código de descuento</label>
+                            <select
+                                value={codigoDescuentoId}
+                                onChange={e => setCodigoDescuentoId(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs font-medium outline-none focus:border-purple-500 bg-white text-gray-700"
+                            >
+                                <option value="">— Sin descuento —</option>
+                                {descuentos
+                                    .map(d => (
+                                        <option key={d.id} value={d.id}>
+                                            {!d.activo ? "⚫ [INACTIVO] " : "🟢 "}{d.nombre} — {d.tipo === "porcentaje" ? `${d.valor}%` : `$${d.valor}`} OFF{d.codigo ? ` (${d.codigo})` : ""}
+                                        </option>
+                                    ))
+                                }
+                            </select>
+                            {descuentoSeleccionado && (
+                                <div className="mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 bg-green-50 text-green-700 border border-green-200">
+                                    ✅ {descuentoSeleccionado.nombre} — Ahorro: ${fmt(codigoDescuento)}
+                                    <button onClick={() => setCodigoDescuentoId("")} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Código Promo QR */}
-                    <div className="px-3 pt-3 border-t border-gray-200">
-                        <label className="text-[10px] text-gray-400 font-medium block mb-1">🎁 Código Promo QR</label>
-                        <div className="flex gap-1">
+                    {!camareroMode && (
+                        <div className="px-3 pt-3 border-t border-gray-200">
+                            <label className="text-[10px] text-gray-400 font-medium block mb-1">🎁 Código Promo QR</label>
+                            <div className="flex gap-1">
                             <input
                                 type="text"
                                 value={promoCode}
@@ -855,36 +877,39 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             >
                                 {promoValidating ? "..." : "OK"}
                             </button>
-                        </div>
-                        {promoResult && (
-                            <div className={`mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 ${promoResult.valid ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                                {promoResult.valid ? '✅' : '❌'}
-                                {promoResult.valid
-                                    ? `${promoResult.codigo?.premio?.nombre || 'Premio'} — Ahorro: $${fmt(promoDescuento)}`
-                                    : (promoResult.message || 'Código inválido')}
-                                {promoResult.valid && (
-                                    <button onClick={() => { setPromoResult(null); setPromoCode(''); }} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
-                                )}
                             </div>
-                        )}
-                    </div>
+                            {promoResult && (
+                                <div className={`mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 border ${promoResult.valid ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                    {promoResult.valid ? '✅' : '❌'}
+                                    {promoResult.valid
+                                        ? `${promoResult.codigo?.premio?.nombre || 'Premio'} — Ahorro: $${fmt(promoDescuento)}`
+                                        : (promoResult.message || 'Código inválido')}
+                                    {promoResult.valid && (
+                                        <button onClick={() => { setPromoResult(null); setPromoCode(''); }} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Se abona */}
-                    <div className="px-3 py-3 border-t border-gray-200">
-                        <label className="text-[10px] text-gray-400 font-medium block mb-1">Se abona $</label>
-                        <input
-                            type="number"
-                            value={seAbona}
-                            onChange={e => setSeAbona(e.target.value)}
-                            placeholder="0"
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-gray-900"
-                        />
-                        {seAbona && parseFloat(seAbona) > total && (
-                            <p className="text-[10px] text-green-600 font-bold mt-1">
-                                Vuelto: $ {fmt(parseFloat(seAbona) - total)}
-                            </p>
-                        )}
-                    </div>
+                    {!camareroMode && (
+                        <div className="px-3 py-3 border-t border-gray-200">
+                            <label className="text-[10px] text-gray-400 font-medium block mb-1">Se abona $</label>
+                            <input
+                                type="number"
+                                value={seAbona}
+                                onChange={e => setSeAbona(e.target.value)}
+                                placeholder="0"
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:border-gray-900"
+                            />
+                            {seAbona && parseFloat(seAbona) > total && (
+                                <p className="text-[10px] text-green-600 font-bold mt-1">
+                                    Vuelto: $ {fmt(parseFloat(seAbona) - total)}
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* ═══ CENTER PANEL: Catalog / Customization ═══ */}
@@ -1084,53 +1109,106 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     <div className="flex-1 overflow-y-auto p-4 space-y-5">
 
                         {/* Modalidad */}
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Modalidad</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setTipo("delivery")}
-                                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${tipo === "delivery" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
-                                >
-                                    Delivery
-                                </button>
-                                <button
-                                    onClick={() => setTipo("takeaway")}
-                                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${tipo === "takeaway" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
-                                >
-                                    Take Away
-                                </button>
+                        {!camareroMode && (
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Modalidad</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setTipo("delivery")}
+                                        className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${tipo === "delivery" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                                    >
+                                        Delivery
+                                    </button>
+                                    <button
+                                        onClick={() => setTipo("takeaway")}
+                                        className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${tipo === "takeaway" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                                    >
+                                        Take Away
+                                    </button>
+                                    <button
+                                        onClick={() => setTipo("salon")}
+                                        className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-colors ${tipo === "salon" ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                                    >
+                                        Salón
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Método de pago */}
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Método de pago</label>
-                            <div className="flex gap-2 flex-wrap">
-                                {metodosPago.map(m => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => setMetodoPagoId(m.id)}
-                                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${metodoPagoId === m.id ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
-                                    >
-                                        {m.nombre}
-                                    </button>
-                                ))}
+                        {!camareroMode && (
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Método de pago</label>
+                                <div className="flex gap-2 flex-wrap">
+                                    {metodosPago.map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => setMetodoPagoId(m.id)}
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${metodoPagoId === m.id ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                                        >
+                                            {m.nombre}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Omitir cliente */}
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={omitirCliente}
-                                onChange={e => setOmitirCliente(e.target.checked)}
-                                className="w-4 h-4 text-gray-900 rounded border-gray-300 focus:ring-gray-900"
-                            />
-                            <span className="text-xs font-medium text-gray-600">Omitir datos del cliente</span>
-                        </label>
+                        {/* Omitir cliente (solo si no es salon) */}
+                        {!camareroMode && tipo !== "salon" && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={omitirCliente}
+                                    onChange={e => setOmitirCliente(e.target.checked)}
+                                    className="w-4 h-4 text-gray-900 rounded border-gray-300 focus:ring-gray-900"
+                                />
+                                <span className="text-xs font-medium text-gray-600">Omitir datos del cliente</span>
+                            </label>
+                        )}
+
+                        {/* Salon fields */}
+                        {tipo === "salon" && (
+                            <div className="space-y-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Mesa</label>
+                                    <select
+                                        value={mesaId}
+                                        onChange={(e) => setMesaId(e.target.value)}
+                                        disabled={camareroMode && editPedido?.mesa_id}
+                                        className="w-full border border-purple-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-purple-500 bg-white disabled:opacity-70"
+                                    >
+                                        <option value="">Seleccionar mesa...</option>
+                                        {mesas.map(m => (
+                                            <option key={m.id} value={m.id}>{m.nombre} (Cap: {m.capacidad}) - {m.estado}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex gap-3">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Comensales</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            value={comensales} 
+                                            onChange={e => setComensales(parseInt(e.target.value) || 1)} 
+                                            className="w-full border border-purple-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 bg-white" 
+                                        />
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer pt-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={cubiertoCobrado}
+                                        onChange={e => setCubiertoCobrado(e.target.checked)}
+                                        className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                                    />
+                                    <span className="text-xs font-medium text-gray-700">Cobrar cubiertos automáticamente</span>
+                                </label>
+                            </div>
+                        )}
 
                         {/* Client fields */}
-                        {!omitirCliente && (
+                        {tipo !== "salon" && !omitirCliente && (
                             <div className="space-y-3">
                                 <div>
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Teléfono</label>
@@ -1253,7 +1331,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 disabled={loading || carrito.length === 0}
                                 className="flex-1 bg-gray-900 text-white py-3 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                             >
-                                {loading ? (editPedido ? "Editando..." : "Creando...") : (editPedido ? "Editar pedido" : "Crear pedido")}
+                                {loading ? (editPedido ? "Editando..." : "Creando...") : (camareroMode ? (editPedido ? "Actualizar Mesa" : "Cargar a la Mesa") : (editPedido ? "Editar pedido" : "Crear pedido"))}
                             </button>
                         </div>
                     </div>

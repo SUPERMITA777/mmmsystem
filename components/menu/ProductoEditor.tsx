@@ -28,6 +28,7 @@ type Producto = {
   producto_sugerido: boolean;
   grupos_adicionales?: string[];
   ficha_tecnica_id?: string | null;
+  impresora?: string;
 };
 
 type GrupoAdicional = {
@@ -70,6 +71,7 @@ export function ProductoEditor({
     visible_en_menu: true,
     producto_oculto: false,
     producto_sugerido: false,
+    impresora: 'COCINA1',
   };
 
   const [formData, setFormData] = useState<Producto | null>(isCreating ? emptyProduct : producto);
@@ -230,6 +232,22 @@ export function ProductoEditor({
               className="w-full bg-transparent text-gray-900 text-sm outline-none py-0.5"
               placeholder="Nombre Interno"
             />
+          </fieldset>
+
+          {/* Impresora (Salón/Comandas) */}
+          <fieldset className="border border-gray-300 rounded-lg px-3 pt-0.5 pb-2 focus-within:border-purple-500 transition-colors">
+            <legend className="text-xs text-gray-500 px-1">Impresora (Comandas)</legend>
+            <select
+              value={formData.impresora || "COCINA1"}
+              onChange={(e) => handleChange("impresora", e.target.value)}
+              className="w-full bg-transparent text-gray-900 text-sm outline-none py-0.5 cursor-pointer"
+            >
+              <option value="COCINA1">COCINA 1</option>
+              <option value="COCINA2">COCINA 2</option>
+              <option value="ENTRADA">ENTRADA</option>
+              <option value="BARRA">BARRA</option>
+              <option value="FACTURACION">FACTURACIÓN</option>
+            </select>
           </fieldset>
 
           {/* Descripción */}

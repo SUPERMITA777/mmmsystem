@@ -303,11 +303,22 @@ export function ZonasEntregaTab() {
         };
 
         if (editingZonaId) {
-            // ACTUALIZAR
-            const { error } = await supabase.from("zonas_entrega").update(fullPayload).eq("id", editingZonaId);
+            // ACTUALIZAR — solo enviar campos de metadatos, sin tocar polygon_coords
+            let { error } = await supabase.from("zonas_entrega").update(fullPayload).eq("id", editingZonaId);
             if (error) {
-                alert("Error al actualizar la zona: " + error.message);
-                return;
+                // Fallback: si falla por columnas nuevas (tipo_precio, precio_por_km), intentar con campos básicos
+                const basicPayload = {
+                    nombre: form.nombre,
+                    costo_envio: form.costo_envio,
+                    minimo_compra: form.minimo_compra,
+                    envio_gratis_desde: fullPayload.envio_gratis_desde,
+                    tiempo_estimado_minutos: fullPayload.tiempo_estimado_minutos,
+                };
+                const { error: err2 } = await supabase.from("zonas_entrega").update(basicPayload).eq("id", editingZonaId);
+                if (err2) {
+                    alert("Error al actualizar la zona: " + err2.message);
+                    return;
+                }
             }
         } else {
             // CREAR (INSERTAR)

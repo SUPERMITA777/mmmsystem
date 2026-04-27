@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleMap, useJsApiLoader, InfoWindowF, PolygonF } from "@react-google-maps/api";
 import AdvancedMarker from "@/components/ui/AdvancedMarker";
+import { useTenant } from "@/context/TenantContext";
 
 type PedidoMapCoords = {
     id: string;
@@ -49,32 +50,61 @@ export default function PanelPedidosMap({
         libraries
     });
 
+    const { sucursalId } = useTenant();
     const [storePos, setStorePos] = useState<{ lat: number; lng: number } | null>(null);
     const [zonas, setZonas] = useState<ZonaData[]>([]);
     const [activeInfoWindow, setActiveInfoWindow] = useState<string | null>(null);
 
+    const fetchZonas = useCallback(async (sId: string) => {
+        const { data: zonasData } = await supabase
+            .from("zonas_entrega")
+            .select("id, nombre, activo, polygon_coords")
+            .eq("sucursal_id", sId)
+            .eq("activo", true);
+        setZonas(zonasData || []);
+    }, []);
+
     useEffect(() => {
         async function fetchStoreData() {
-            const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-            if (!suc) return;
+            const sId = sucursalId;
+            if (!sId) {
+                // Fallback si no hay tenant context
+                const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
+                if (!suc) return;
+                const fallbackId = suc.id;
+                const { data: cfg } = await supabase
+                    .from("config_sucursal")
+                    .select("local_lat, local_lng")
+                    .eq("sucursal_id", fallbackId)
+                    .limit(1)
+                    .maybeSingle();
+                if (cfg?.local_lat && cfg?.local_lng) {
+                    setStorePos({ lat: cfg.local_lat, lng: cfg.local_lng });
+                }
+                fetchZonas(fallbackId);
+                return;
+            }
             const { data: cfg } = await supabase
                 .from("config_sucursal")
                 .select("local_lat, local_lng")
-                .eq("sucursal_id", suc.id)
+                .eq("sucursal_id", sId)
                 .limit(1)
                 .maybeSingle();
             if (cfg?.local_lat && cfg?.local_lng) {
                 setStorePos({ lat: cfg.local_lat, lng: cfg.local_lng });
             }
-            const { data: zonasData } = await supabase
-                .from("zonas_entrega")
-                .select("id, nombre, activo, polygon_coords")
-                .eq("sucursal_id", suc.id)
-                .eq("activo", true);
-            setZonas(zonasData || []);
+            fetchZonas(sId);
         }
         fetchStoreData();
-    }, []);
+
+        // Re-fetch zonas cada 60 segundos para reflejar cambios en settings
+        const interval = setInterval(() => {
+            const sId = sucursalId;
+            if (sId) fetchZonas(sId);
+        }, 60000);
+
+        return () => clearInterval(interval);
+    }, [sucursalId, fetchZonas]);
 
     const validPedidos = useMemo(() =>
         pedidos.filter(p => p.cliente_lat != null && p.cliente_lng != null),

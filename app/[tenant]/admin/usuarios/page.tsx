@@ -20,6 +20,7 @@ const ROL_BADGE: Record<string, string> = {
     cajero: "bg-blue-100 text-blue-700",
     cocinero: "bg-orange-100 text-orange-700",
     repartidor: "bg-green-100 text-green-700",
+    camarero: "bg-yellow-100 text-yellow-700",
     empleado: "bg-gray-100 text-gray-700",
 };
 
@@ -29,6 +30,7 @@ const ROL_LABELS: Record<string, string> = {
     cajero: "Cajero",
     cocinero: "Cocinero",
     repartidor: "Repartidor",
+    camarero: "Camarero",
     empleado: "Empleado",
 };
 

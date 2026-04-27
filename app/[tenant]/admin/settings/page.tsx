@@ -11,6 +11,7 @@ import { ZonasEntregaTab } from "@/components/settings/ZonasEntregaTab";
 import { RedesSocialesTab } from "@/components/settings/RedesSocialesTab";
 import { MarketingTab } from "@/components/settings/MarketingTab";
 import { ComandasTab } from "@/components/settings/ComandasTab";
+import { ImpresorasTab } from "@/components/settings/ImpresorasTab";
 import { LocalidadesTab } from "@/components/settings/LocalidadesTab";
 import { PanelTab } from "@/components/settings/PanelTab";
 import { DatabaseTab } from "@/components/settings/DatabaseTab";
@@ -27,6 +28,7 @@ const TABS = [
   { id: "redes", label: "Redes sociales" },
   { id: "marketing", label: "Marketing" },
   { id: "comandas", label: "Comandas" },
+  { id: "impresoras", label: "Impresoras" },
   { id: "localidades", label: "Localidades" },
   { id: "database", label: "Base de datos" },
 ];
@@ -98,6 +100,10 @@ export default function SettingsPage() {
 
           <TabPanel id="comandas" activeId={activeTab}>
             <ComandasTab />
+          </TabPanel>
+
+          <TabPanel id="impresoras" activeId={activeTab}>
+            <ImpresorasTab />
           </TabPanel>
 
           <TabPanel id="localidades" activeId={activeTab}>

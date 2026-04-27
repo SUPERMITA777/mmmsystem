@@ -30,10 +30,17 @@ export async function GET() {
             return NextResponse.json({ user: null }, { status: 401 });
         }
 
+        const { data: userData } = await supabase
+            .from('usuarios')
+            .select('rol')
+            .eq('id', user.id)
+            .single();
+
         return NextResponse.json({
             user: {
                 id: user.id,
                 email: user.email,
+                rol: userData?.rol || 'empleado'
             },
         });
     } catch (err) {

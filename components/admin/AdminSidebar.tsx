@@ -29,10 +29,12 @@ import { useTenant } from "@/context/TenantContext";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAdminUI } from "@/context/AdminUIContext";
+import { useAuth } from "@/components/admin/AuthProvider";
 
 const items = [
   { id: "settings", href: "/admin/settings", icon: Settings, label: "Configuraciones" },
   { id: "menu", href: "/admin/menu", icon: UtensilsCrossed, label: "Menú" },
+  { id: "salon", href: "/admin/salon", icon: Store, label: "Salón" },
   { id: "panel-pedidos", href: "/admin/panel-pedidos", icon: ClipboardList, label: "Panel de pedidos" },
   { id: "cajas", href: "/admin/cajas", icon: CreditCard, label: "Cajas" },
   { id: "pedidos", href: "/admin/pedidos", icon: FileText, label: "Pedidos" },
@@ -53,6 +55,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const params = useParams();
   const { sucursalId } = useTenant();
+  const { user } = useAuth();
   const { isSidebarCollapsed, toggleSidebar, isMobileSidebarOpen, closeMobileSidebar } = useAdminUI();
   const [modulosOcultos, setModulosOcultos] = useState<string[]>([]);
 
@@ -75,12 +78,18 @@ export function AdminSidebar() {
 
   const tenant = params?.tenant || pathname.split('/')[1] || "demo";
 
-  const dynamicItems = items
+  let dynamicItems = items
     .filter(item => !modulosOcultos.includes(item.id))
     .map(item => ({
       ...item,
       href: `/${tenant}${item.href}`
     }));
+
+  if (user?.rol === "camarero") {
+    dynamicItems = [
+      { id: "camarero", href: `/${tenant}/admin/camarero`, icon: Store, label: "Salón (Camarero)" }
+    ];
+  }
 
   const sidebarWidth = isSidebarCollapsed ? "w-20" : "w-64";
 
@@ -168,13 +177,13 @@ export function AdminSidebar() {
 
         {/* User / Logout Section */}
         <div className={`p-4 border-t border-gray-50 bg-gray-50/30 ${isSidebarCollapsed && !isMobileSidebarOpen ? 'items-center' : ''} flex gap-3`}>
-          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shrink-0 border-2 border-white shadow-sm">
-            N
+          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shrink-0 border-2 border-white shadow-sm uppercase">
+            {user?.email?.charAt(0) || "U"}
           </div>
           {(!isSidebarCollapsed || isMobileSidebarOpen) && (
             <div className="flex flex-col justify-center overflow-hidden">
-              <span className="text-sm font-semibold text-gray-900 truncate">Administrador</span>
-              <span className="text-[10px] text-gray-500 truncate">Admin Mode</span>
+              <span className="text-sm font-semibold text-gray-900 truncate">{user?.email || "Usuario"}</span>
+              <span className="text-[10px] text-gray-500 truncate uppercase">{user?.rol || "Empleado"}</span>
             </div>
           )}
         </div>
