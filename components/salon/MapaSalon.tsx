@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 import { Plus, Save, Edit3, Trash2, X } from "lucide-react";
-import ReactGridLayout, { WidthProvider } from "react-grid-layout";
+import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 
-const ResponsiveGridLayout = WidthProvider(ReactGridLayout);
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 type Mesa = {
     id: string;
