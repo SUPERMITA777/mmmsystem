@@ -601,7 +601,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }
             }
 
-            if (editPedido) {
+            if (editPedido && editPedido.id) {
                 // UPDATE existing order
                 const { error: uError } = await supabase.from("pedidos").update({
                     cliente_id: resolvedClienteId,
