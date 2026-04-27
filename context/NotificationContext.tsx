@@ -308,7 +308,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           } else {
             // Si no es la primera vez (polling fallback), buscamos nuevos
             for (const id of ids) {
-              if (!knownIdsRef.current.has(id)) {
+              if (id && id !== "undefined" && !knownIdsRef.current.has(id)) {
                 console.log("[NotificationContext] 🔍 Detectado nuevo pedido por POLLING:", id);
                 knownIdsRef.current.add(id);
                 // Buscar el objeto completo para la notificación del sistema
@@ -353,6 +353,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           filter: `sucursal_id=eq.${sucursalId}` 
         }, (payload) => {
           const newPedido = payload.new;
+          if (!newPedido?.id) return;
           console.log("[NotificationContext] 🔔 NUEVO PEDIDO Realtime:", newPedido.id);
           
           if (!knownIdsRef.current.has(newPedido.id)) {

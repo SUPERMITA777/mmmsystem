@@ -21,7 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Bot
+  Bot,
+  LogOut
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
@@ -176,16 +177,32 @@ export function AdminSidebar() {
         </div>
 
         {/* User / Logout Section */}
-        <div className={`p-4 border-t border-gray-50 bg-gray-50/30 ${isSidebarCollapsed && !isMobileSidebarOpen ? 'items-center' : ''} flex gap-3`}>
-          <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shrink-0 border-2 border-white shadow-sm uppercase">
-            {user?.email?.charAt(0) || "U"}
-          </div>
-          {(!isSidebarCollapsed || isMobileSidebarOpen) && (
-            <div className="flex flex-col justify-center overflow-hidden">
-              <span className="text-sm font-semibold text-gray-900 truncate">{user?.email || "Usuario"}</span>
-              <span className="text-[10px] text-gray-500 truncate uppercase">{user?.rol || "Empleado"}</span>
+        <div className={`p-4 border-t border-gray-50 bg-gray-50/30 ${isSidebarCollapsed && !isMobileSidebarOpen ? 'flex-col' : 'flex-row'} flex items-center justify-between gap-3`}>
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-sm font-bold shrink-0 border-2 border-white shadow-sm uppercase">
+              {user?.email?.charAt(0) || "U"}
             </div>
-          )}
+            {(!isSidebarCollapsed || isMobileSidebarOpen) && (
+              <div className="flex flex-col justify-center overflow-hidden">
+                <span className="text-sm font-semibold text-gray-900 truncate">{user?.email || "Usuario"}</span>
+                <span className="text-[10px] text-gray-500 truncate uppercase">{user?.rol || "Empleado"}</span>
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.href = `/${tenant}/admin/login`;
+            }}
+            className={`
+              p-2 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all active:scale-95
+              ${isSidebarCollapsed && !isMobileSidebarOpen ? 'w-full flex justify-center' : ''}
+            `}
+            title="Cerrar sesión"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </aside>
     </>
