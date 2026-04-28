@@ -174,7 +174,7 @@ export default function UsuariosPage() {
 
     const openModal = (u: Usuario | "new") => {
         if (u === "new") {
-            setForm({ nombre: "", email: "", rol: "empleado", pin: "", password: "", activo: true });
+            setForm({ nombre: "", email: "", rol: "empleado", pin: "", password: "", color: "#000000", activo: true });
         } else {
             setForm({
                 nombre: u.nombre,
