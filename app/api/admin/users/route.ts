@@ -48,6 +48,10 @@ export async function POST(req: Request) {
     try {
         const { email, password, nombre, rol, sucursal_id, pin, color } = await req.json();
 
+        if (!sucursal_id) {
+            return NextResponse.json({ error: "sucursal_id es requerido" }, { status: 400 });
+        }
+
         // 1. Create user in Supabase Auth
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,

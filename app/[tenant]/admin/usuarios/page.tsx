@@ -195,6 +195,10 @@ export default function UsuariosPage() {
 
         try {
             if (modalUser === "new") {
+                if (!sucursalId) {
+                    alert("Error: No se detectó el ID del local. Por favor recarga la página.");
+                    return;
+                }
                 const res = await fetch('/api/admin/users', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
