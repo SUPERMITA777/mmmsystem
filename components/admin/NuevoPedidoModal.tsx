@@ -36,6 +36,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [adicionales, setAdicionales] = useState<any[]>([]);
     const [productoGrupos, setProductoGrupos] = useState<any[]>([]);
     const [descuentos, setDescuentos] = useState<any[]>([]);
+    const [mesas, setMesas] = useState<any[]>([]);
 
     // UI State
     const [busqueda, setBusqueda] = useState("");
