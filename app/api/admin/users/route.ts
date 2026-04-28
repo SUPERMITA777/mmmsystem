@@ -53,7 +53,7 @@ export async function POST(req: Request) {
             email,
             password,
             email_confirm: true,
-            user_metadata: { nombre, rol }
+            user_metadata: { nombre, rol, sucursal_id }
         });
 
         if (authError) {
