@@ -71,6 +71,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [cubiertoCobrado, setCubiertoCobrado] = useState(false);
     const [camareros, setCamareros] = useState<any[]>([]);
     const [camareroId, setCamareroId] = useState("");
+    const [mesaId, setMesaId] = useState("");
     const { sucursalId } = useTenant();
     const isLoadingEditPedido = useRef(false);
     
