@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
-import { Plus, Save, Edit3, Trash2, X } from "lucide-react";
+import { Plus, Save, Edit3, Trash2, X, ExternalLink, User } from "lucide-react";
 import RGL, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -22,6 +22,7 @@ type Mesa = {
     forma: string;
     width: number;
     height: number;
+    camarero_color?: string;
 };
 
 export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean }) {
@@ -61,6 +62,22 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 h: m.height ? Math.max(1, Math.floor(m.height / 50)) : 2,
             }));
             setLayout(initialLayout);
+
+            // Load active orders to get waiter colors
+            const { data: activePedidos } = await supabase
+                .from("pedidos")
+                .select("mesa_id, camarero_id, camarero:usuarios!camarero_id(color)")
+                .eq("sucursal_id", sucursalId)
+                .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"]);
+
+            const mesasWithColor = (data || []).map((m: Mesa) => {
+                const pedido = activePedidos?.find(p => p.mesa_id === m.id);
+                return {
+                    ...m,
+                    camarero_color: (pedido?.camarero as any)?.color || null
+                };
+            });
+            setMesas(mesasWithColor);
 
         } catch (error) {
             console.error("Error loading mesas:", error);
@@ -171,36 +188,44 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 </div>
                 <div className="flex items-center gap-3">
                     {!isCamareroMode && (
-                        editMode ? (
-                            <>
-                                <button
-                                    onClick={handleAddMesa}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors border border-gray-200"
-                                >
-                                    <Plus size={16} /> Nueva Mesa
-                                </button>
-                                <button
-                                    onClick={() => setEditMode(false)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors border border-red-200"
-                                >
-                                    <X size={16} /> Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSaveLayout}
-                                    disabled={saving}
-                                    className="flex items-center gap-2 px-4 py-1.5 bg-[#7B1FA2] text-white hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors shadow-sm"
-                                >
-                                    <Save size={16} /> {saving ? "Guardando..." : "Guardar Mapa"}
-                                </button>
-                            </>
-                        ) : (
+                        <>
                             <button
-                                onClick={() => setEditMode(true)}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                onClick={() => window.open(`${window.location.pathname.replace('/admin/salon', '/camarero/salon')}`, '_blank')}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors shadow-sm mr-2"
                             >
-                                <Edit3 size={16} /> Editar Mapa
+                                <ExternalLink size={16} /> Vista Mozos
                             </button>
-                        )
+                            {editMode ? (
+                                <>
+                                    <button
+                                        onClick={handleAddMesa}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors border border-gray-200"
+                                    >
+                                        <Plus size={16} /> Nueva Mesa
+                                    </button>
+                                    <button
+                                        onClick={() => setEditMode(false)}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors border border-red-200"
+                                    >
+                                        <X size={16} /> Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSaveLayout}
+                                        disabled={saving}
+                                        className="flex items-center gap-2 px-4 py-1.5 bg-[#7B1FA2] text-white hover:bg-purple-700 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                    >
+                                        <Save size={16} /> {saving ? "Guardando..." : "Guardar Mapa"}
+                                    </button>
+                                </>
+                            ) : (
+                                <button
+                                    onClick={() => setEditMode(true)}
+                                    className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                                >
+                                    <Edit3 size={16} /> Editar Mapa
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -221,11 +246,21 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                     {mesas.map((mesa) => {
                         const bgColors: any = {
                             libre: "bg-green-100 border-green-300 text-green-800",
-                            ocupada: "bg-red-100 border-red-300 text-red-800",
+                            ocupada: mesa.camarero_color 
+                                ? `border-2` // Color will be set via style
+                                : "bg-red-100 border-red-300 text-red-800",
                             reservada: "bg-yellow-100 border-yellow-300 text-yellow-800",
                             mantenimiento: "bg-gray-200 border-gray-400 text-gray-600"
                         };
                         const colorClass = bgColors[mesa.estado] || bgColors.libre;
+                        
+                        // Custom style for occupied tables with waiter color
+                        const customStyle: any = {};
+                        if (mesa.estado === 'ocupada' && mesa.camarero_color) {
+                            customStyle.backgroundColor = `${mesa.camarero_color}20`; // 20% opacity for background
+                            customStyle.borderColor = mesa.camarero_color;
+                            customStyle.color = mesa.camarero_color;
+                        }
                         const isCircle = mesa.forma === "redonda";
 
                         return (
@@ -236,11 +271,18 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                     ${colorClass} 
                                     ${isCircle ? 'rounded-full' : 'rounded-xl'}
                                     ${editMode ? 'cursor-move hover:ring-4 hover:ring-purple-200' : 'cursor-pointer hover:scale-105 hover:shadow-md'}
-                                `}>
+                                `}
+                                style={customStyle}
+                                >
                                     <span className="font-black text-xl">{mesa.numero}</span>
                                     <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70 flex items-center gap-1 mt-1">
                                         <Users size={10} /> {mesa.capacidad}
                                     </span>
+                                    {mesa.camarero_color && mesa.estado === 'ocupada' && (
+                                        <div className="absolute top-1 right-1">
+                                            <User size={12} fill={mesa.camarero_color} />
+                                        </div>
+                                    )}
                                 </div>
                                 {editMode && (
                                     <button 

@@ -26,16 +26,26 @@ export async function POST(req: Request) {
 
         console.log(`[Sync] Encontrados ${authUsers.length} usuarios en Auth`);
 
-        // 2. Prepare data for upsert
-        // We will map all Auth users to the 'usuarios' table for THIS sucursal
-        const usersToUpsert = authUsers.map(u => ({
-            id: u.id,
-            email: u.email,
-            nombre: u.user_metadata?.nombre || u.email?.split('@')[0] || 'Usuario',
-            rol: u.user_metadata?.rol || 'empleado',
-            sucursal_id: sucursal_id,
-            activo: true
-        }));
+        // 2. Fetch existing usuarios to prevent overwriting other tenants' users
+        const { data: existingUsuarios } = await supabaseAdmin.from('usuarios').select('id, sucursal_id');
+        const existingMap = new Map(existingUsuarios?.map(u => [u.id, u.sucursal_id]) || []);
+
+        // 3. Prepare data for upsert
+        // We will map Auth users to the 'usuarios' table but preserve their sucursal_id if they already belong to another tenant.
+        const usersToUpsert = authUsers.map(u => {
+            const currentSucursalId = existingMap.get(u.id);
+            // If they already exist in the DB with a sucursal, KEEP IT. If new, assign to this sucursal_id.
+            const targetSucursalId = currentSucursalId !== undefined ? currentSucursalId : sucursal_id;
+            
+            return {
+                id: u.id,
+                email: u.email,
+                nombre: u.user_metadata?.nombre || u.email?.split('@')[0] || 'Usuario',
+                rol: u.user_metadata?.rol || 'empleado',
+                sucursal_id: targetSucursalId,
+                activo: true
+            };
+        });
 
         console.log(`[Sync] Realizando UPSERT de ${usersToUpsert.length} usuarios`);
 

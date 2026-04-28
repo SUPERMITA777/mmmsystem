@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     try {
-        const { email, password, nombre, rol, sucursal_id, pin } = await req.json();
+        const { email, password, nombre, rol, sucursal_id, pin, color } = await req.json();
 
         // 1. Create user in Supabase Auth
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -70,7 +70,8 @@ export async function POST(req: Request) {
                 nombre,
                 rol,
                 sucursal_id,
-                pin: pin || null
+                pin: pin || null,
+                color: color || null
             });
 
         if (profileError) {
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
     try {
-        const { id, email, password, nombre, rol, activo, pin } = await req.json();
+        const { id, email, password, nombre, rol, activo, pin, color } = await req.json();
 
         if (!id) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
 
@@ -116,6 +117,7 @@ export async function PATCH(req: Request) {
         if (rol) profileUpdate.rol = rol;
         if (activo !== undefined) profileUpdate.activo = activo;
         if (pin !== undefined) profileUpdate.pin = pin;
+        if (color !== undefined) profileUpdate.color = color;
 
         if (Object.keys(profileUpdate).length > 0) {
             const { error: profileError } = await supabaseAdmin

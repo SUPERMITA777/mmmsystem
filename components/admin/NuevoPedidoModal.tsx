@@ -67,10 +67,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [zonas, setZonas] = useState<any[]>([]);
     const [configSucursal, setConfigSucursal] = useState<any>(null);
     const [validacionDelivery, setValidacionDelivery] = useState<{ valid: boolean; zona?: string; costo: number; loading: boolean; error?: string }>({ valid: false, costo: 0, loading: false });
-    const [mesas, setMesas] = useState<any[]>([]);
-    const [mesaId, setMesaId] = useState("");
     const [comensales, setComensales] = useState<number>(1);
     const [cubiertoCobrado, setCubiertoCobrado] = useState(false);
+    const [camareros, setCamareros] = useState<any[]>([]);
+    const [camareroId, setCamareroId] = useState("");
     const { sucursalId } = useTenant();
     const isLoadingEditPedido = useRef(false);
     
@@ -116,6 +116,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setNotaPedido(editPedido.notas || "");
                 setSeAbona("");
                 setMesaId(editPedido.mesa_id || "");
+                setCamareroId(editPedido.camarero_id || "");
                 setComensales(editPedido.comensales || 1);
                 setCubiertoCobrado(editPedido.cubierto_cobrado || false);
                 // Preserve original payment method
@@ -141,6 +142,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setNotaPedido("");
                 setSeAbona("");
                 setMesaId("");
+                setCamareroId("");
                 setComensales(1);
                 setCubiertoCobrado(false);
                 setPromoCode("");
@@ -218,6 +220,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setDescuentos(descs || []);
         const { data: mss } = await supabase.from("mesas").select("*").eq("sucursal_id", sucursalId).order("numero");
         setMesas(mss || []);
+        const { data: usrs } = await supabase.from("usuarios").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
+        setCamareros(usrs || []);
     }
 
     function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number, id?: string, no_acumulable?: boolean, has_discount: boolean } {
@@ -614,9 +618,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     metodo_pago_id: metodoPagoId,
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
-                    cliente_lat: direccionGeocoded?.lat,
                     cliente_lng: direccionGeocoded?.lng,
                     mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                    camarero_id: tipo === "salon" ? (camareroId || null) : null,
+                    camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
                     comensales: tipo === "salon" ? comensales : null,
                     cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
                 }).eq("id", editPedido.id);
@@ -687,9 +692,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         metodo_pago_nombre: metodoPagoNombre,
                         estado: "pendiente",
                         notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
-                        cliente_lat: direccionGeocoded?.lat,
                         cliente_lng: direccionGeocoded?.lng,
                         mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                        camarero_id: tipo === "salon" ? (camareroId || null) : null,
+                        camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
                         comensales: tipo === "salon" ? comensales : null,
                         cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
                     }).select().single();
@@ -1180,6 +1186,21 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         <option value="">Seleccionar mesa...</option>
                                         {mesas.map(m => (
                                             <option key={m.id} value={m.id}>{m.nombre} (Cap: {m.capacidad}) - {m.estado}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Camarero</label>
+                                    <select
+                                        value={camareroId}
+                                        onChange={(e) => setCamareroId(e.target.value)}
+                                        className="w-full border border-purple-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-purple-500 bg-white"
+                                    >
+                                        <option value="">Seleccionar camarero...</option>
+                                        {camareros.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.nombre} {c.apellido || ""}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>

@@ -12,6 +12,7 @@ type Usuario = {
     rol: string;
     activo: boolean;
     pin?: string;
+    color?: string;
 };
 
 const ROL_BADGE: Record<string, string> = {
@@ -44,6 +45,7 @@ export default function UsuariosPage() {
         rol: "empleado",
         pin: "",
         password: "",
+        color: "#000000",
         activo: true
     });
     const [submitting, setSubmitting] = useState(false);
@@ -180,6 +182,7 @@ export default function UsuariosPage() {
                 rol: u.rol,
                 pin: u.pin || "",
                 password: "",
+                color: u.color || "#000000",
                 activo: u.activo
             });
         }
@@ -340,8 +343,16 @@ export default function UsuariosPage() {
                                     <tr key={u.id} className="hover:bg-gray-50/30 transition-colors group">
                                         <td className="px-8 py-5">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-gray-900 flex items-center justify-center text-white font-black border-2 border-white shadow-sm uppercase">
+                                                <div 
+                                                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black border-2 border-white shadow-sm uppercase relative overflow-hidden"
+                                                    style={{ backgroundColor: u.color || "#111" }}
+                                                >
                                                     {u.nombre.charAt(0)}
+                                                    {u.rol === 'camarero' && (
+                                                        <div className="absolute inset-0 bg-black/10 flex items-end justify-center pb-0.5">
+                                                            <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <p className="font-black text-gray-900 tracking-tight">{u.nombre}</p>
@@ -517,6 +528,25 @@ export default function UsuariosPage() {
                                                 placeholder="4-6 dígitos"
                                             />
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Color Identificador</label>
+                                    <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                        <input
+                                            type="color"
+                                            value={form.color}
+                                            onChange={e => setForm({ ...form, color: e.target.value })}
+                                            className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border-none"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={form.color}
+                                            onChange={e => setForm({ ...form, color: e.target.value })}
+                                            className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full uppercase"
+                                            placeholder="#000000"
+                                        />
                                     </div>
                                 </div>
 
