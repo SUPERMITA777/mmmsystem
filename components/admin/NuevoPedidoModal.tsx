@@ -622,14 +622,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             if (editPedido && editPedido.id) {
                 // UPDATE existing order
                 const { error: uError } = await supabase.from("pedidos").update({
-                    cliente_id: resolvedClienteId,
+                    cliente_id: resolvedClienteId || null,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                     tipo, subtotal, costo_envio: costoEnvio, total,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                     notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
-                    metodo_pago_id: metodoPagoId,
+                    metodo_pago_id: metodoPagoId || null,
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
                     cliente_lng: direccionGeocoded?.lng,
@@ -695,14 +695,14 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
                         sucursal_id: sucursalId,
                         numero_pedido: numeroPedido,
-                        cliente_id: resolvedClienteId,
+                        cliente_id: resolvedClienteId || null,
                         cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                         cliente_telefono: cliente.telefono,
                         cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                         tipo, subtotal, costo_envio: costoEnvio, total,
                         descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                         notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
-                        metodo_pago_id: metodoPagoId,
+                        metodo_pago_id: metodoPagoId || null,
                         metodo_pago_nombre: metodoPagoNombre,
                         estado: "pendiente",
                         notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
