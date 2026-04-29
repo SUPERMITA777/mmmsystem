@@ -4,7 +4,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 import { Plus, Save, Edit3, Trash2, X, ExternalLink, User } from "lucide-react";
-import RGL, { WidthProvider } from "react-grid-layout";
+// @ts-ignore - WidthProvider may not be in the ESM export
+import RGL from "react-grid-layout";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { WidthProvider } = require("react-grid-layout");
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";

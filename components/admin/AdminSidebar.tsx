@@ -31,6 +31,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAdminUI } from "@/context/AdminUIContext";
 import { useAuth } from "@/components/admin/AuthProvider";
+import { usePermissions } from "@/context/PermissionsContext";
 
 const items = [
   { id: "settings", href: "/admin/settings", icon: Settings, label: "Configuraciones" },
@@ -56,6 +57,7 @@ export function AdminSidebar() {
   const params = useParams();
   const { sucursalId } = useTenant();
   const { user } = useAuth();
+  const { canView, getPermissionLevel } = usePermissions();
   const { isSidebarCollapsed, toggleSidebar, isMobileSidebarOpen, closeMobileSidebar } = useAdminUI();
   const [modulosOcultos, setModulosOcultos] = useState<string[]>([]);
 
@@ -80,15 +82,21 @@ export function AdminSidebar() {
 
   let dynamicItems = items
     .filter(item => !modulosOcultos.includes(item.id))
+    .filter(item => canView(item.id)) // Filter by permissions
     .map(item => ({
       ...item,
-      href: `/${tenant}${item.href}`
+      href: `/${tenant}${item.href}`,
+      readOnly: !canView(item.id) ? false : getPermissionLevel(item.id) === "view",
     }));
 
   if (user?.rol === "camarero") {
-    dynamicItems = [
-      { id: "camarero", href: `/${tenant}/admin/camarero`, icon: Store, label: "Salón (Camarero)" }
-    ];
+    // Check if camarero has any custom permissions, otherwise default to salon only
+    const hasCustomPerms = dynamicItems.length > 0;
+    if (!hasCustomPerms) {
+      dynamicItems = [
+        { id: "camarero", href: `/${tenant}/admin/camarero`, icon: Store, label: "Salón (Camarero)", readOnly: false }
+      ];
+    }
   }
 
   const sidebarWidth = isSidebarCollapsed ? "w-20" : "w-64";

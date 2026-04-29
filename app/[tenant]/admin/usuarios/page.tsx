@@ -93,14 +93,42 @@ export default function UsuariosPage() {
             .maybeSingle();
 
         if (data?.permisos) {
-            setPermisos(data.permisos);
+            // Migrate old boolean format to new 3-level format
+            const migrated: any = {};
+            for (const rol of Object.keys(data.permisos)) {
+                migrated[rol] = {};
+                for (const sec of Object.keys(data.permisos[rol])) {
+                    const val = data.permisos[rol][sec];
+                    if (typeof val === "boolean") {
+                        migrated[rol][sec] = val ? "edit" : "none";
+                    } else {
+                        migrated[rol][sec] = val || "none";
+                    }
+                }
+                // Fill missing sections
+                SECCIONES.forEach(s => {
+                    if (!(s.id in migrated[rol])) {
+                        migrated[rol][s.id] = rol === "super_admin" || rol === "admin" ? "edit" : "none";
+                    }
+                });
+            }
+            // Fill missing roles
+            ROLES_LIST.forEach(r => {
+                if (!migrated[r]) {
+                    migrated[r] = {};
+                    SECCIONES.forEach(s => {
+                        migrated[r][s.id] = r === "super_admin" || r === "admin" ? "edit" : "none";
+                    });
+                }
+            });
+            setPermisos(migrated);
         } else {
             // Default empty state
             const initial: any = {};
             ROLES_LIST.forEach(r => {
                 initial[r] = {};
                 SECCIONES.forEach(s => {
-                    initial[r][s.id] = r === "super_admin";
+                    initial[r][s.id] = (r === "super_admin" || r === "admin") ? "edit" : "none";
                 });
             });
             setPermisos(initial);
@@ -126,15 +154,20 @@ export default function UsuariosPage() {
         }
     }
 
-    function togglePermiso(rol: string, seccionId: string) {
-        if (rol === "super_admin") return;
-        setPermisos(prev => ({
-            ...prev,
-            [rol]: {
-                ...prev[rol],
-                [seccionId]: !prev[rol]?.[seccionId]
-            }
-        }));
+    function cyclePermiso(rol: string, seccionId: string) {
+        if (rol === "super_admin" || rol === "admin") return;
+        setPermisos(prev => {
+            const current = prev[rol]?.[seccionId] || "none";
+            // Cycle: none → view → edit → none
+            const next = current === "none" ? "view" : current === "view" ? "edit" : "none";
+            return {
+                ...prev,
+                [rol]: {
+                    ...prev[rol],
+                    [seccionId]: next
+                }
+            };
+        });
     }
 
     async function fetchUsuarios() {
@@ -421,29 +454,76 @@ export default function UsuariosPage() {
                                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{rol}</span>
                                         </div>
                                     </td>
-                                    {SECCIONES.map(seccion => (
-                                        <td key={seccion.id} className="px-4 py-6 text-center">
-                                            <button
-                                                onClick={() => togglePermiso(rol, seccion.id)}
-                                                disabled={rol === "super_admin"}
-                                                className={`
-                                                    w-10 h-5 rounded-full relative transition-all duration-500 shadow-inner
-                                                    ${permisos[rol]?.[seccion.id] ? "bg-[#7B1FA2] shadow-purple-100" : "bg-gray-100 shadow-gray-50"}
-                                                    ${rol === "super_admin" ? "opacity-50 cursor-not-allowed bg-purple-400" : ""}
-                                                `}
-                                            >
-                                                <div className={`
-                                                    absolute top-1 w-3 h-3 rounded-full bg-white shadow-xl transition-all duration-500
-                                                    ${permisos[rol]?.[seccion.id] ? "left-6" : "left-1"}
-                                                `} />
-                                            </button>
-                                        </td>
-                                    ))}
+                                    {SECCIONES.map(seccion => {
+                                        const level = permisos[rol]?.[seccion.id] || "none";
+                                        const isLocked = rol === "super_admin" || rol === "admin";
+                                        
+                                        const levelConfig = {
+                                            none: { 
+                                                label: "✕", 
+                                                bg: "bg-red-50", 
+                                                text: "text-red-500",
+                                                ring: "ring-red-200",
+                                                tooltip: "Sin acceso"
+                                            },
+                                            view: { 
+                                                label: "👁", 
+                                                bg: "bg-amber-50", 
+                                                text: "text-amber-600",
+                                                ring: "ring-amber-200",
+                                                tooltip: "Solo ver"
+                                            },
+                                            edit: { 
+                                                label: "✓", 
+                                                bg: "bg-emerald-50", 
+                                                text: "text-emerald-600",
+                                                ring: "ring-emerald-200",
+                                                tooltip: "Ver + Editar"
+                                            },
+                                        };
+                                        
+                                        const config = levelConfig[level as keyof typeof levelConfig] || levelConfig.none;
+                                        
+                                        return (
+                                            <td key={seccion.id} className="px-4 py-6 text-center">
+                                                <button
+                                                    onClick={() => cyclePermiso(rol, seccion.id)}
+                                                    disabled={isLocked}
+                                                    title={isLocked ? "Acceso total (bloqueado)" : `${config.tooltip} — Click para cambiar`}
+                                                    className={`
+                                                        w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold
+                                                        transition-all duration-300 ring-2 mx-auto
+                                                        ${config.bg} ${config.text} ${config.ring}
+                                                        ${isLocked ? "opacity-50 cursor-not-allowed" : "hover:scale-110 active:scale-95 cursor-pointer hover:shadow-md"}
+                                                    `}
+                                                >
+                                                    {config.label}
+                                                </button>
+                                            </td>
+                                        );
+                                    })}
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+                    
+                    {/* Legend */}
                     <div className="p-8 bg-gray-50/30 border-t border-gray-100">
+                        <div className="flex flex-wrap items-center gap-6 mb-4">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Leyenda:</span>
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-red-50 ring-2 ring-red-200 flex items-center justify-center text-red-500 text-xs font-bold">✕</div>
+                                <span className="text-xs font-semibold text-gray-600">Sin acceso</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-amber-50 ring-2 ring-amber-200 flex items-center justify-center text-amber-600 text-xs">👁</div>
+                                <span className="text-xs font-semibold text-gray-600">Solo ver (lectura)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-emerald-50 ring-2 ring-emerald-200 flex items-center justify-center text-emerald-600 text-xs font-bold">✓</div>
+                                <span className="text-xs font-semibold text-gray-600">Ver + Editar</span>
+                            </div>
+                        </div>
                         <div className="flex items-start gap-4">
                             <div className="w-10 h-10 rounded-2xl bg-purple-100 flex items-center justify-center text-[#7B1FA2] shrink-0">
                                 <Shield size={20} />
@@ -451,7 +531,7 @@ export default function UsuariosPage() {
                             <div>
                                 <p className="text-sm font-black text-gray-900">Acceso Maestro</p>
                                 <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                    El rango <span className="font-bold text-purple-700 underline decoration-purple-200">Super Admin</span> siempre tiene acceso total a todas las secciones del sistema para garantizar la operatividad y resolución de problemas.
+                                    Los rangos <span className="font-bold text-purple-700 underline decoration-purple-200">Super Admin</span> y <span className="font-bold text-purple-700 underline decoration-purple-200">Administrador</span> siempre tienen acceso total a todas las secciones del sistema.
                                 </p>
                             </div>
                         </div>
