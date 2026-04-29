@@ -41,6 +41,7 @@ BEGIN
     USING (
         id = auth.uid() OR 
         sucursal_id = get_user_sucursal_id() OR 
+        is_sucursal_admin() OR
         is_super_admin()
     );
 
