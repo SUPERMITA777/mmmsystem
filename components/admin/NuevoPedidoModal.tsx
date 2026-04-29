@@ -222,8 +222,20 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setDescuentos(descs || []);
         const { data: mss } = await supabase.from("mesas").select("*").eq("sucursal_id", sucursalId).order("numero");
         setMesas(mss || []);
-        const { data: usrs } = await supabase.from("usuarios").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
-        setCamareros(usrs || []);
+        // Fetch staff via server-side API to bypass RLS restrictions
+        try {
+            const staffRes = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
+            if (staffRes.ok) {
+                const staffData = await staffRes.json();
+                setCamareros(staffData || []);
+            } else {
+                console.error("Error fetching staff:", await staffRes.text());
+                setCamareros([]);
+            }
+        } catch (err) {
+            console.error("Error fetching staff:", err);
+            setCamareros([]);
+        }
     }
 
     function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number, id?: string, no_acumulable?: boolean, has_discount: boolean } {
