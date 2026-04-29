@@ -1,39 +1,50 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 
-async function verifySuperAdmin() {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) {
-                    return cookieStore.get(name)?.value;
-                },
-            },
+async function verifySuperAdmin(request?: Request) {
+    // Strategy 1: Bearer token from Authorization header
+    let token: string | null = null;
+    if (request) {
+        const authHeader = request.headers.get("Authorization");
+        if (authHeader?.startsWith("Bearer ")) {
+            token = authHeader.slice(7);
         }
-    );
+    }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Use supabaseAdmin (service role) to check user_roles - the anon key may not have SELECT on this table
-    const { data: roleData, error: roleError } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", user.id).single();
-    if (roleError) {
-        console.error('verifySuperAdmin roleError:', roleError.message);
+    if (!token) {
+        console.error("verifySuperAdmin: No token provided");
         return null;
     }
-    if (roleData?.role !== "superadmin") return null;
+
+    // Verify the token using supabaseAdmin (service role) 
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    if (userError || !user) {
+        console.error("verifySuperAdmin: user error:", userError?.message);
+        return null;
+    }
+
+    // Check role using supabaseAdmin (bypasses any RLS)
+    const { data: roleData, error: roleError } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+    if (roleError) {
+        console.error("verifySuperAdmin: roleError:", roleError.message);
+        return null;
+    }
+    if (roleData?.role !== "superadmin") {
+        console.error("verifySuperAdmin: user is not superadmin, role:", roleData?.role);
+        return null;
+    }
 
     return user;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
-        const superAdmin = await verifySuperAdmin();
+        const superAdmin = await verifySuperAdmin(request);
         if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         // 1. Get all auth users using Admin API
@@ -73,7 +84,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
-        const superAdmin = await verifySuperAdmin();
+        const superAdmin = await verifySuperAdmin(request);
         if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const body = await request.json();
@@ -109,7 +120,7 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
     try {
-        const superAdmin = await verifySuperAdmin();
+        const superAdmin = await verifySuperAdmin(request);
         if (!superAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const body = await request.json();

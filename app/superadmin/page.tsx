@@ -144,8 +144,18 @@ export default function SuperAdminPage() {
     const [extendDays, setExtendDays] = useState("30");
     const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
 
+    // Helper to get auth headers with Bearer token for API calls
+    async function getAuthHeaders(): Promise<Record<string, string>> {
+        const { data: { session } } = await supabase.auth.getSession();
+        return {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { "Authorization": `Bearer ${session.access_token}` } : {})
+        };
+    }
+
     async function fetchUsers() {
-        const res = await fetch("/api/superadmin/users");
+        const headers = await getAuthHeaders();
+        const res = await fetch("/api/superadmin/users", { headers });
         if (res.ok) {
             const data = await res.json();
             setUsers(data.users || []);
@@ -253,9 +263,10 @@ export default function SuperAdminPage() {
                 ? { ...userForm }
                 : { user_id: editingUser.id, ...userForm };
 
+            const headers = await getAuthHeaders();
             const res = await fetch(url, {
                 method,
-                headers: { "Content-Type": "application/json" },
+                headers,
                 body: JSON.stringify(payload)
             });
 
