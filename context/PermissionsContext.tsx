@@ -90,12 +90,23 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         return user?.rol || "empleado";
     }
 
+    // Check if permissions have been explicitly configured for this role
+    function hasConfiguredPermissions(rol: string): boolean {
+        return !!permisos[rol] && Object.keys(permisos[rol]).length > 0;
+    }
+
     function canView(sectionId: string): boolean {
         const rol = getUserRole();
         // Super admin and admin always have full access
         if (rol === "super_admin" || rol === "admin") return true;
+        // While loading or if user not yet resolved, grant access to prevent empty sidebar
+        if (loading || !user) return true;
+        // If no permissions configured for this role, grant full access by default
+        if (!hasConfiguredPermissions(rol)) return true;
 
         const level = permisos[rol]?.[sectionId];
+        // If section not explicitly configured, grant access
+        if (level === undefined) return true;
         return level === "view" || level === "edit";
     }
 
@@ -103,15 +114,24 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         const rol = getUserRole();
         // Super admin and admin always have full access
         if (rol === "super_admin" || rol === "admin") return true;
+        // While loading or if user not yet resolved, grant access
+        if (loading || !user) return true;
+        // If no permissions configured for this role, grant full access by default
+        if (!hasConfiguredPermissions(rol)) return true;
 
-        return permisos[rol]?.[sectionId] === "edit";
+        const level = permisos[rol]?.[sectionId];
+        // If section not explicitly configured, grant edit access
+        if (level === undefined) return true;
+        return level === "edit";
     }
 
     function getPermissionLevel(sectionId: string): PermissionLevel {
         const rol = getUserRole();
         if (rol === "super_admin" || rol === "admin") return "edit";
+        if (loading || !user) return "edit";
+        if (!hasConfiguredPermissions(rol)) return "edit";
 
-        return permisos[rol]?.[sectionId] || "none";
+        return permisos[rol]?.[sectionId] || "edit";
     }
 
     return (
