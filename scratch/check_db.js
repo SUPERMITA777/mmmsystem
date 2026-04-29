@@ -11,26 +11,29 @@ async function checkAndFix() {
         console.log('✅ Conectado a la base de datos.');
 
         // 1. Ver usuarios actuales en el local Don Juan
-        const res = await client.query("SELECT id, email FROM auth.users WHERE email = 'emanuelsanch99@gmail.com'");
-        console.log('\n🔐 Buscando cuenta en AUTH.USERS:');
-        console.table(res.rows);
+        // 1. Convertir en SUPERADMIN de forma limpia
+        console.log('\n👑 Ascendiendo a Superadmin de forma limpia...');
+        await client.query("DELETE FROM user_roles WHERE user_id = '70ca573a-23f2-45e6-9964-b633075c345f'");
+        await client.query(`
+            INSERT INTO user_roles (user_id, role)
+            VALUES ('70ca573a-23f2-45e6-9964-b633075c345f', 'superadmin')
+        `);
+        console.log('✅ Ahora eres Superadmin oficial.');
 
-        if (res.rows.length > 0) {
-            const userId = res.rows[0].id;
-            const sucursalId = '15cc8387-26f9-457c-b27e-f3029d1654f2';
-            console.log(`\n♻️ Cuenta encontrada en Auth. Recreando perfil en public.usuarios para ID: ${userId}...`);
-            
-            await client.query(`
-                INSERT INTO public.usuarios (id, email, nombre, rol, sucursal_id, activo)
-                VALUES ($1, $2, 'Emanuel', 'admin', $3, true)
-                ON CONFLICT (id) DO UPDATE 
-                SET sucursal_id = $3, rol = 'admin';
-            `, [userId, 'emanuelsanch99@gmail.com', sucursalId]);
-            
-            console.log('✅ Perfil recreado/actualizado con éxito.');
-        } else {
-            console.log('❌ No se encontró la cuenta ni siquiera en Auth.Users.');
-        }
+        // 2. Diagnosticar por qué Don Juan no muestra usuarios
+        console.log('\n🔬 Diagnóstico de funciones de sesión para tu ID...');
+        const diag = await client.query(`
+            SELECT 
+                id, 
+                rol, 
+                sucursal_id,
+                get_user_sucursal_id() as func_sucursal_id,
+                is_sucursal_admin() as func_is_admin,
+                is_super_admin() as func_is_super
+            FROM usuarios 
+            WHERE id = '70ca573a-23f2-45e6-9964-b633075c345f'
+        `);
+        console.table(diag.rows);
 
         const metaRes = await client.query("SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_name = 'usuarios'");
         console.log('\n🔍 Metadatos de la tabla:');

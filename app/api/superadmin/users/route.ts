@@ -20,7 +20,12 @@ async function verifySuperAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
+    // Use supabaseAdmin (service role) to check user_roles - the anon key may not have SELECT on this table
+    const { data: roleData, error: roleError } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", user.id).single();
+    if (roleError) {
+        console.error('verifySuperAdmin roleError:', roleError.message);
+        return null;
+    }
     if (roleData?.role !== "superadmin") return null;
 
     return user;
