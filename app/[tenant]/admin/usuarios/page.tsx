@@ -172,14 +172,20 @@ export default function UsuariosPage() {
 
     async function fetchUsuarios() {
         if (!sucursalId) return;
-        const { data, error } = await supabase.from("usuarios").select("*").eq("sucursal_id", sucursalId).order("nombre");
-        if (error) {
+        try {
+            // Use server-side API to bypass RLS (super_admin needs cross-tenant access)
+            const res = await fetch(`/api/staff?sucursal_id=${sucursalId}&all=true`);
+            if (res.ok) {
+                const data = await res.json();
+                setUsuarios(data || []);
+            } else {
+                console.error("Error fetching users:", await res.text());
+            }
+        } catch (error) {
             console.error("Error fetching users:", error);
+        } finally {
             setLoading(false);
-            return;
         }
-        setUsuarios(data || []);
-        setLoading(false);
     }
 
     async function handleSync() {
