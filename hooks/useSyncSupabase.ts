@@ -163,15 +163,28 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
       ];
 
       for (const table of tables) {
-        const { data, error } = await supabase
-          .from(table)
-          .select("*")
-          .eq("sucursal_id", sucursalId);
+        try {
+          const { data, error } = await supabase
+            .from(table)
+            .select("*")
+            .eq("sucursal_id", sucursalId);
 
-        if (!error && data) {
-          // Limpiar y re-insertar para mantener consistencia
-          await (db as any)[table].clear();
-          await (db as any)[table].bulkAdd(data);
+          if (error) {
+            console.error(`[Sync] Error en Supabase para tabla ${table}:`, error.message, error.details);
+            continue;
+          }
+
+          if (data) {
+            const dexieTable = (db as any)[table];
+            if (dexieTable) {
+              await dexieTable.clear();
+              await dexieTable.bulkAdd(data);
+            } else {
+              console.warn(`[Sync] La tabla ${table} no existe en Dexie.`);
+            }
+          }
+        } catch (tableErr: any) {
+          console.error(`[Sync] Error procesando tabla ${table}:`, tableErr.message || tableErr);
         }
       }
 

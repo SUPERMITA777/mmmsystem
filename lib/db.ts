@@ -55,6 +55,9 @@ class MMMDatabase extends Dexie {
   descuentos!: EntityTable<any, "id">;
   mesas!: EntityTable<any, "id">;
   config_sucursal!: EntityTable<any, "sucursal_id">;
+  fichas_tecnicas!: EntityTable<any, "id">;
+  ficha_tecnica_items!: EntityTable<any, "id">;
+  ingredientes!: EntityTable<any, "id">;
 
   constructor() {
     super("MMMSystemDB");
