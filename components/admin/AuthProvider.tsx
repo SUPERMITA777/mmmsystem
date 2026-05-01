@@ -2,11 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter, usePathname, useParams } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 interface AuthUser {
     id: string;
     email: string;
     rol?: string;
+    sucursal_id?: string | null;
 }
 
 interface AuthContextType {
@@ -45,10 +47,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const res = await fetch("/api/auth/me");
             if (res.ok) {
                 const data = await res.json();
-                setUser(data.user);
+                const authUser = data.user as AuthUser;
+                setUser(authUser);
+
+                // Tenant Verification (client-side safety net — middleware handles the primary check)
+                if (pathname.includes("/admin") && !pathname.includes("/admin/login") && authUser) {
+                    // Skip check for super_admin — they can access any tenant
+                    if (authUser.rol === "super_admin") return;
+
+                    if (authUser.sucursal_id && tenant !== "superadmin") {
+                        const { data: sucData } = await supabase
+                            .from("sucursales")
+                            .select("slug")
+                            .eq("id", authUser.sucursal_id)
+                            .single();
+                        
+                        if (sucData && sucData.slug !== tenant) {
+                            // Preserve current admin sub-path (e.g., /admin/menu → /donjuan/admin/menu)
+                            const adminIndex = pathname.indexOf("/admin");
+                            const subPath = adminIndex !== -1 ? pathname.substring(adminIndex) : "/admin";
+                            console.warn(`[Auth] Tenant mismatch: user belongs to "${sucData.slug}", redirecting from "${tenant}"`);
+                            router.push(`/${sucData.slug}${subPath}`);
+                            return;
+                        }
+                    }
+                }
             }
-        } catch {
-            // Not authenticated — middleware will handle redirect
+        } catch (err) {
+            console.error("Auth check error:", err);
         } finally {
             setLoading(false);
         }

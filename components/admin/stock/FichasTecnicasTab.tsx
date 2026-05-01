@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Plus, ChefHat, Trash2, RefreshCw, TrendingUp, DollarSign, Percent } from "lucide-react";
 import NuevaFichaModal from "./NuevaFichaModal";
+import { db } from "@/lib/db";
 
 type FichaTecnica = {
     id: string;
@@ -51,13 +52,37 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
     const fetchFichas = useCallback(async () => {
         if (!sucursalId) return;
         setLoading(true);
-        const { data } = await supabase
-            .from("fichas_tecnicas")
-            .select("*")
-            .eq("sucursal_id", sucursalId)
-            .order("nombre");
-        setFichas((data as FichaTecnica[]) || []);
-        setLoading(false);
+        console.log("[FichasTab] Cargando fichas para sucursal:", sucursalId);
+        try {
+            // 1. Intentar local
+            const localData = await db.fichas_tecnicas
+                .where("sucursal_id")
+                .equals(sucursalId)
+                .toArray();
+            
+            if (localData.length > 0) {
+                console.log("[FichasTab] Fichas cargadas desde DB Local:", localData.length);
+                setFichas(localData as FichaTecnica[]);
+                setLoading(false);
+                return;
+            }
+
+            // 2. Fallback a Supabase
+            console.log("[FichasTab] DB Local vacía, consultando Supabase...");
+            const { data, error } = await supabase
+                .from("fichas_tecnicas")
+                .select("*")
+                .eq("sucursal_id", sucursalId)
+                .order("nombre");
+            
+            if (error) throw error;
+            console.log("[FichasTab] Fichas cargadas desde Supabase:", data?.length || 0);
+            setFichas((data as FichaTecnica[]) || []);
+        } catch (err) {
+            console.error("[FichasTab] Error cargando fichas:", err);
+        } finally {
+            setLoading(false);
+        }
     }, [sucursalId]);
 
     const fetchFichaItems = useCallback(async (fichaId: string) => {

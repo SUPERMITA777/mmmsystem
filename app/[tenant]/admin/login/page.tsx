@@ -31,7 +31,14 @@ export default function LoginPage() {
                 return;
             }
 
-            router.push(`/${tenantSlug}/admin`);
+            // Redirect to the user's assigned tenant, not the URL tenant
+            const targetSlug = data.user?.tenantSlug || tenantSlug;
+            
+            // If user is super_admin without a specific branch, keep current tenant
+            const isSuperAdmin = data.user?.rol === 'super_admin';
+            const redirectSlug = isSuperAdmin ? tenantSlug : targetSlug;
+
+            router.push(`/${redirectSlug}/admin`);
             router.refresh();
         } catch {
             setError("Error de conexión. Intenta de nuevo.");

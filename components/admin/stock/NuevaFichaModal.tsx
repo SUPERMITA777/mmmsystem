@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Save, Plus, Trash2, Search, ChefHat, Package } from "lucide-react";
+import { db } from "@/lib/db";
 
 type FichaTecnica = {
     id: string;
@@ -177,6 +178,16 @@ export default function NuevaFichaModal({
                 }));
                 const { error } = await supabase.from("ficha_tecnica_items").insert(toInsert);
                 if (error) throw error;
+
+                // ACTUALIZACIÓN LOCAL (Dexie) para visibilidad inmediata
+                await db.fichas_tecnicas.put({
+                    id: fichaId,
+                    nombre: nombre.trim(),
+                    descripcion: descripcion.trim() || null,
+                    costo_total: costoTotal,
+                    sucursal_id: sucursalId,
+                    updated_at: new Date().toISOString()
+                });
             }
 
             onSave();
