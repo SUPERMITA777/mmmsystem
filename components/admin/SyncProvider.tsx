@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useSyncSupabase } from "@/hooks/useSyncSupabase";
 import { useTenant } from "@/context/TenantContext";
 import OfflineIndicator from "@/components/ui/OfflineIndicator";
@@ -14,6 +15,13 @@ import OfflineIndicator from "@/components/ui/OfflineIndicator";
 export default function SyncProvider() {
   const { sucursalId } = useTenant();
   const sync = useSyncSupabase(sucursalId);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) return null;
 
   return (
     <OfflineIndicator

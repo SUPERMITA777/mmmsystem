@@ -48,9 +48,7 @@ const SYNC_INTERVAL_MS = 30_000; // 30 segundos
 const MAX_BATCH_SIZE = 50; // Máximo de registros por batch
 
 export function useSyncSupabase(sucursalId: string | null): SyncState {
-  const [isOnline, setIsOnline] = useState<boolean>(
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
@@ -257,6 +255,9 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
   // ─── Listeners de conexión ──────────────────────────────
 
   useEffect(() => {
+    // Inicializar estado real al montar
+    setIsOnline(navigator.onLine);
+
     const handleOnline = () => {
       console.log("[Sync] 🟢 Conexión recuperada");
       setIsOnline(true);

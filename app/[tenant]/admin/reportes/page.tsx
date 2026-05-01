@@ -56,7 +56,12 @@ export default function ReportesPage() {
     const [productsWithCosts, setProductsWithCosts] = useState<any[]>([]);
     const [cajas, setCajas] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const [isMounted, setIsMounted] = useState(false);
     const { sucursalId } = useTenant();
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // Cost Modal State
     const [isCostoModalOpen, setIsCostoModalOpen] = useState(false);
@@ -67,8 +72,10 @@ export default function ReportesPage() {
     const [endDate, setEndDate] = useState(getArgentinaDate());
 
     useEffect(() => {
-        if (sucursalId) fetchData();
-    }, [startDate, endDate, sucursalId]);
+        if (sucursalId && isMounted) fetchData();
+    }, [startDate, endDate, sucursalId, isMounted]);
+
+    if (!isMounted) return null;
 
     async function fetchData() {
         if (!sucursalId) return;
