@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink, QrCode } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
-import { printComanda, printCocina, printPromoQrWeb } from "@/lib/printUtils";
+import { printComanda, printCocina, printCocinaIncremental, printPreCuenta, printPromoQrWeb } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 import { useTenant } from "@/context/TenantContext";
@@ -240,16 +240,31 @@ export default function PanelPedidosPage() {
     if (nuevoEstado === "preparando") {
       sendWhatsAppNotification(pedido, 'confirmado');
       if (sucursalId) descontarStockDePedido(pedido.id, sucursalId);
+      // Auto-print kitchen ticket on confirm
+      printCocina(pedido, printConfig);
     } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
       sendWhatsAppNotification(pedido, 'listo');
     } else if (nuevoEstado === "entregado") {
       sendWhatsAppNotification(pedido, 'entregado');
+      // Free up the table for salon orders
+      if (pedido.tipo === "salon" && (pedido as any).mesa_id) {
+        await supabase.from("mesas").update({ estado: "libre" }).eq("id", (pedido as any).mesa_id);
+      }
     }
 
     fetchPedidos();
     if (selectedPedido?.id === pedido.id) {
       setSelectedPedido({ ...pedido, estado: nuevoEstado });
     }
+  }
+
+  async function cerrarMesa(pedido: Pedido) {
+    await supabase.from("pedidos").update({ estado: "entregado" }).eq("id", pedido.id);
+    if ((pedido as any).mesa_id) {
+      await supabase.from("mesas").update({ estado: "libre" }).eq("id", (pedido as any).mesa_id);
+    }
+    setSelectedPedido(null);
+    fetchPedidos();
   }
 
   async function asignarRepartidor(pedidoId: string, repartidorId: string) {
@@ -265,6 +280,10 @@ export default function PanelPedidosPage() {
       estado: "preparando",
       tiempo_preparacion_minutos: minutes
     }).eq("id", pedido.id);
+
+    // Auto-print comanda + kitchen ticket
+    printComanda(pedido, printConfig);
+    printCocina(pedido, printConfig);
 
     // Enviar WhatsApp de confirmación
     sendWhatsAppNotification(pedido, 'confirmado');
@@ -609,7 +628,7 @@ export default function PanelPedidosPage() {
               {/* Right Panel — Order Info */}
               <div className="w-[340px] flex flex-col bg-gray-50/50 overflow-y-auto">
                 <div className="p-6 space-y-5 flex-1">
-                  {/* Pedido # + Editar */}
+                  {/* Pedido # + Comandar/Editar */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-800">
                       Pedido <span className="text-purple-600">#{selectedPedido.numero_pedido}</span>
@@ -621,7 +640,7 @@ export default function PanelPedidosPage() {
                       }}
                       className="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
                     >
-                      Editar
+                      {selectedPedido.tipo === "salon" ? "Comandar" : "Editar"}
                     </button>
                   </div>
 
@@ -709,17 +728,24 @@ export default function PanelPedidosPage() {
                     )}
                   </div>
 
-                  {/* Action buttons: Comandar / Cocina / Facturar */}
-                  <div className="flex gap-2">
+                  {/* Action buttons: Comandar / Cocina / PreCuenta / Cerrar Mesa */}
+                  <div className="flex gap-2 flex-wrap">
                     <button onClick={() => {
                       const tenant = window.location.pathname.split('/')[1];
                       const promoQrUrl = promoActiva
                         ? `${window.location.origin}/${tenant}/promo/${selectedPedido.id}`
                         : undefined;
                       printComanda(selectedPedido, { ...printConfig, promoQrUrl });
-                    }} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Comandar</button>
+                    }} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Comanda</button>
                     <button onClick={() => printCocina(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cocina</button>
-                    <button className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors opacity-50">Facturar</button>
+                    {selectedPedido.tipo === "salon" && (
+                      <>
+                        <button onClick={() => printPreCuenta(selectedPedido, printConfig)} className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Pre-Cuenta</button>
+                        <button onClick={() => {
+                          if (confirm(`¿Cerrar mesa y marcar pedido como entregado?`)) cerrarMesa(selectedPedido);
+                        }} className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cerrar Mesa</button>
+                      </>
+                    )}
                   </div>
                 </div>
 

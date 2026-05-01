@@ -262,21 +262,28 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 }
 
 /* ──────────────────────────────────────────────────────
-   COCINA – Ticket mínimo para cocina
+   COCINA – Ticket para cocina con N° grande y horario
    ────────────────────────────────────────────────────── */
-export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
+export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, itemsOverride?: any[]) {
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const tipoLabel =
-    pedido.tipo === "delivery" ? "Delivery"
-      : pedido.tipo === "takeaway" ? "Take Away"
-        : "Salón";
+    pedido.tipo === "delivery" ? "DELIVERY"
+      : pedido.tipo === "takeaway" ? "TAKE AWAY"
+        : "SALÓN";
 
   const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
+  const mesaNum = pedido.mesas?.numero || pedido.mesa_numero;
+
+  const createdAt = new Date(pedido.created_at || new Date());
+  const horaComandado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const fechaCorta = createdAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+
+  const items = itemsOverride ?? pedido.pedido_items ?? [];
 
   // Agrupar items por categoría para la cocina
   const groupedItemsCoc: Record<string, any[]> = {};
-  (pedido.pedido_items ?? []).forEach((item: any) => {
+  items.forEach((item: any) => {
     let catName = "PRODUCTOS";
     if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
       catName = item.productos.categorias.nombre.toUpperCase();
@@ -286,17 +293,17 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
   });
 
   const itemsHtml = Object.keys(groupedItemsCoc).map(catName => {
-    const header = `<div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-top:6px;margin-bottom:4px">${catName}</div>`;
+    const header = `<div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-top:8px;margin-bottom:4px;border-bottom:1px solid #000;padding-bottom:2px">${catName}</div>`;
 
     const catItemsHtml = groupedItemsCoc[catName].map(item => `
-          <div style="font-weight:bold;font-size:${c.fuente_cliente_nombre}px;margin:5px 0;line-height:1.3">
-              ${item.cantidad} ${item.nombre_producto.toUpperCase()}
+          <div style="font-weight:bold;font-size:${Math.max(c.fuente_cliente_nombre, 20)}px;margin:8px 0 2px;line-height:1.3">
+              ${item.cantidad} x ${(item.nombre_producto || item.nombre).toUpperCase()}
           </div>
           ${(item.adicionales ?? []).length
-        ? `<div style="font-size:${c.fuente_adicionales || c.fuente_cliente_detalles}px;margin-left:10px;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join(" · ")}</div>`
+        ? `<div style="font-size:${c.fuente_adicionales || 14}px;margin-left:10px;font-weight:bold;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join("<br>")}</div>`
         : ""}
-          ${item.notas
-        ? `<div style="font-size:${c.fuente_cliente_detalles}px;margin-left:10px;font-style:italic;color:#333">${item.notas}</div>`
+          ${(item.notas || item.nota)
+        ? `<div style="font-size:${Math.max(c.fuente_cliente_detalles, 14)}px;margin-left:10px;margin-top:2px;font-weight:bold;font-style:italic;padding:4px 6px;border:1px dashed #000;border-radius:4px">📝 ${(item.notas || item.nota).toUpperCase()}</div>`
         : ""}`
     ).join("");
     return header + catItemsHtml;
@@ -309,21 +316,25 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
   @page { size: 80mm auto; margin: 5mm 4mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; line-height: 1.4; }
-  .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
+  .center { text-align: center; }
+  .sep { border: none; border-top: 2px dashed #000; margin: 8px 0; }
 </style>
 </head>
 <body>
 
-  <!-- ENCABEZADO -->
-  <div style="font-weight:bold;font-size:${c.fuente_total_bold}px">${tipoLabel} N°${numCorto}
-    <span style="font-weight:normal;font-size:${c.fuente_direccion}px;margin-left:4px">#${pedido.numero_pedido}</span>
+  <!-- NÚMERO DE PEDIDO GRANDE -->
+  <div class="center" style="font-weight:900;font-size:32px;letter-spacing:2px;margin-bottom:4px">
+    ${pedido.tipo === "salon" && mesaNum ? `MESA ${mesaNum}` : `N° ${numCorto}`}
+  </div>
+  <div class="center" style="font-weight:bold;font-size:16px;margin-bottom:2px">${tipoLabel}</div>
+
+  <!-- HORARIO COMANDADO -->
+  <div class="center" style="font-size:20px;font-weight:bold;margin:6px 0;padding:4px;border:2px solid #000;border-radius:4px">
+    ⏰ ${horaComandado} hs — ${fechaCorta}
   </div>
 
-  ${pedido.cliente_direccion && c.mostrar_direccion
-      ? `<div style="font-size:${c.fuente_direccion}px;font-weight:bold;margin-top:2px">${pedido.cliente_direccion}</div>`
-      : ""}
-  ${pedido.cliente_nombre
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;color:#333">${pedido.cliente_nombre}</div>`
+  ${pedido.cliente_nombre && pedido.tipo !== "salon"
+      ? `<div style="font-size:${c.fuente_cliente_detalles}px;font-weight:bold;color:#333;margin-top:4px">${pedido.cliente_nombre}</div>`
       : ""}
 
   <hr class="sep">
@@ -337,6 +348,104 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}) {
 
   <!-- PRODUCTOS -->
   ${itemsHtml}
+
+  <hr class="sep">
+  <div class="center" style="font-size:10px;color:#666">Pedido #${pedido.numero_pedido || "—"}</div>
+
+</body></html>`;
+
+  doPrint(html);
+}
+
+/* ──────────────────────────────────────────────────────
+   COCINA INCREMENTAL – Solo items nuevos (evita duplicados)
+   ────────────────────────────────────────────────────── */
+export function printCocinaIncremental(pedido: any, newItems: any[], config: Partial<PrintConfig> = {}) {
+  if (!newItems || newItems.length === 0) return;
+  printCocina(pedido, config, newItems);
+}
+
+/* ──────────────────────────────────────────────────────
+   PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
+   ────────────────────────────────────────────────────── */
+export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
+  const c = { ...DEFAULT_CONFIG, ...config };
+
+  const mesaNum = pedido.mesas?.numero || pedido.mesa_numero || "—";
+  const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
+  const metodoPago = pedido.metodo_pago_nombre || "Efectivo";
+
+  const createdAt = new Date(pedido.created_at || new Date());
+  const horaCreado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const fechaLarga = createdAt.toLocaleDateString("es-AR", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric"
+  });
+
+  const itemsRows = (pedido.pedido_items ?? []).map((item: any) => {
+    const subtotal = item.precio_unitario * item.cantidad;
+    const aggregated = aggregateAdicionales(item.adicionales ?? []);
+    const ads = aggregated.map((a: any) =>
+      `<tr>
+        <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px">+ ${a.nombre}</td>
+        <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px">+${fmtARS(a.precio ?? 0)}</td>
+      </tr>`
+    ).join("");
+    return `
+      <tr>
+        <td style="padding:3px 0;font-size:${c.fuente_items}px">${item.cantidad} ${item.nombre_producto}</td>
+        <td style="text-align:right;padding:3px 0;font-size:${c.fuente_items}px;white-space:nowrap">${fmtARS(subtotal)}</td>
+      </tr>${ads}`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  @page { size: 80mm auto; margin: 5mm 4mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; color: #000; line-height: 1.4; }
+  .center { text-align: center; }
+  .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { vertical-align: top; }
+</style>
+</head>
+<body>
+
+  <div class="center" style="font-size:24px;font-weight:900;margin-bottom:4px">PRE-CUENTA</div>
+  <div class="center" style="font-size:20px;font-weight:bold;margin-bottom:2px">Mesa ${mesaNum}</div>
+  <div class="center" style="font-size:${c.fuente_footer}px;color:#333">${fechaLarga}</div>
+  <div class="center" style="font-size:${c.fuente_footer}px;color:#333">Pedido a las ${horaCreado} hs.</div>
+
+  ${pedido.cliente_nombre ? `<div class="center" style="font-size:${c.fuente_cliente_detalles}px;margin-top:4px;font-weight:bold">${pedido.cliente_nombre}</div>` : ""}
+
+  <hr class="sep">
+
+  <table>${itemsRows}</table>
+
+  <hr class="sep">
+
+  <table style="font-size:${c.fuente_totales}px">
+    <tr>
+      <td style="color:#333">Subtotal</td>
+      <td style="text-align:right;color:#333">${fmtARS(pedido.subtotal ?? 0)}</td>
+    </tr>
+    ${(pedido.descuento ?? 0) > 0 ? `
+    <tr>
+      <td style="color:#1a7a3f;font-weight:bold">🏷️ Descuento${pedido.notas_internas ? ` (${pedido.notas_internas})` : ""}</td>
+      <td style="text-align:right;color:#1a7a3f;font-weight:bold">- ${fmtARS(pedido.descuento)}</td>
+    </tr>` : ""}
+    <tr>
+      <td style="font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:6px">${metodoPago}</td>
+      <td style="text-align:right;font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:6px">${fmtARS(pedido.total ?? 0)}</td>
+    </tr>
+  </table>
+
+  <hr class="sep">
+
+  <div class="center" style="font-size:${c.fuente_footer}px;color:#555;font-style:italic;margin-top:2px">
+    Comprobante no válido como factura.
+  </div>
 
 </body></html>`;
 

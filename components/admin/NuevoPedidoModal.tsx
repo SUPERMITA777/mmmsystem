@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
+import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft, Lock } from "lucide-react";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
 import { db, guardarPedidoLocal, generateLocalId } from "@/lib/db";
+import { printCocina, printCocinaIncremental } from "@/lib/printUtils";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -82,6 +83,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [mesaId, setMesaId] = useState("");
     const { sucursalId } = useTenant();
     const isLoadingEditPedido = useRef(false);
+    // Tracking commanded items (items that have been sent to kitchen)
+    const [itemsComandados, setItemsComandados] = useState<Set<string>>(new Set());
+    const [printConfig, setPrintConfig] = useState<any>(null);
     
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
@@ -99,6 +103,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     useEffect(() => {
         if (isOpen && sucursalId) {
             fetchAll(!!editPedido);
+            fetchPrintConfig();
             setView("catalog");
             if (editPedido) {
                 isLoadingEditPedido.current = true;
@@ -114,6 +119,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     adicionales: (item.adicionales || []).map((a: any) => ({ nombre: a.nombre, precio: a.precio || 0, cantidad: a.cantidad || 1 })),
                 }));
                 setCarrito(items);
+                // Mark existing items as already commanded for salon orders
+                if (editPedido.tipo === "salon" && editPedido.estado !== "pendiente") {
+                    setItemsComandados(new Set(items.map((i: CartItem) => i.id)));
+                } else {
+                    setItemsComandados(new Set());
+                }
                 setCliente({
                     nombre: editPedido.cliente_nombre || "",
                     telefono: editPedido.cliente_telefono || "",
@@ -158,6 +169,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setComensales(1);
                 setCubiertoCobrado(false);
                 setPromoCode("");
+                setItemsComandados(new Set());
                 setPromoResult(null);
                 setCodigoDescuentoId("");
                 setValidacionDelivery({ valid: false, costo: 0, loading: false });
@@ -296,7 +308,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const staffData = await staffRes.json();
                 setCamareros(staffData || []);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error fetching staff:", err);
         }
     }
@@ -547,19 +559,183 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }
 
     function updateCartQty(idx: number, delta: number) {
-        setCarrito(prev => prev.map((item, i) => {
-            if (i !== idx) return item;
-            const nq = item.cantidad + delta;
-            return nq <= 0 ? item : { ...item, cantidad: nq };
+        const item = carrito[idx];
+        if (!item) return;
+        // Prevent decreasing commanded items
+        if (delta < 0 && itemsComandados.has(item.id)) {
+            alert("No se puede disminuir la cantidad de un producto ya comandado.");
+            return;
+        }
+        setCarrito(prev => prev.map((it, i) => {
+            if (i !== idx) return it;
+            const nq = it.cantidad + delta;
+            return nq <= 0 ? it : { ...it, cantidad: nq };
         }));
     }
 
     function updateCartPrice(idx: number, price: number) {
+        const item = carrito[idx];
+        if (item && item.precioOverride !== price) {
+            const motivo = prompt("Motivo del ajuste de precio:");
+            if (!motivo) return;
+        }
         setCarrito(prev => prev.map((item, i) => i === idx ? { ...item, precioOverride: price } : item));
     }
 
     function removeFromCart(idx: number) {
+        const item = carrito[idx];
+        if (item && itemsComandados.has(item.id)) {
+            alert("No se puede eliminar un producto ya comandado.");
+            return;
+        }
+        const motivo = itemsComandados.size > 0 ? prompt("Motivo de la eliminación del producto:") : "ok";
+        if (!motivo) return;
         setCarrito(prev => prev.filter((_, i) => i !== idx));
+    }
+
+    async function fetchPrintConfig() {
+        if (!sucursalId) return;
+        try {
+            const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const boldMap = suc?.panel_settings?.print_bold || {};
+            const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
+            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales });
+            else setPrintConfig({ boldMap, fuente_adicionales });
+        } catch {}
+    }
+
+    async function comandarSalon() {
+        if (carrito.length === 0) return;
+        setLoading(true);
+        try {
+            const mPago = metodosPago.find(m => m.id === metodoPagoId);
+            const metodoPagoNombre = mPago ? mPago.nombre : "Efectivo";
+
+            // Identify NEW items (not yet commanded)
+            const newItems = carrito.filter(item => !itemsComandados.has(item.id));
+
+            if (editPedido && editPedido.id) {
+                // UPDATE existing salon order
+                const { error: uError } = await supabase.from("pedidos").update({
+                    cliente_nombre: cliente.nombre || "Consumidor Final",
+                    tipo: "salon", subtotal, total,
+                    metodo_pago_id: metodoPagoId || null,
+                    metodo_pago_nombre: metodoPagoNombre,
+                    notas: notaPedido || "",
+                    estado: "preparando",
+                    mesa_id: mesaId || null,
+                    camarero_id: camareroId || null,
+                    camarero_nombre: camareros.find(c => c.id === camareroId)?.nombre || null,
+                    comensales: comensales,
+                }).eq("id", editPedido.id);
+                if (uError) throw uError;
+
+                // Delete old items and re-insert all
+                await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+                const items = carrito.map(item => ({
+                    pedido_id: editPedido.id,
+                    producto_id: item.producto_id,
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precioOverride,
+                    notas: item.nota || "",
+                    adicionales: item.adicionales || []
+                }));
+                await supabase.from("pedido_items").insert(items);
+
+                // Print only new items to kitchen
+                if (newItems.length > 0) {
+                    const pedidoForPrint = { ...editPedido, tipo: "salon", mesa_numero: editPedido.mesas?.numero, numero_pedido: editPedido.numero_pedido, created_at: new Date().toISOString(), notas: notaPedido };
+                    const printItems = newItems.map(item => ({
+                        nombre_producto: item.nombre,
+                        cantidad: item.cantidad,
+                        adicionales: item.adicionales || [],
+                        notas: item.nota || "",
+                    }));
+                    printCocinaIncremental(pedidoForPrint, printItems, printConfig);
+                }
+
+                // Mark all items as commanded
+                setItemsComandados(new Set(carrito.map(i => i.id)));
+            } else {
+                // CREATE new salon order
+                const localId = generateLocalId();
+                const now = new Date();
+                const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' });
+                const todayStr = formatter.format(now);
+                const datePart = todayStr.replace(/-/g, '');
+
+                let createdPedido: any = null;
+                let attempts = 0;
+                while (attempts < 10 && !createdPedido) {
+                    attempts++;
+                    if (attempts > 1) await new Promise(r => setTimeout(r, 300));
+                    const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', { p_sucursal_id: sucursalId, p_date_part: datePart });
+                    if (rpcError) throw rpcError;
+                    const paddedSeq = String(nextSeq).padStart(4, '0');
+                    const numeroPedido = `SALON-${datePart}-${paddedSeq}`;
+
+                    const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
+                        id: localId,
+                        sucursal_id: sucursalId,
+                        numero_pedido: numeroPedido,
+                        cliente_nombre: cliente.nombre || "Consumidor Final",
+                        tipo: "salon", subtotal, costo_envio: 0, total,
+                        metodo_pago_id: metodoPagoId || null,
+                        metodo_pago_nombre: metodoPagoNombre,
+                        estado: "preparando",
+                        notas: notaPedido || "",
+                        mesa_id: mesaId || null,
+                        camarero_id: camareroId || null,
+                        camarero_nombre: camareros.find(c => c.id === camareroId)?.nombre || null,
+                        comensales: comensales,
+                    }).select().single();
+
+                    if (pError) {
+                        if (pError.code === '23505') continue;
+                        throw pError;
+                    }
+                    createdPedido = pedido;
+                }
+                if (!createdPedido) throw new Error("No se pudo crear el pedido.");
+
+                const items = carrito.map(item => ({
+                    pedido_id: createdPedido.id,
+                    producto_id: item.producto_id,
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precioOverride,
+                    notas: item.nota || "",
+                    adicionales: item.adicionales || []
+                }));
+                await supabase.from("pedido_items").insert(items);
+
+                // Update mesa status
+                if (mesaId) {
+                    await supabase.from("mesas").update({ estado: "ocupada" }).eq("id", mesaId);
+                }
+
+                // Print ALL items to kitchen (first comanda)
+                const pedidoForPrint = { ...createdPedido, mesas: { numero: mesas.find(m => m.id === mesaId)?.numero } };
+                const printItems = carrito.map(item => ({
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    adicionales: item.adicionales || [],
+                    notas: item.nota || "",
+                }));
+                printCocina(pedidoForPrint, printConfig, printItems);
+
+                // Mark all items as commanded
+                setItemsComandados(new Set(carrito.map(i => i.id)));
+            }
+
+            onCreated();
+            onClose();
+        } catch (e: any) {
+            console.error(e);
+            alert("Error al comandar: " + (e.message || ""));
+        } finally { setLoading(false); }
     }
 
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
@@ -941,15 +1117,26 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 {/* Qty + Delete */}
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1">
-                                        <button onClick={() => updateCartQty(idx, -1)} className="text-gray-400 hover:text-gray-900"><Minus size={12} /></button>
+                                        <button
+                                            onClick={() => updateCartQty(idx, -1)}
+                                            disabled={itemsComandados.has(item.id)}
+                                            className={`${itemsComandados.has(item.id) ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                        ><Minus size={12} /></button>
                                         <span className="text-xs font-bold w-4 text-center">{item.cantidad}</span>
                                         <button onClick={() => updateCartQty(idx, 1)} className="text-gray-400 hover:text-gray-900"><Plus size={12} /></button>
                                     </div>
                                     <div className="flex items-center gap-3">
+                                        {itemsComandados.has(item.id) && (
+                                            <span className="text-[8px] text-orange-500 font-bold flex items-center gap-0.5"><Lock size={8} /> Comandado</span>
+                                        )}
                                         <button onClick={() => editCartItem(idx)} className="text-xs text-blue-500 hover:text-blue-700 font-bold transition-colors">
                                             Editar
                                         </button>
-                                        <button onClick={() => removeFromCart(idx)} className="text-xs text-red-400 hover:text-red-600 font-bold transition-colors">
+                                        <button
+                                            onClick={() => removeFromCart(idx)}
+                                            disabled={itemsComandados.has(item.id)}
+                                            className={`text-xs font-bold transition-colors ${itemsComandados.has(item.id) ? 'text-gray-300 cursor-not-allowed' : 'text-red-400 hover:text-red-600'}`}
+                                        >
                                             Eliminar
                                         </button>
                                     </div>
@@ -1527,13 +1714,23 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             <button onClick={onClose} className="text-red-500 font-bold text-xs hover:text-red-600 transition-colors">
                                 Cancelar
                             </button>
-                            <button
-                                onClick={crearPedido}
-                                disabled={loading || carrito.length === 0}
-                                className="flex-1 bg-gray-900 text-white py-3 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            >
-                                {loading ? (editPedido ? "Editando..." : "Creando...") : (camareroMode ? (editPedido ? "Actualizar Mesa" : "Cargar a la Mesa") : (editPedido ? "Editar pedido" : "Crear pedido"))}
-                            </button>
+                            {tipo === "salon" ? (
+                                <button
+                                    onClick={comandarSalon}
+                                    disabled={loading || carrito.length === 0}
+                                    className="flex-1 bg-orange-600 text-white py-3 rounded-full text-xs font-bold hover:bg-orange-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? "Comandando..." : "🍳 COMANDAR"}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={crearPedido}
+                                    disabled={loading || carrito.length === 0}
+                                    className="flex-1 bg-gray-900 text-white py-3 rounded-full text-xs font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? (editPedido ? "Editando..." : "Creando...") : (editPedido ? "Editar pedido" : "Crear pedido")}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
