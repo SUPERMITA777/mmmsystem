@@ -328,7 +328,6 @@ export function ProductoEditor({
               value={formData.ficha_tecnica_id || ""}
               onChange={e => {
                 handleChange("ficha_tecnica_id", e.target.value || null);
-                if (e.target.value && formData.categoria_id) loadFichasTecnicas(formData.categoria_id);
               }}
               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 outline-none focus:border-purple-400 transition-colors"
             >
