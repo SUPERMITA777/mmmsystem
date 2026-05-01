@@ -157,6 +157,9 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
         "producto_grupos_adicionales",
         "descuentos",
         "mesas",
+        "fichas_tecnicas",
+        "ficha_tecnica_items",
+        "ingredientes",
       ];
 
       for (const table of tables) {

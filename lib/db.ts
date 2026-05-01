@@ -59,7 +59,7 @@ class MMMDatabase extends Dexie {
   constructor() {
     super("MMMSystemDB");
 
-    this.version(2).stores({
+    this.version(3).stores({
       pedidos: "id, sincronizado, sucursal_id, created_at, estado",
       productos: "id, sucursal_id, categoria_id, nombre",
       categorias: "id, sucursal_id, orden",
@@ -69,7 +69,10 @@ class MMMDatabase extends Dexie {
       producto_grupos_adicionales: "id, sucursal_id, producto_id, grupo_id",
       descuentos: "id, sucursal_id",
       mesas: "id, sucursal_id",
-      config_sucursal: "sucursal_id"
+      config_sucursal: "sucursal_id",
+      fichas_tecnicas: "id, sucursal_id, nombre",
+      ficha_tecnica_items: "id, sucursal_id, ficha_tecnica_id, ingrediente_id",
+      ingredientes: "id, sucursal_id, nombre"
     });
   }
 }

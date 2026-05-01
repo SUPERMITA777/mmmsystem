@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { ExternalLink, ChefHat, TrendingUp, ChevronDown, Check } from "lucide-react";
 import ImageCropperModal from "@/components/ui/ImageCropperModal";
+import { useTenant } from "@/context/TenantContext";
+import { db } from "@/lib/db";
 
 type Categoria = {
   id: string;
@@ -59,6 +61,7 @@ export function ProductoEditor({
   onCreate?: (producto: Omit<Producto, 'id'>) => void;
   defaultCategoriaId?: string;
 }) {
+  const { sucursalId } = useTenant();
   const emptyProduct: Producto = {
     id: '',
     nombre: '',
@@ -91,49 +94,61 @@ export function ProductoEditor({
         loadGruposYAsignaciones(producto.id);
       }
     }
-    // Load fichas técnicas when category_id is available
-    if (formData?.categoria_id && formData.categoria_id !== 'sin-categoria') {
-      loadFichasTecnicas(formData.categoria_id);
+    
+    if (sucursalId) {
+      loadFichasTecnicas();
     }
-  }, [producto, isCreating, defaultCategoriaId]);
+  }, [producto, isCreating, defaultCategoriaId, sucursalId]);
 
-  async function loadFichasTecnicas(categoriaId: string) {
-    if (!categoriaId || categoriaId === 'sin-categoria') return;
-    const { data: catData } = await supabase
-      .from("categorias")
-      .select("sucursal_id")
-      .eq("id", categoriaId)
-      .single();
-    if (catData?.sucursal_id) {
+  async function loadFichasTecnicas() {
+    if (!sucursalId) return;
+    try {
+      // Intentar primero local (Local-First)
+      const local = await db.fichas_tecnicas.where("sucursal_id").equals(sucursalId).toArray();
+      if (local.length > 0) {
+        setFichasTecnicas(local as FichaTecnica[]);
+        return;
+      }
+
+      // Fallback a Supabase si no hay nada local
       const { data } = await supabase
         .from("fichas_tecnicas")
         .select("id, nombre, costo_total")
-        .eq("sucursal_id", catData.sucursal_id)
+        .eq("sucursal_id", sucursalId)
         .order("nombre");
       setFichasTecnicas((data as FichaTecnica[]) || []);
+    } catch (err) {
+      console.error("Error loading recipes:", err);
+    }
+  }
+
+  async function loadAllGrupos() {
+    if (!sucursalId) return;
+    try {
+      const local = await db.grupos_adicionales.where("sucursal_id").equals(sucursalId).toArray();
+      setTodosLosGrupos(local || []);
+    } catch {
+      const { data } = await supabase
+        .from("grupos_adicionales")
+        .select("id, titulo")
+        .eq("sucursal_id", sucursalId);
+      setTodosLosGrupos(data || []);
     }
   }
 
   async function loadGruposYAsignaciones(productoId: string) {
-    if (formData?.categoria_id && formData.categoria_id !== 'sin-categoria') {
-      const { data: catData } = await supabase
-        .from("categorias")
-        .select("sucursal_id")
-        .eq("id", formData.categoria_id)
-        .single();
-      
-      if (catData) {
-        const { data: grupos } = await supabase
-          .from("grupos_adicionales")
-          .select("id, titulo")
-          .eq("sucursal_id", catData.sucursal_id);
-        setTodosLosGrupos(grupos || []);
-      }
-    } else {
-      setTodosLosGrupos([]);
+    if (!sucursalId) return;
+    await loadAllGrupos();
+    
+    try {
+      const { data: asignaciones } = await supabase
+        .from("producto_grupos_adicionales")
+        .select("grupo_id")
+        .eq("producto_id", productoId);
+      setGruposAsignados(asignaciones?.map((a: any) => a.grupo_id) || []);
+    } catch (err) {
+      console.error("Error loading assignments:", err);
     }
-    const { data: asignaciones } = await supabase.from("producto_grupos_adicionales").select("grupo_id").eq("producto_id", productoId);
-    setGruposAsignados(asignaciones?.map((a: any) => a.grupo_id) || []);
   }
 
   function toggleGrupo(grupoId: string) {
