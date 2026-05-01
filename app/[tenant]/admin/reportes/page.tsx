@@ -709,7 +709,7 @@ export default function ReportesPage() {
                                                         </td>
                                                     </tr>
                                                 );
-                                            })}}
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
