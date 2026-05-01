@@ -46,14 +46,30 @@ export interface PedidoLocal {
 
 class MMMDatabase extends Dexie {
   pedidos!: EntityTable<PedidoLocal, "id">;
+  productos!: EntityTable<any, "id">;
+  categorias!: EntityTable<any, "id">;
+  metodos_pago!: EntityTable<any, "id">;
+  adicionales!: EntityTable<any, "id">;
+  grupos_adicionales!: EntityTable<any, "id">;
+  producto_grupos_adicionales!: EntityTable<any, "id">;
+  descuentos!: EntityTable<any, "id">;
+  mesas!: EntityTable<any, "id">;
+  config_sucursal!: EntityTable<any, "sucursal_id">;
 
   constructor() {
     super("MMMSystemDB");
 
-    this.version(1).stores({
-      // Índices: id (PK), sincronizado para queries de sync,
-      // sucursal_id para filtrar por tenant, created_at para ordenar
+    this.version(2).stores({
       pedidos: "id, sincronizado, sucursal_id, created_at, estado",
+      productos: "id, sucursal_id, categoria_id, nombre",
+      categorias: "id, sucursal_id, orden",
+      metodos_pago: "id, sucursal_id",
+      adicionales: "id, sucursal_id, grupo_id",
+      grupos_adicionales: "id, sucursal_id",
+      producto_grupos_adicionales: "id, sucursal_id, producto_id, grupo_id",
+      descuentos: "id, sucursal_id",
+      mesas: "id, sucursal_id",
+      config_sucursal: "sucursal_id"
     });
   }
 }

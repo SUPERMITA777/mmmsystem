@@ -6,7 +6,7 @@ import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle,
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
-import { guardarPedidoLocal, generateLocalId } from "@/lib/db";
+import { db, guardarPedidoLocal, generateLocalId } from "@/lib/db";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -180,6 +180,52 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     async function fetchAll(isEditing: boolean = false) {
         if (!sucursalId) return;
+
+        // ─── 1. Cargar desde Dexie (Local) ───────────────────
+        try {
+            if (!sucursalId) return;
+
+            const [
+                localProds,
+                localCats,
+                localMPs,
+                localConfig,
+                localGrps,
+                localAds,
+                localPGs,
+                localDescs,
+                localMesas
+            ] = await Promise.all([
+                db.productos.where("sucursal_id").equals(sucursalId).toArray(),
+                db.categorias.where("sucursal_id").equals(sucursalId).sortBy("orden"),
+                db.metodos_pago.where("sucursal_id").equals(sucursalId).toArray(),
+                db.config_sucursal.where("sucursal_id").equals(sucursalId).first(),
+                db.grupos_adicionales.where("sucursal_id").equals(sucursalId).toArray(),
+                db.adicionales.where("sucursal_id").equals(sucursalId).toArray(),
+                db.producto_grupos_adicionales.where("sucursal_id").equals(sucursalId).toArray(),
+                db.descuentos.where("sucursal_id").equals(sucursalId).toArray(),
+                db.mesas.where("sucursal_id").equals(sucursalId).sortBy("numero")
+            ]);
+
+            if (localProds.length > 0) {
+                setProductos(localProds);
+                setCategorias(localCats);
+                setMetodosPago(localMPs);
+                if (localMPs.length && !isEditing) setMetodoPagoId(localMPs[0].id);
+                setConfigSucursal(localConfig);
+                setGruposAdicionales(localGrps);
+                setAdicionales(localAds);
+                setProductoGrupos(localPGs);
+                setDescuentos(localDescs);
+                setMesas(localMesas);
+            }
+        } catch (err) {
+            console.error("Error cargando datos locales:", err);
+        }
+
+        // ─── 2. Si hay red, actualizar desde Supabase ────────
+        if (!navigator.onLine) return;
+
         const { data: prods } = await supabase.from("productos").select("*").eq("sucursal_id", sucursalId).order("nombre");
 
         // Also fetch products via category relationship to catch any products
@@ -210,41 +256,48 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             }
             return acc;
         }, []);
-        setProductos(uniqueProds);
+
+        if (uniqueProds.length > 0) setProductos(uniqueProds);
 
         const { data: cats } = await supabase.from("categorias").select("*").eq("sucursal_id", sucursalId).order("orden");
-        setCategorias(cats || []);
+        if (cats) setCategorias(cats);
+
         const { data: mps } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
-        setMetodosPago(mps || []);
-        // Only set default payment method when creating a new order, not when editing
-        if (mps?.length && !isEditing) setMetodoPagoId(mps[0].id);
+        if (mps) {
+            setMetodosPago(mps);
+            if (mps.length && !isEditing && !metodoPagoId) setMetodoPagoId(mps[0].id);
+        }
+
         const { data: szonas } = await supabase.from("zonas_entrega").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
-        setZonas(szonas || []);
+        if (szonas) setZonas(szonas);
+
         const { data: cfg } = await supabase.from("config_sucursal").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-        setConfigSucursal(cfg);
+        if (cfg) setConfigSucursal(cfg);
+
         const { data: grps } = await supabase.from("grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
-        setGruposAdicionales(grps || []);
+        if (grps) setGruposAdicionales(grps);
+
         const { data: ads } = await supabase.from("adicionales").select("*").eq("sucursal_id", sucursalId);
-        setAdicionales(ads || []);
+        if (ads) setAdicionales(ads);
+
         const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
-        setProductoGrupos(pg || []);
+        if (pg) setProductoGrupos(pg);
+
         const { data: descs } = await supabase.from("descuentos").select("*").eq("sucursal_id", sucursalId).order("activo", { ascending: false }).order("nombre");
-        setDescuentos(descs || []);
+        if (descs) setDescuentos(descs);
+
         const { data: mss } = await supabase.from("mesas").select("*").eq("sucursal_id", sucursalId).order("numero");
-        setMesas(mss || []);
-        // Fetch staff via server-side API to bypass RLS restrictions
+        if (mss) setMesas(mss);
+
+        // Fetch staff via server-side API
         try {
             const staffRes = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
             if (staffRes.ok) {
                 const staffData = await staffRes.json();
                 setCamareros(staffData || []);
-            } else {
-                console.error("Error fetching staff:", await staffRes.text());
-                setCamareros([]);
             }
         } catch (err) {
             console.error("Error fetching staff:", err);
-            setCamareros([]);
         }
     }
 

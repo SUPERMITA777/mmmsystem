@@ -141,6 +141,56 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
 
   // ─── Proceso de sincronización masiva ───────────────────
 
+  // ─── Sincronizar catálogo (Supabase → Dexie) ───────────
+
+  const syncCatalog = useCallback(async () => {
+    if (!sucursalId || !navigator.onLine) return;
+
+    try {
+      console.log("[Sync] Actualizando catálogo local...");
+
+      // Tablas a sincronizar
+      const tables = [
+        "productos",
+        "categorias",
+        "metodos_pago",
+        "adicionales",
+        "grupos_adicionales",
+        "producto_grupos_adicionales",
+        "descuentos",
+        "mesas",
+      ];
+
+      for (const table of tables) {
+        const { data, error } = await supabase
+          .from(table)
+          .select("*")
+          .eq("sucursal_id", sucursalId);
+
+        if (!error && data) {
+          // Limpiar y re-insertar para mantener consistencia
+          await (db as any)[table].clear();
+          await (db as any)[table].bulkAdd(data);
+        }
+      }
+
+      // Caso especial: config_sucursal (single record)
+      const { data: config, error: configError } = await supabase
+        .from("config_sucursal")
+        .select("*")
+        .eq("sucursal_id", sucursalId)
+        .maybeSingle();
+
+      if (!configError && config) {
+        await db.config_sucursal.put(config);
+      }
+
+      console.log("[Sync] Catálogo local actualizado correctamente.");
+    } catch (err) {
+      console.error("[Sync] Error actualizando catálogo:", err);
+    }
+  }, [sucursalId]);
+
   const syncAll = useCallback(async () => {
     if (!sucursalId) return;
     if (isSyncingRef.current) return; // Evitar concurrencia
@@ -151,6 +201,9 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
     setLastError(null);
 
     try {
+      // Primero asegurar que el catálogo esté al día
+      await syncCatalog();
+
       const pendientes = await getPedidosPendientes(sucursalId);
 
       if (pendientes.length === 0) {
@@ -208,6 +261,7 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
       console.log("[Sync] 🟢 Conexión recuperada");
       setIsOnline(true);
       // Intentar sync inmediatamente al reconectarse
+      syncCatalog();
       syncAll();
     };
 

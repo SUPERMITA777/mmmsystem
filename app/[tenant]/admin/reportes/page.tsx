@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight, Wallet, User, ArrowUpRight, ArrowDownRight, ClipboardList } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
-import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina, getArgentinaYesterday } from "@/lib/dateUtils";
+import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina, getArgentinaYesterday, formatToArgentinaDateTime } from "@/lib/dateUtils";
 
 // --- Components ---
 import AsignarCostoModal from "@/components/admin/reportes/AsignarCostoModal";
@@ -49,11 +49,12 @@ function DonutChart({ data, colors }: { data: { label: string, value: number }[]
 const COLORS = ["#9333ea", "#f97316", "#06b6d4", "#10b981", "#ef4444", "#f59e0b"];
 
 export default function ReportesPage() {
-    const [tab, setTab] = useState<"facturacion" | "ventas" | "rentabilidad">("facturacion");
+    const [tab, setTab] = useState<"facturacion" | "ventas" | "rentabilidad" | "turnos">("facturacion");
     const [loading, setLoading] = useState(true);
     const [pedidos, setPedidos] = useState<any[]>([]);
     const [items, setItems] = useState<any[]>([]);
     const [productsWithCosts, setProductsWithCosts] = useState<any[]>([]);
+    const [cajas, setCajas] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const { sucursalId } = useTenant();
 
@@ -103,6 +104,16 @@ export default function ReportesPage() {
                 .select("id, nombre, precio, ficha_tecnica_id, costo_fijo, fichas_tecnicas(costo_total)")
                 .eq("sucursal_id", sucursalId);
             setProductsWithCosts(productsData || []);
+
+            // Fetch Cajas for the period
+            const { data: cajasData } = await supabase
+                .from("cajas")
+                .select("*, transacciones_caja(*)")
+                .eq("sucursal_id", sucursalId)
+                .gte("fecha_apertura", getStartOfDayArgentina(startDate))
+                .lte("fecha_apertura", getEndOfDayArgentina(endDate))
+                .order("fecha_apertura", { ascending: false });
+            setCajas(cajasData || []);
 
         } catch (error) {
             console.error("Error fetching reports:", error);
@@ -207,10 +218,16 @@ export default function ReportesPage() {
             productsArray.forEach((p: any) => {
                 csvContent += `${p.nombre},${p.cant},${p.precio},${p.total}\n`;
             });
-        } else {
+        } else if (tab === "rentabilidad") {
             csvContent += "Producto,Cantidad,Venta Total,Costo Total,Utilidad,Margen %\n";
             rentabilidadArray.forEach((p: any) => {
                 csvContent += `${p.nombre},${p.cant},${p.totalVenta},${p.totalCosto},${p.utilidad},${p.margen.toFixed(2)}%\n`;
+            });
+        } else {
+            csvContent += "Cajero,Apertura,Cierre,Monto Apertura,Ventas Efvo,Mov Manuales,Esperado,Real,Diferencia\n";
+            cajas.forEach((c: any) => {
+                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                csvContent += `${c.cajero_nombre},${c.fecha_apertura},${c.fecha_cierre},${c.monto_apertura},${(c.monto_esperado || 0) - c.monto_apertura - manual},${manual},${c.monto_esperado},${c.monto_cierre},${c.diferencia}\n`;
             });
         }
         const encodedUri = encodeURI(csvContent);
@@ -243,6 +260,12 @@ export default function ReportesPage() {
                         className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "rentabilidad" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Rentabilidad
+                    </button>
+                    <button
+                        onClick={() => setTab("turnos")}
+                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "turnos" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                    >
+                        Turnos
                     </button>
                 </div>
 
@@ -599,6 +622,87 @@ export default function ReportesPage() {
                                                     </td>
                                                 </tr>
                                             ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {tab === "turnos" && (
+                        <div className="space-y-6">
+                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                <div className="p-6 border-b border-gray-50 flex items-center justify-between">
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Historial de Turnos y Arqueos</h4>
+                                    <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-lg text-[10px] font-black uppercase tracking-widest">{cajas.length} Turnos</span>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b border-gray-50 bg-gray-50/30">
+                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Cajero / Turno</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Apertura</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Efvo</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Mov. Manuales</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Esperado</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Cierre Real</th>
+                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Diferencia</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {cajas.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin turnos en este periodo</td>
+                                                </tr>
+                                            ) : cajas.map((c: any, i) => {
+                                                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                                                const isAbierta = c.estado === 'abierta';
+                                                const ventasEfvo = isAbierta ? 0 : (c.monto_esperado || 0) - c.monto_apertura - manual;
+                                                
+                                                return (
+                                                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs font-black text-gray-900 uppercase">{c.cajero_nombre || "Anónimo"}</span>
+                                                                    {isAbierta && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+                                                                </div>
+                                                                <span className="text-[10px] font-bold text-gray-400">
+                                                                    {formatToArgentinaDateTime(c.fecha_apertura)}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-xs font-bold text-gray-600">
+                                                            $ {new Intl.NumberFormat("es-AR").format(c.monto_apertura)}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-xs font-black text-green-600">
+                                                            {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(ventasEfvo)}`}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-xs font-bold text-blue-600">
+                                                            $ {new Intl.NumberFormat("es-AR").format(manual)}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
+                                                            {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(c.monto_esperado || 0)}`}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
+                                                            {isAbierta ? (
+                                                                <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-lg text-[8px] font-black uppercase tracking-tighter border border-green-100">En Curso</span>
+                                                            ) : (
+                                                                `$ ${new Intl.NumberFormat("es-AR").format(c.monto_cierre || 0)}`
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            {isAbierta ? (
+                                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Pendiente</span>
+                                                            ) : (
+                                                                <span className={`text-sm font-black ${c.diferencia === 0 ? "text-gray-400" : (c.diferencia > 0 ? "text-green-600" : "text-red-600")}`}>
+                                                                    $ {new Intl.NumberFormat("es-AR").format(c.diferencia || 0)}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}}
                                         </tbody>
                                     </table>
                                 </div>
