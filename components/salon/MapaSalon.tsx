@@ -75,9 +75,17 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
 
             const mesasWithColor = (data || []).map((m: Mesa) => {
                 const pedido = activePedidos?.find(p => p.mesa_id === m.id);
+                // If there is an active order, force the state to 'ocupada'
+                // This ensures the table shows as occupied even if the DB state is out of sync
+                const actualState = pedido ? "ocupada" : m.estado;
+                
+                // Supabase might return camarero as array or object depending on relation
+                const camareroObj = Array.isArray(pedido?.camarero) ? pedido.camarero[0] : pedido?.camarero;
+                
                 return {
                     ...m,
-                    camarero_color: (pedido?.camarero as any)?.color || null
+                    estado: actualState,
+                    camarero_color: camareroObj?.color || null
                 };
             });
             setMesas(mesasWithColor);

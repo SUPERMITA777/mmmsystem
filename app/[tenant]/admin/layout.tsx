@@ -6,6 +6,7 @@ import { TenantProvider } from "@/context/TenantContext";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { AdminUIProvider } from "@/context/AdminUIContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
+import SyncProvider from "@/components/admin/SyncProvider";
 import versionData from "@/version.json";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -25,6 +26,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div className="fixed bottom-2 left-3 text-[10px] font-mono text-gray-400/60 select-none pointer-events-none z-50">
                   Ver. {versionData.version}
                 </div>
+                {/* Local-First: Indicador de sincronización offline/online */}
+                <SyncProvider />
               </div>
             </AdminUIProvider>
           </PermissionsProvider>

@@ -154,7 +154,7 @@ export default function PanelPedidosPage() {
     if (!sucursalId) return;
     let query = supabase
       .from("pedidos")
-      .select("*, pedido_items(*, productos(categorias(nombre)))")
+      .select("*, pedido_items(*, productos(categorias(nombre))), mesas(numero)")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .gte("created_at", getStartOfDayArgentina(fechaDesde))
@@ -455,6 +455,10 @@ export default function PanelPedidosPage() {
                         const isLate = elapsed > 60;
                         const isWarning = elapsed > 40 && elapsed <= 60;
                         const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
+                        const tituloCard = pedido.tipo === "salon" && (pedido as any).mesas?.numero
+                          ? `Mesa ${(pedido as any).mesas.numero}`
+                          : `N°${numCorto}`;
+
                         return (
                           <div
                             key={pedido.id}
@@ -462,7 +466,7 @@ export default function PanelPedidosPage() {
                             className={`w-full text-left rounded-2xl p-4 border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
                           >
                             <div className="flex items-center justify-between mb-3">
-                              <span className="text-[11px] font-black text-gray-900">N°{numCorto} {tipoLabel(pedido.tipo)} <span className="text-[10px] font-bold text-green-600 ml-1">POS</span></span>
+                              <span className="text-[11px] font-black text-gray-900">{tituloCard} {tipoLabel(pedido.tipo)} <span className="text-[10px] font-bold text-green-600 ml-1">POS</span></span>
                               <span className="text-[10px] text-gray-400 font-bold">{elapsed} mins | {pedido.metodo_pago_nombre || "Efectivo"} | {pedido.cliente_nombre?.toLowerCase()}</span>
                             </div>
 
@@ -508,7 +512,10 @@ export default function PanelPedidosPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <h3 className="text-xl font-bold text-gray-900">
-                  {tipoLabel(selectedPedido.tipo)} N°{selectedPedido.numero_pedido?.split("-").pop() ?? selectedPedido.numero_pedido}
+                  {selectedPedido.tipo === "salon" && (selectedPedido as any).mesas?.numero
+                    ? `Mesa ${(selectedPedido as any).mesas.numero}`
+                    : `${tipoLabel(selectedPedido.tipo)} N°${selectedPedido.numero_pedido?.split("-").pop() ?? selectedPedido.numero_pedido}`
+                  }
                 </h3>
                 <span className="bg-green-100 text-green-700 text-[10px] font-black px-2.5 py-1 rounded-md uppercase">POS</span>
               </div>

@@ -6,6 +6,7 @@ import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle,
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
+import { guardarPedidoLocal, generateLocalId } from "@/lib/db";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -59,6 +60,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     // Order metadata
     const [tipo, setTipo] = useState<"delivery" | "takeaway" | "salon">("delivery");
     const [metodoPagoId, setMetodoPagoId] = useState("");
+    
+    // Mixed payments state
+    const [isMixto, setIsMixto] = useState(false);
+    const [metodoPago2Id, setMetodoPago2Id] = useState("");
+    const [montoMixto1, setMontoMixto1] = useState("");
+
     const [omitirCliente, setOmitirCliente] = useState(false);
     const [cliente, setCliente] = useState({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
     const [notaPedido, setNotaPedido] = useState("");
@@ -123,6 +130,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setCubiertoCobrado(editPedido.cubierto_cobrado || false);
                 // Preserve original payment method
                 if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
+                setIsMixto(false);
+                setMetodoPago2Id("");
+                setMontoMixto1("");
                 // Restore delivery validation if previously verified
                 if (editPedido.tipo === "delivery") {
                     setValidacionDelivery({
@@ -578,7 +588,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         let pedidoFinalId: string | null = null;
         try {
             const mPago = metodosPago.find(m => m.id === metodoPagoId);
-            const metodoPagoNombre = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
+            const mPagoNombre1 = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
+            let metodoPagoNombre = mPagoNombre1;
+
+            let notasPagoMixto = "";
+            if (isMixto && metodoPago2Id && montoMixto1) {
+                const mPago2 = metodosPago.find(m => m.id === metodoPago2Id);
+                const mPagoNombre2 = mPago2 ? mPago2.nombre : "Transferencia";
+                metodoPagoNombre = `Mixto (${mPagoNombre1} / ${mPagoNombre2})`;
+                notasPagoMixto = `Pago mixto: $${montoMixto1} en ${mPagoNombre1}, resto en ${mPagoNombre2}. `;
+            }
 
             let resolvedClienteId = null;
             if (!omitirCliente && cliente.telefono) {
@@ -631,7 +650,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
                     metodo_pago_id: metodoPagoId || null,
                     metodo_pago_nombre: metodoPagoNombre,
-                    notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
+                    notas: notasPagoMixto + (notaPedido || (seAbona ? `Abona con: $${seAbona}` : "")),
                     cliente_lng: direccionGeocoded?.lng,
                     mesa_id: tipo === "salon" ? (mesaId || null) : null,
                     camarero_id: tipo === "salon" ? (camareroId || null) : null,
@@ -656,78 +675,43 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (iError2) throw iError2;
                 pedidoFinalId = editPedido.id;
             } else {
-                // CREATE new order - daily sequential numbering with RETRY loop
-                let attempts = 0;
-                let createdPedido: any = null;
-                const maxAttempts = 10;
+                // ═══ LOCAL-FIRST: Construir payloads y guardar en Dexie primero ═══
+                const localId = generateLocalId();
+                const now = new Date();
+                const formatter = new Intl.DateTimeFormat('en-CA', { 
+                    timeZone: 'America/Argentina/Buenos_Aires', 
+                    year: 'numeric', month: '2-digit', day: '2-digit' 
+                });
+                const todayStr = formatter.format(now);
+                const datePart = todayStr.replace(/-/g, '');
+                const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
+                // Número provisional offline (se reemplazará en sync si hay colisión)
+                const numeroPedidoLocal = `${tipoPrefix}-${datePart}-LOCAL-${localId.slice(0, 6).toUpperCase()}`;
 
-                while (attempts < maxAttempts && !createdPedido) {
-                    attempts++;
+                const pedidoPayload: Record<string, any> = {
+                    sucursal_id: sucursalId,
+                    numero_pedido: numeroPedidoLocal,
+                    cliente_id: resolvedClienteId || null,
+                    cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
+                    cliente_telefono: cliente.telefono,
+                    cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
+                    tipo, subtotal, costo_envio: costoEnvio, total,
+                    descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
+                    notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
+                    metodo_pago_id: metodoPagoId || null,
+                    metodo_pago_nombre: metodoPagoNombre,
+                    estado: "pendiente",
+                    notas: notasPagoMixto + (notaPedido || (seAbona ? `Abona con: $${seAbona}` : "")),
+                    cliente_lng: direccionGeocoded?.lng,
+                    mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                    camarero_id: tipo === "salon" ? (camareroId || null) : null,
+                    camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
+                    comensales: tipo === "salon" ? comensales : null,
+                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
+                };
 
-                    // Si es un reintento, esperamos un poco
-                    if (attempts > 1) {
-                        await new Promise(r => setTimeout(r, 300 * (attempts - 1)));
-                    }
-
-                    const now = new Date();
-                    const formatter = new Intl.DateTimeFormat('en-CA', { 
-                        timeZone: 'America/Argentina/Buenos_Aires', 
-                        year: 'numeric', month: '2-digit', day: '2-digit' 
-                    });
-                    const todayStr = formatter.format(now);
-                    const datePart = todayStr.replace(/-/g, '');
-                    const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
-
-                    // LLamar al RPC para obtener el siguiente número (Atómico y numérico)
-                    const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', {
-                        p_sucursal_id: sucursalId,
-                        p_date_part: datePart
-                    });
-
-                    if (rpcError) {
-                        console.error("[NuevoPedidoModal] Error calling get_next_order_number:", rpcError);
-                        throw rpcError;
-                    }
-
-                    const paddedSeq = String(nextSeq).padStart(4, '0');
-                    const numeroPedido = `${tipoPrefix}-${datePart}-${paddedSeq}`;
-
-                    const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                        sucursal_id: sucursalId,
-                        numero_pedido: numeroPedido,
-                        cliente_id: resolvedClienteId || null,
-                        cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
-                        cliente_telefono: cliente.telefono,
-                        cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
-                        tipo, subtotal, costo_envio: costoEnvio, total,
-                        descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
-                        notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
-                        metodo_pago_id: metodoPagoId || null,
-                        metodo_pago_nombre: metodoPagoNombre,
-                        estado: "pendiente",
-                        notas: notaPedido || (seAbona ? `Abona con: $${seAbona}` : ""),
-                        cliente_lng: direccionGeocoded?.lng,
-                        mesa_id: tipo === "salon" ? (mesaId || null) : null,
-                        camarero_id: tipo === "salon" ? (camareroId || null) : null,
-                        camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
-                        comensales: tipo === "salon" ? comensales : null,
-                        cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
-                    }).select().single();
-
-                    if (pError) {
-                        if (pError.code === '23505') {
-                            console.warn(`[NuevoPedidoModal] Colisión detectada para ${numeroPedido} en intento ${attempts}, reintentando...`);
-                            continue;
-                        }
-                        throw pError;
-                    }
-                    createdPedido = pedido;
-                }
-
-                if (!createdPedido) throw new Error("No se pudo generar un número de pedido único tras varios intentos.");
-
-                const items = carrito.map(item => ({
-                    pedido_id: createdPedido.id,
+                const itemsPayload = carrito.map(item => ({
+                    id: generateLocalId(),
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
@@ -735,9 +719,79 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     notas: item.nota || "",
                     adicionales: item.adicionales || []
                 }));
-                const { error: iError3 } = await supabase.from("pedido_items").insert(items);
-                if (iError3) throw iError3;
-                pedidoFinalId = createdPedido.id;
+
+                // 1️⃣ GUARDAR EN DEXIE (siempre funciona, incluso sin red)
+                await guardarPedidoLocal({
+                    mesa: tipo === "salon" ? (mesaId || null) : null,
+                    items: itemsPayload,
+                    total,
+                    estado: "pendiente",
+                    sucursal_id: sucursalId!,
+                    payload_pedido: pedidoPayload,
+                    payload_items: itemsPayload,
+                });
+
+                pedidoFinalId = localId;
+
+                // 2️⃣ INTENTAR SUBIR A SUPABASE (si hay red)
+                if (navigator.onLine) {
+                    try {
+                        // Intentar obtener número secuencial real desde el servidor
+                        let createdPedido: any = null;
+                        let attempts = 0;
+                        const maxAttempts = 10;
+
+                        while (attempts < maxAttempts && !createdPedido) {
+                            attempts++;
+                            if (attempts > 1) await new Promise(r => setTimeout(r, 300 * (attempts - 1)));
+
+                            const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', {
+                                p_sucursal_id: sucursalId,
+                                p_date_part: datePart
+                            });
+                            if (rpcError) throw rpcError;
+
+                            const paddedSeq = String(nextSeq).padStart(4, '0');
+                            const numeroPedido = `${tipoPrefix}-${datePart}-${paddedSeq}`;
+
+                            const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
+                                ...pedidoPayload,
+                                id: localId,
+                                numero_pedido: numeroPedido,
+                            }).select().single();
+
+                            if (pError) {
+                                if (pError.code === '23505') {
+                                    console.warn(`[NuevoPedidoModal] Colisión para ${numeroPedido}, reintentando...`);
+                                    continue;
+                                }
+                                throw pError;
+                            }
+                            createdPedido = pedido;
+                        }
+
+                        if (!createdPedido) throw new Error("No se pudo generar número de pedido único.");
+
+                        const items = itemsPayload.map(item => ({ ...item, pedido_id: createdPedido.id }));
+                        const { error: iError3 } = await supabase.from("pedido_items").insert(items);
+                        if (iError3) throw iError3;
+
+                        // Marcar como sincronizado en Dexie
+                        const { marcarSincronizado } = await import("@/lib/db");
+                        // El guardarPedidoLocal genera su propio ID, buscar y marcar
+                        const { db: localDb } = await import("@/lib/db");
+                        const pendientes = await localDb.pedidos.where("sincronizado").equals(0).toArray();
+                        const match = pendientes.find(p => p.payload_pedido?.numero_pedido === numeroPedidoLocal);
+                        if (match) await marcarSincronizado(match.id);
+
+                        pedidoFinalId = createdPedido.id;
+                    } catch (syncErr: any) {
+                        // ⚡ La red falló PERO el pedido ya está seguro en Dexie
+                        console.warn("[Local-First] Pedido guardado localmente, sync fallido:", syncErr.message);
+                    }
+                } else {
+                    console.log("[Local-First] Sin red — pedido guardado localmente, se sincronizará después.");
+                }
             }
 
             onCreated();
@@ -745,11 +799,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
             // Marcar código promo como usado
             if (promoResult?.valid && promoResult?.codigo?.id && pedidoFinalId) {
-                await supabase.from("promo_qr_codigos").update({
-                    usado: true,
-                    fecha_uso: new Date().toISOString(),
-                    pedido_canje_id: pedidoFinalId,
-                }).eq("id", promoResult.codigo.id);
+                try {
+                    await supabase.from("promo_qr_codigos").update({
+                        usado: true,
+                        fecha_uso: new Date().toISOString(),
+                        pedido_canje_id: pedidoFinalId,
+                    }).eq("id", promoResult.codigo.id);
+                } catch { /* Se sincronizará después */ }
             }
         } catch (e: any) {
             console.error(e);
@@ -1163,13 +1219,60 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     {metodosPago.map(m => (
                                         <button
                                             key={m.id}
-                                            onClick={() => setMetodoPagoId(m.id)}
-                                            className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${metodoPagoId === m.id ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
+                                            onClick={() => { setMetodoPagoId(m.id); setIsMixto(false); }}
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${metodoPagoId === m.id && !isMixto ? "bg-gray-900 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-100"}`}
                                         >
                                             {m.nombre}
                                         </button>
                                     ))}
+                                    <button
+                                        onClick={() => setIsMixto(true)}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${isMixto ? "bg-purple-600 text-white" : "bg-white border border-purple-200 text-purple-600 hover:bg-purple-50"}`}
+                                    >
+                                        Mixto
+                                    </button>
                                 </div>
+
+                                {isMixto && (
+                                    <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-100 space-y-3">
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block mb-1">Pago 1</label>
+                                                <select
+                                                    value={metodoPagoId}
+                                                    onChange={e => setMetodoPagoId(e.target.value)}
+                                                    className="w-full border border-purple-200 rounded-md px-2 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+                                                >
+                                                    <option value="">Seleccionar...</option>
+                                                    {metodosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block mb-1">Monto Pago 1</label>
+                                                <input
+                                                    type="number"
+                                                    value={montoMixto1}
+                                                    onChange={e => setMontoMixto1(e.target.value)}
+                                                    placeholder="Ej: 5000"
+                                                    className="w-full border border-purple-200 rounded-md px-2 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] font-bold text-purple-600 uppercase tracking-wider block mb-1">Pago 2 (Resto)</label>
+                                                <select
+                                                    value={metodoPago2Id}
+                                                    onChange={e => setMetodoPago2Id(e.target.value)}
+                                                    className="w-full border border-purple-200 rounded-md px-2 py-1.5 text-xs outline-none focus:border-purple-500 bg-white"
+                                                >
+                                                    <option value="">Seleccionar...</option>
+                                                    {metodosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
