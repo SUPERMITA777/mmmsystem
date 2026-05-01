@@ -1,22 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
-import { Printer, RefreshCw, Search, CheckCircle2, AlertCircle, Play, ChevronDown, Info } from "lucide-react";
-
-const FIXED_PRINTERS = [
-    { id: "COCINA1", name: "COCINA 1" },
-    { id: "COCINA2", name: "COCINA 2" },
-    { id: "ENTRADA", name: "ENTRADA" },
-    { id: "BARRA", name: "BARRA" },
-    { id: "FACTURACION", name: "FACTURACIÓN" },
-"use client";
-
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { useTenant } from "@/context/TenantContext";
-import { Printer, RefreshCw, Search, CheckCircle2, AlertCircle, Play, ChevronDown, Info } from "lucide-react";
+import { Printer, RefreshCw, Play, ChevronDown, Info, CheckCircle2, XCircle, Download, Wifi, WifiOff } from "lucide-react";
 
 const FIXED_PRINTERS = [
     { id: "COCINA1", name: "COCINA 1" },
@@ -26,21 +13,58 @@ const FIXED_PRINTERS = [
     { id: "FACTURACION", name: "FACTURACIÓN" },
 ];
 
-const COMMON_BRIDGE_PORTS = [3000, 3001, 8080, 8000];
+/* Puertos donde buscar el bridge (9100 es el estándar para impresoras) */
+const BRIDGE_PORTS = [9100, 9101];
 
 export function ImpresorasTab() {
     const [config, setConfig] = useState<Record<string, { enabled: boolean; ip: string; printerName: string }>>({});
     const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
     const [bridgeStatus, setBridgeStatus] = useState<"connected" | "disconnected" | "checking">("checking");
-    const [scanning, setScanning] = useState(false);
+    const [bridgePort, setBridgePort] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testingId, setTestingId] = useState<string | null>(null);
+    const [testResult, setTestResult] = useState<Record<string, "ok" | "error" | null>>({});
     const { sucursalId } = useTenant();
+
+    /* ── Detectar el puente ── */
+    const checkBridge = useCallback(async () => {
+        setBridgeStatus("checking");
+        for (const port of BRIDGE_PORTS) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 1500);
+                const res = await fetch(`http://localhost:${port}/status`, { signal: controller.signal });
+                clearTimeout(timeout);
+                if (res.ok) {
+                    setBridgeStatus("connected");
+                    setBridgePort(port);
+                    // Cargar impresoras del sistema automáticamente
+                    try {
+                        const pRes = await fetch(`http://localhost:${port}/printers`);
+                        if (pRes.ok) {
+                            const printers = await pRes.json();
+                            if (Array.isArray(printers)) setAvailablePrinters(printers);
+                        }
+                    } catch {}
+                    return;
+                }
+            } catch {}
+        }
+        setBridgeStatus("disconnected");
+        setBridgePort(null);
+    }, []);
 
     useEffect(() => {
         if (sucursalId) loadConfig();
     }, [sucursalId]);
+
+    useEffect(() => {
+        checkBridge();
+        // Re-check every 10 seconds
+        const interval = setInterval(checkBridge, 10000);
+        return () => clearInterval(interval);
+    }, [checkBridge]);
 
     async function loadConfig() {
         if (!sucursalId) return;
@@ -53,7 +77,6 @@ export function ImpresorasTab() {
 
             const dbConfig = data?.panel_settings?.impresoras || {};
             
-            // Initialize with defaults for all fixed printers
             const initialConfig: Record<string, { enabled: boolean; ip: string; printerName: string }> = {};
             FIXED_PRINTERS.forEach(p => {
                 initialConfig[p.id] = {
@@ -63,9 +86,6 @@ export function ImpresorasTab() {
                 };
             });
             setConfig(initialConfig);
-            
-            // Try to auto-scan on load
-            scanPrinters();
         } catch (error) {
             console.error("Error cargando configuración de impresoras:", error);
         } finally {
@@ -73,87 +93,37 @@ export function ImpresorasTab() {
         }
     }
 
-    async function scanPrinters() {
-        setScanning(true);
-        setBridgeStatus("checking");
-        try {
-            // 1. Check Experimental Web Printing API
-            if ('printing' in navigator) {
-                try {
-                    const printers = await (navigator as any).printing.getPrinters();
-                    if (printers && printers.length > 0) {
-                        setAvailablePrinters(printers.map((p: any) => p.name));
-                        setBridgeStatus("connected");
-                        setScanning(false);
-                        return;
-                    }
-                } catch (e) {}
-            }
-
-            // 2. Check Local Bridge
-            let foundBridge = false;
-            for (const port of COMMON_BRIDGE_PORTS) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 800);
-                    const res = await fetch(`http://localhost:${port}/printers`, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (Array.isArray(data)) {
-                            setAvailablePrinters(data);
-                            setBridgeStatus("connected");
-                            foundBridge = true;
-                            break;
-                        }
-                    }
-                } catch (e) {}
-            }
-            if (!foundBridge) setBridgeStatus("disconnected");
-        } catch (error) {
-            console.error("Error escaneando impresoras:", error);
-            setBridgeStatus("disconnected");
-        } finally {
-            setScanning(false);
-        }
-    }
-
     async function handleTest(printerId: string) {
-        setTestingId(printerId);
+        if (!bridgePort) {
+            alert("El Puente de Impresión no está activo. Ejecutá iniciar-impresoras.bat primero.");
+            return;
+        }
         const printer = config[printerId];
-        if (!printer || !printer.enabled) {
-            setTestingId(null);
+        if (!printer?.printerName) {
+            alert("Seleccioná una impresora primero.");
             return;
         }
 
+        setTestingId(printerId);
+        setTestResult(prev => ({ ...prev, [printerId]: null }));
+
         try {
-            // Try to send a test print through the bridge or browser
-            if (printer.printerName) {
-                // If we have a bridge, send test command
-                let sent = false;
-                for (const port of COMMON_BRIDGE_PORTS) {
-                    try {
-                        const res = await fetch(`http://localhost:${port}/print-test`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ printerName: printer.printerName })
-                        });
-                        if (res.ok) { sent = true; break; }
-                    } catch (e) {}
-                }
-                if (sent) {
-                    alert(`Prueba enviada a: ${printer.printerName}`);
-                } else {
-                    // Fallback to window.print mock logic or simple alert
-                    alert(`Probando impresora "${printer.printerName}"... (Asegurate de que el puente esté activo)`);
-                }
-            } else if (printer.ip) {
-                alert(`Probando conectividad con IP ${printer.ip}...`);
+            const res = await fetch(`http://localhost:${bridgePort}/print-test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ printerName: printer.printerName })
+            });
+            if (res.ok) {
+                setTestResult(prev => ({ ...prev, [printerId]: "ok" }));
             } else {
-                alert("Seleccioná una impresora para probar.");
+                setTestResult(prev => ({ ...prev, [printerId]: "error" }));
             }
+        } catch {
+            setTestResult(prev => ({ ...prev, [printerId]: "error" }));
         } finally {
             setTestingId(null);
+            // Clear result after 5s
+            setTimeout(() => setTestResult(prev => ({ ...prev, [printerId]: null })), 5000);
         }
     }
 
@@ -178,7 +148,7 @@ export function ImpresorasTab() {
                     .eq("id", currentCfg.id);
             }
 
-            alert("Configuración de impresoras guardada");
+            alert("✅ Configuración de impresoras guardada");
         } catch (error) {
             console.error(error);
             alert("Error al guardar la configuración");
@@ -193,159 +163,205 @@ export function ImpresorasTab() {
 
     return (
         <div className="space-y-6">
-            <div className="bg-white rounded-lg border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                            <Printer size={20} />
+            {/* ── Banner de Estado del Puente ── */}
+            {bridgeStatus === "disconnected" && (
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-5">
+                    <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                            <WifiOff className="text-amber-600" size={24} />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-lg font-semibold text-gray-900">Impresoras del Sistema</h3>
-                                <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                                    bridgeStatus === "connected" ? "bg-green-100 text-green-700" : 
-                                    bridgeStatus === "checking" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                                }`}>
-                                    {bridgeStatus === "connected" ? "Puente Activo" : 
-                                     bridgeStatus === "checking" ? "Buscando..." : "Puente No Detectado"}
-                                </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-amber-900 text-lg">Puente de Impresión no detectado</h3>
+                            <p className="text-sm text-amber-700 mt-1">
+                                Para imprimir automáticamente en tus impresoras USB y de red, necesitás ejecutar el Puente de Impresión en esta PC.
+                            </p>
+                            <div className="mt-4 bg-white/80 rounded-xl p-4 border border-amber-100">
+                                <p className="font-bold text-sm text-gray-800 mb-2">Configuración rápida (1 vez):</p>
+                                <ol className="text-sm text-gray-600 space-y-2 list-decimal ml-4">
+                                    <li>Abrí la carpeta del proyecto: <code className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs font-mono">scripts/</code></li>
+                                    <li>Hacé doble clic en <code className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs font-mono">iniciar-impresoras.bat</code></li>
+                                    <li>Elegí &quot;S&quot; para que se inicie solo con Windows</li>
+                                    <li>¡Listo! Esta página se actualizará automáticamente.</li>
+                                </ol>
                             </div>
-                            <p className="text-sm text-gray-500">Configurá las impresoras disponibles para enviar comandas y tickets.</p>
+                            <div className="mt-3 flex gap-2">
+                                <button 
+                                    onClick={checkBridge}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                                >
+                                    <RefreshCw size={14} />
+                                    Reintentar conexión
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <button 
-                        onClick={scanPrinters}
-                        disabled={scanning}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
-                    >
-                        <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
-                        {scanning ? "Escaneando..." : "Escanear Impresoras"}
-                    </button>
+                </div>
+            )}
+
+            {bridgeStatus === "connected" && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                        <Wifi className="text-green-600" size={20} />
+                    </div>
+                    <div className="flex-1">
+                        <p className="font-bold text-green-800">Puente de Impresión activo</p>
+                        <p className="text-sm text-green-600">{availablePrinters.length} impresora{availablePrinters.length !== 1 ? 's' : ''} detectada{availablePrinters.length !== 1 ? 's' : ''} en el sistema</p>
+                    </div>
+                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                </div>
+            )}
+
+            {bridgeStatus === "checking" && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center gap-3">
+                    <RefreshCw className="text-slate-400 animate-spin" size={20} />
+                    <p className="text-sm text-slate-500">Buscando Puente de Impresión...</p>
+                </div>
+            )}
+
+            {/* ── Configuración de Impresoras ── */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
+                        <Printer size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Asignar Impresoras</h3>
+                        <p className="text-sm text-gray-500">
+                            {bridgeStatus === "connected" 
+                                ? "Seleccioná qué impresora física usa cada estación."
+                                : "Escribí el nombre de cada impresora tal como aparece en Windows."
+                            }
+                        </p>
+                    </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                     {FIXED_PRINTERS.map(printer => (
-                        <div key={printer.id} className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-purple-200 transition-colors bg-slate-50/50">
-                            <div className="flex items-center gap-4">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        className="sr-only peer"
-                                        checked={config[printer.id]?.enabled ?? true}
-                                        onChange={(e) => setConfig({
-                                            ...config,
-                                            [printer.id]: { ...config[printer.id], enabled: e.target.checked }
-                                        })}
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                                </label>
-                                <div>
-                                    <h4 className="font-bold text-gray-900">{printer.name}</h4>
-                                    <p className="text-xs text-gray-500">
-                                        ID interno: {printer.id}
-                                    </p>
-                                </div>
+                        <div key={printer.id} className={`flex items-center gap-4 p-4 border rounded-xl transition-all ${
+                            config[printer.id]?.enabled 
+                                ? "border-slate-200 bg-white hover:border-purple-200" 
+                                : "border-slate-100 bg-slate-50 opacity-60"
+                        }`}>
+                            {/* Toggle */}
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer"
+                                    checked={config[printer.id]?.enabled ?? true}
+                                    onChange={(e) => setConfig({
+                                        ...config,
+                                        [printer.id]: { ...config[printer.id], enabled: e.target.checked }
+                                    })}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                            </label>
+
+                            {/* Name */}
+                            <div className="w-28 shrink-0">
+                                <h4 className="font-bold text-gray-900 text-sm">{printer.name}</h4>
+                                <p className="text-[10px] text-gray-400">{printer.id}</p>
                             </div>
-                            <div className="flex items-center gap-4 flex-1">
-                                <div className="flex-1">
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Impresora del Sistema</label>
-                                    <div className="relative mt-1">
-                                        <div className="flex gap-2">
-                                            <div className="relative flex-1">
-                                                <select
-                                                    value={availablePrinters.includes(config[printer.id]?.printerName || "") ? config[printer.id]?.printerName : "manual"}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val !== "manual") {
-                                                            setConfig({
-                                                                ...config,
-                                                                [printer.id]: { ...config[printer.id], printerName: val }
-                                                            });
-                                                        }
-                                                    }}
-                                                    className="w-full pl-3 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none appearance-none"
-                                                >
-                                                    <option value="">Seleccionar...</option>
-                                                    {availablePrinters.map(p => (
-                                                        <option key={p} value={p}>{p}</option>
-                                                    ))}
-                                                    <option value="manual">✎ Ingresar manualmente...</option>
-                                                </select>
-                                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                                                    <ChevronDown size={14} />
-                                                </div>
-                                            </div>
-                                            
-                                            {(availablePrinters.length === 0 || !availablePrinters.includes(config[printer.id]?.printerName || "") || config[printer.id]?.printerName === "") && (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre de Windows/Mac"
-                                                    value={config[printer.id]?.printerName || ""}
-                                                    onChange={(e) => setConfig({
-                                                        ...config,
-                                                        [printer.id]: { ...config[printer.id], printerName: e.target.value }
-                                                    })}
-                                                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                                />
-                                            )}
+
+                            {/* Printer selector */}
+                            <div className="flex-1">
+                                {bridgeStatus === "connected" && availablePrinters.length > 0 ? (
+                                    <div className="relative">
+                                        <select
+                                            value={config[printer.id]?.printerName || ""}
+                                            onChange={(e) => setConfig({
+                                                ...config,
+                                                [printer.id]: { ...config[printer.id], printerName: e.target.value }
+                                            })}
+                                            disabled={!config[printer.id]?.enabled}
+                                            className="w-full pl-3 pr-10 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none appearance-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                        >
+                                            <option value="">— Seleccionar impresora —</option>
+                                            {availablePrinters.map(p => (
+                                                <option key={p} value={p}>{p}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                                            <ChevronDown size={14} />
                                         </div>
                                     </div>
-                                </div>
-                                <div className="w-48">
-                                    <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">IP de red (Opcional)</label>
+                                ) : (
                                     <input
                                         type="text"
-                                        placeholder="Ej: 192.168.1.100"
-                                        value={config[printer.id]?.ip || ""}
+                                        placeholder="Nombre exacto de la impresora en Windows"
+                                        value={config[printer.id]?.printerName || ""}
                                         onChange={(e) => setConfig({
                                             ...config,
-                                            [printer.id]: { ...config[printer.id], ip: e.target.value }
+                                            [printer.id]: { ...config[printer.id], printerName: e.target.value }
                                         })}
-                                        className="w-full mt-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                        disabled={!config[printer.id]?.enabled}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                                     />
-                                </div>
-                                <div className="pt-5">
-                                    <button
-                                        onClick={() => handleTest(printer.id)}
-                                        disabled={testingId === printer.id || !config[printer.id]?.enabled}
-                                        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-200 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
-                                        title="Probar impresora"
-                                    >
-                                        {testingId === printer.id ? (
-                                            <RefreshCw size={16} className="animate-spin text-purple-600" />
-                                        ) : (
-                                            <Play size={16} className="group-hover:scale-110 transition-transform" />
-                                        )}
-                                    </button>
-                                </div>
+                                )}
                             </div>
+
+                            {/* IP (optional) */}
+                            <div className="w-40 shrink-0">
+                                <input
+                                    type="text"
+                                    placeholder="IP (opcional)"
+                                    value={config[printer.id]?.ip || ""}
+                                    onChange={(e) => setConfig({
+                                        ...config,
+                                        [printer.id]: { ...config[printer.id], ip: e.target.value }
+                                    })}
+                                    disabled={!config[printer.id]?.enabled}
+                                    className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                />
+                            </div>
+
+                            {/* Test button */}
+                            <button
+                                onClick={() => handleTest(printer.id)}
+                                disabled={testingId === printer.id || !config[printer.id]?.enabled || !config[printer.id]?.printerName}
+                                className={`p-2.5 rounded-lg transition-all shrink-0 ${
+                                    testResult[printer.id] === "ok" 
+                                        ? "bg-green-100 text-green-600 border border-green-200" 
+                                        : testResult[printer.id] === "error"
+                                            ? "bg-red-100 text-red-600 border border-red-200"
+                                            : "bg-white border border-slate-200 text-slate-500 hover:text-purple-600 hover:border-purple-200"
+                                } disabled:opacity-30 disabled:cursor-not-allowed`}
+                                title="Enviar ticket de prueba"
+                            >
+                                {testingId === printer.id ? (
+                                    <RefreshCw size={16} className="animate-spin" />
+                                ) : testResult[printer.id] === "ok" ? (
+                                    <CheckCircle2 size={16} />
+                                ) : testResult[printer.id] === "error" ? (
+                                    <XCircle size={16} />
+                                ) : (
+                                    <Play size={16} />
+                                )}
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
 
+            {/* ── Save Button ── */}
             <div className="flex justify-end gap-3">
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm"
+                    className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-purple-200"
                 >
-                    {saving ? "Guardando..." : "Guardar Configuración"}
+                    {saving ? "Guardando..." : "💾 Guardar Configuración"}
                 </button>
             </div>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
-                <Info className="text-blue-500 shrink-0" size={20} />
-                <div className="text-sm text-blue-800 space-y-2">
-                    <p className="font-bold">¿Cómo activar la impresión automática?</p>
-                    <ul className="list-decimal ml-4 space-y-1">
-                        <li>He creado un archivo en tu proyecto: <code className="bg-blue-100 px-1 rounded text-[12px]">scripts/printer-bridge.js</code></li>
-                        <li>Abrí una terminal en la carpeta del proyecto y ejecutá: <code className="bg-blue-100 px-1 rounded text-[12px]">node scripts/printer-bridge.js</code></li>
-                        <li>Una vez que el terminal diga <b>"Puente de Impresión MMM ejecutándose"</b>, refrescá esta página y el estado pasará a <b>"Puente Activo"</b>.</li>
-                        <li>A partir de ahí, las impresoras USB y de red aparecerán en el desplegable y el ticket saldrá automáticamente.</li>
-                    </ul>
+            {/* ── Info: Sin puente ── */}
+            {bridgeStatus !== "connected" && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex gap-3">
+                    <Info className="text-slate-400 shrink-0 mt-0.5" size={18} />
+                    <div className="text-sm text-slate-600">
+                        <p><strong>Sin el puente</strong>, los tickets se enviarán a la ventana de impresión de Chrome donde podrás seleccionar la impresora manualmente. El sistema funciona igual, pero requiere un clic extra por cada ticket.</p>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

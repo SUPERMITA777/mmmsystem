@@ -41,7 +41,7 @@ const DEFAULT_CONFIG: PrintConfig = {
   impresoras: {},
 };
 
-const COMMON_BRIDGE_PORTS = [3000, 3001, 8080, 8000];
+const BRIDGE_PORTS = [9100, 9101];
 
 function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
@@ -51,10 +51,10 @@ async function doPrint(html: string, printerName?: string) {
   // 1. Try to send to Bridge if printerName is provided
   if (printerName) {
     let sent = false;
-    for (const port of COMMON_BRIDGE_PORTS) {
+    for (const port of BRIDGE_PORTS) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1000);
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
         const res = await fetch(`http://localhost:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
