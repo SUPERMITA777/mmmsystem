@@ -18,6 +18,7 @@ export type PrintConfig = {
   mostrar_fecha_hora: boolean;
   color_accents: string;
   boldMap?: Record<string, boolean>;
+  impresoras?: Record<string, { enabled: boolean; ip: string; printerName: string }>;
   promoQrUrl?: string; // URL para el código QR de la promo
 };
 
@@ -37,13 +38,40 @@ const DEFAULT_CONFIG: PrintConfig = {
   mostrar_fecha_hora: true,
   color_accents: '#2563eb',
   boldMap: {},
+  impresoras: {},
 };
+
+const COMMON_BRIDGE_PORTS = [3000, 3001, 8080, 8000];
 
 function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
 }
 
-function doPrint(html: string) {
+async function doPrint(html: string, printerName?: string) {
+  // 1. Try to send to Bridge if printerName is provided
+  if (printerName) {
+    let sent = false;
+    for (const port of COMMON_BRIDGE_PORTS) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000);
+        const res = await fetch(`http://localhost:${port}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html, printerName }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          sent = true;
+          break;
+        }
+      } catch (e) {}
+    }
+    if (sent) return; // Silent print success
+  }
+
+  // 2. Fallback to Browser Print
   // Para evitar abrir nuevas pestañas, usamos un iframe oculto
   let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
   if (!iframe) {
@@ -258,7 +286,8 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  doPrint(html);
+  const printerName = c.impresoras?.["FACTURACION"]?.printerName;
+  doPrint(html, printerName);
 }
 
 /* ──────────────────────────────────────────────────────
@@ -354,7 +383,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-  doPrint(html);
+  const printerName = c.impresoras?.["COCINA1"]?.printerName;
+  doPrint(html, printerName);
 }
 
 /* ──────────────────────────────────────────────────────
@@ -449,7 +479,8 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  doPrint(html);
+  const printerName = c.impresoras?.["FACTURACION"]?.printerName;
+  doPrint(html, printerName);
 }
 
 /* Alias legacy */

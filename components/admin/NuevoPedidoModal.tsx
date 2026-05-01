@@ -600,8 +600,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
             const boldMap = suc?.panel_settings?.print_bold || {};
             const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
-            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales });
-            else setPrintConfig({ boldMap, fuente_adicionales });
+            const impresoras = suc?.panel_settings?.impresoras || {};
+            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras });
+            else setPrintConfig({ boldMap, fuente_adicionales, impresoras });
         } catch {}
     }
 
