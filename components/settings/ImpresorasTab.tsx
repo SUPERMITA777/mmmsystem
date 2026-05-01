@@ -11,6 +11,19 @@ const FIXED_PRINTERS = [
     { id: "ENTRADA", name: "ENTRADA" },
     { id: "BARRA", name: "BARRA" },
     { id: "FACTURACION", name: "FACTURACIÓN" },
+"use client";
+
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useTenant } from "@/context/TenantContext";
+import { Printer, RefreshCw, Search, CheckCircle2, AlertCircle, Play, ChevronDown, Info } from "lucide-react";
+
+const FIXED_PRINTERS = [
+    { id: "COCINA1", name: "COCINA 1" },
+    { id: "COCINA2", name: "COCINA 2" },
+    { id: "ENTRADA", name: "ENTRADA" },
+    { id: "BARRA", name: "BARRA" },
+    { id: "FACTURACION", name: "FACTURACIÓN" },
 ];
 
 const COMMON_BRIDGE_PORTS = [3000, 3001, 8080, 8000];
@@ -18,6 +31,7 @@ const COMMON_BRIDGE_PORTS = [3000, 3001, 8080, 8000];
 export function ImpresorasTab() {
     const [config, setConfig] = useState<Record<string, { enabled: boolean; ip: string; printerName: string }>>({});
     const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+    const [bridgeStatus, setBridgeStatus] = useState<"connected" | "disconnected" | "checking">("checking");
     const [scanning, setScanning] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -61,6 +75,7 @@ export function ImpresorasTab() {
 
     async function scanPrinters() {
         setScanning(true);
+        setBridgeStatus("checking");
         try {
             // 1. Check Experimental Web Printing API
             if ('printing' in navigator) {
@@ -68,6 +83,7 @@ export function ImpresorasTab() {
                     const printers = await (navigator as any).printing.getPrinters();
                     if (printers && printers.length > 0) {
                         setAvailablePrinters(printers.map((p: any) => p.name));
+                        setBridgeStatus("connected");
                         setScanning(false);
                         return;
                     }
@@ -75,6 +91,7 @@ export function ImpresorasTab() {
             }
 
             // 2. Check Local Bridge
+            let foundBridge = false;
             for (const port of COMMON_BRIDGE_PORTS) {
                 try {
                     const controller = new AbortController();
@@ -85,14 +102,17 @@ export function ImpresorasTab() {
                         const data = await res.json();
                         if (Array.isArray(data)) {
                             setAvailablePrinters(data);
-                            setScanning(false);
-                            return;
+                            setBridgeStatus("connected");
+                            foundBridge = true;
+                            break;
                         }
                     }
                 } catch (e) {}
             }
+            if (!foundBridge) setBridgeStatus("disconnected");
         } catch (error) {
             console.error("Error escaneando impresoras:", error);
+            setBridgeStatus("disconnected");
         } finally {
             setScanning(false);
         }
@@ -180,7 +200,16 @@ export function ImpresorasTab() {
                             <Printer size={20} />
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900">Impresoras del Sistema</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-semibold text-gray-900">Impresoras del Sistema</h3>
+                                <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                    bridgeStatus === "connected" ? "bg-green-100 text-green-700" : 
+                                    bridgeStatus === "checking" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                                }`}>
+                                    {bridgeStatus === "connected" ? "Puente Activo" : 
+                                     bridgeStatus === "checking" ? "Buscando..." : "Puente No Detectado"}
+                                </div>
+                            </div>
                             <p className="text-sm text-gray-500">Configurá las impresoras disponibles para enviar comandas y tickets.</p>
                         </div>
                     </div>
@@ -308,11 +337,12 @@ export function ImpresorasTab() {
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
                 <Info className="text-blue-500 shrink-0" size={20} />
                 <div className="text-sm text-blue-800 space-y-2">
-                    <p className="font-bold">¿No aparecen tus impresoras?</p>
-                    <ul className="list-disc ml-4 space-y-1">
-                        <li>Asegurate de tener el <b>Puente de Impresión MMM</b> instalado y ejecutándose en esta PC.</li>
-                        <li>Si usas Google Chrome, podés habilitar la detección nativa en: <code className="bg-blue-100 px-1 rounded text-[12px]">chrome://flags/#enable-web-printing</code></li>
-                        <li>También podés escribir el nombre exacto de la impresora (como figura en Windows) manualmente.</li>
+                    <p className="font-bold">¿Cómo activar la impresión automática?</p>
+                    <ul className="list-decimal ml-4 space-y-1">
+                        <li>He creado un archivo en tu proyecto: <code className="bg-blue-100 px-1 rounded text-[12px]">scripts/printer-bridge.js</code></li>
+                        <li>Abrí una terminal en la carpeta del proyecto y ejecutá: <code className="bg-blue-100 px-1 rounded text-[12px]">node scripts/printer-bridge.js</code></li>
+                        <li>Una vez que el terminal diga <b>"Puente de Impresión MMM ejecutándose"</b>, refrescá esta página y el estado pasará a <b>"Puente Activo"</b>.</li>
+                        <li>A partir de ahí, las impresoras USB y de red aparecerán en el desplegable y el ticket saldrá automáticamente.</li>
                     </ul>
                 </div>
             </div>
