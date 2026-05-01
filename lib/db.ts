@@ -60,7 +60,7 @@ class MMMDatabase extends Dexie {
   ingredientes!: EntityTable<any, "id">;
 
   constructor() {
-    super("MMMSystemDB");
+    super("MMMSystemDB_v2");
 
     this.version(4).stores({
       pedidos: "id, sincronizado, sucursal_id, created_at, estado",
