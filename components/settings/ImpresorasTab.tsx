@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
-import { Printer, RefreshCw, Search, CheckCircle2, AlertCircle, Play, ChevronDown } from "lucide-react";
+import { Printer, RefreshCw, Search, CheckCircle2, AlertCircle, Play, ChevronDown, Info } from "lucide-react";
 
 const FIXED_PRINTERS = [
     { id: "COCINA1", name: "COCINA 1" },
@@ -221,24 +221,44 @@ export function ImpresorasTab() {
                                 <div className="flex-1">
                                     <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Impresora del Sistema</label>
                                     <div className="relative mt-1">
-                                        <select
-                                            value={config[printer.id]?.printerName || ""}
-                                            onChange={(e) => setConfig({
-                                                ...config,
-                                                [printer.id]: { ...config[printer.id], printerName: e.target.value }
-                                            })}
-                                            className="w-full pl-3 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none appearance-none"
-                                        >
-                                            <option value="">Seleccionar impresora...</option>
-                                            {availablePrinters.map(p => (
-                                                <option key={p} value={p}>{p}</option>
-                                            ))}
-                                            {config[printer.id]?.printerName && !availablePrinters.includes(config[printer.id].printerName) && (
-                                                <option value={config[printer.id].printerName}>{config[printer.id].printerName} (No detectada)</option>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <select
+                                                    value={availablePrinters.includes(config[printer.id]?.printerName || "") ? config[printer.id]?.printerName : "manual"}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (val !== "manual") {
+                                                            setConfig({
+                                                                ...config,
+                                                                [printer.id]: { ...config[printer.id], printerName: val }
+                                                            });
+                                                        }
+                                                    }}
+                                                    className="w-full pl-3 pr-10 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none appearance-none"
+                                                >
+                                                    <option value="">Seleccionar...</option>
+                                                    {availablePrinters.map(p => (
+                                                        <option key={p} value={p}>{p}</option>
+                                                    ))}
+                                                    <option value="manual">✎ Ingresar manualmente...</option>
+                                                </select>
+                                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+                                                    <ChevronDown size={14} />
+                                                </div>
+                                            </div>
+                                            
+                                            {(availablePrinters.length === 0 || !availablePrinters.includes(config[printer.id]?.printerName || "") || config[printer.id]?.printerName === "") && (
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre de Windows/Mac"
+                                                    value={config[printer.id]?.printerName || ""}
+                                                    onChange={(e) => setConfig({
+                                                        ...config,
+                                                        [printer.id]: { ...config[printer.id], printerName: e.target.value }
+                                                    })}
+                                                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                                />
                                             )}
-                                        </select>
-                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
-                                            <ChevronDown size={14} />
                                         </div>
                                     </div>
                                 </div>
@@ -279,10 +299,22 @@ export function ImpresorasTab() {
                 <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="px-6 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm"
                 >
-                    {saving ? "Guardando..." : "Guardar impresoras"}
+                    {saving ? "Guardando..." : "Guardar Configuración"}
                 </button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3">
+                <Info className="text-blue-500 shrink-0" size={20} />
+                <div className="text-sm text-blue-800 space-y-2">
+                    <p className="font-bold">¿No aparecen tus impresoras?</p>
+                    <ul className="list-disc ml-4 space-y-1">
+                        <li>Asegurate de tener el <b>Puente de Impresión MMM</b> instalado y ejecutándose en esta PC.</li>
+                        <li>Si usas Google Chrome, podés habilitar la detección nativa en: <code className="bg-blue-100 px-1 rounded text-[12px]">chrome://flags/#enable-web-printing</code></li>
+                        <li>También podés escribir el nombre exacto de la impresora (como figura en Windows) manualmente.</li>
+                    </ul>
+                </div>
             </div>
         </div>
     );
