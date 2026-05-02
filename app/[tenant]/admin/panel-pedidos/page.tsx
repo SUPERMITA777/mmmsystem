@@ -144,7 +144,7 @@ export default function PanelPedidosPage() {
       .subscribe();
 
     return () => {
-      clearInterval(timer);
+      clearInterval(interval);
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
