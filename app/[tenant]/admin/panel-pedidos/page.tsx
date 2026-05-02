@@ -108,7 +108,6 @@ export default function PanelPedidosPage() {
   const [confirmTimePedido, setConfirmTimePedido] = useState<Pedido | null>(null);
   const [isNuevoPedidoOpen, setIsNuevoPedidoOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [printConfig, setPrintConfig] = useState<any>(null);
   const [sucursalConfig, setSucursalConfig] = useState<any>(null);
