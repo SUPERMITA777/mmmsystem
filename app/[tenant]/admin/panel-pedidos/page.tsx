@@ -45,6 +45,8 @@ type Pedido = {
   created_at: string;
   repartidor_id?: string | null;
   tiempo_preparacion_minutos?: number;
+  camarero?: { color: string } | null;
+  mesa_id?: string | null;
 };
 
 const ESTADOS_3_COLUMNAS = [
@@ -154,7 +156,7 @@ export default function PanelPedidosPage() {
     if (!sucursalId) return;
     let query = supabase
       .from("pedidos")
-      .select("*, pedido_items(*, productos(categorias(nombre))), mesas(numero)")
+      .select("*, pedido_items(*, productos(categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .gte("created_at", getStartOfDayArgentina(fechaDesde))
@@ -382,6 +384,23 @@ export default function PanelPedidosPage() {
             </button>
           </div>
 
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-tighter">Mapa</span>
+            <button
+              onClick={async () => {
+                const newValue = !sucursalConfig?.panel_settings?.ocultar_mapa_delivery;
+                const newSettings = { ...sucursalConfig?.panel_settings, ocultar_mapa_delivery: newValue };
+                setSucursalConfig({ ...sucursalConfig, panel_settings: newSettings });
+                if (sucursalConfig?.id) {
+                  await supabase.from("config_sucursal").update({ panel_settings: newSettings }).eq("id", sucursalConfig.id);
+                }
+              }}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${!sucursalConfig?.panel_settings?.ocultar_mapa_delivery ? "bg-purple-600" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${!sucursalConfig?.panel_settings?.ocultar_mapa_delivery ? "translate-x-4" : "translate-x-1"}`} />
+            </button>
+          </div>
+
           <div className="ml-auto flex items-center gap-3">
             <button
               onClick={() => { enableAudio(); playNotificationSound(); }}
@@ -479,21 +498,39 @@ export default function PanelPedidosPage() {
                           ? `Mesa ${(pedido as any).mesas.numero}`
                           : `N°${numCorto}`;
 
-                        return (
-                          <div
-                            key={pedido.id}
-                            onClick={() => setSelectedPedido(pedido)}
-                            className={`w-full text-left rounded-2xl p-4 border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <span className="text-[11px] font-black text-gray-900">{tituloCard} {tipoLabel(pedido.tipo)} <span className="text-[10px] font-bold text-green-600 ml-1">POS</span></span>
-                              <span className="text-[10px] text-gray-400 font-bold">{elapsed} mins | {pedido.metodo_pago_nombre || "Efectivo"} | {pedido.cliente_nombre?.toLowerCase()}</span>
-                            </div>
+                          return (
+                            <div
+                              key={pedido.id}
+                              onClick={() => setSelectedPedido(pedido)}
+                              className={`w-full text-left rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
+                            >
+                              {pedido.tipo === "salon" ? (
+                                <div 
+                                  className="px-4 py-2 text-center"
+                                  style={{ backgroundColor: pedido.camarero?.color || "#f3f4f6" }}
+                                >
+                                  <span className="text-[14px] font-black text-white drop-shadow-sm uppercase">
+                                    MESA {(pedido as any).mesas?.numero || "?"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="p-4 pb-2">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-black text-gray-900">{tituloCard} {tipoLabel(pedido.tipo)} <span className="text-[10px] font-bold text-green-600 ml-1">POS</span></span>
+                                    <span className="text-[10px] text-gray-400 font-bold">{elapsed} mins</span>
+                                  </div>
+                                </div>
+                              )}
 
-                            {/* Visual line at top based on state if needed */}
-                            <div className={`h-1.5 w-full rounded-full mb-1 ${isLate ? "bg-red-500" : isWarning ? "bg-orange-500" : "bg-gray-100"}`} />
-                          </div>
-                        );
+                              <div className="px-4 pb-4">
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-[10px] text-gray-400 font-bold">{pedido.metodo_pago_nombre || "Efectivo"} | {pedido.cliente_nombre?.toLowerCase()}</span>
+                                  {pedido.tipo !== "salon" && <span className="text-[10px] text-gray-400 font-bold">{elapsed} mins</span>}
+                                </div>
+                                <div className={`h-1.5 w-full rounded-full mt-3 ${isLate ? "bg-red-500" : isWarning ? "bg-orange-500" : "bg-gray-100"}`} />
+                              </div>
+                            </div>
+                          );
                       })}
                     </div>
                   </div>

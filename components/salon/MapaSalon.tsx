@@ -69,23 +69,34 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             // Load active orders to get waiter colors
             const { data: activePedidos } = await supabase
                 .from("pedidos")
-                .select("mesa_id, camarero_id, camarero:usuarios!camarero_id(color)")
+                .select("mesa_id, camarero_id")
                 .eq("sucursal_id", sucursalId)
                 .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"]);
+
+            // Get unique camarero IDs and fetch their colors
+            const camareroIds = [...new Set((activePedidos || []).map(p => p.camarero_id).filter(Boolean))];
+            let camareroColors: Record<string, string> = {};
+            if (camareroIds.length > 0) {
+                const { data: camareros } = await supabase
+                    .from("usuarios")
+                    .select("id, color")
+                    .in("id", camareroIds);
+                camareroColors = (camareros || []).reduce((acc: Record<string, string>, c: any) => {
+                    if (c.color) acc[c.id] = c.color;
+                    return acc;
+                }, {});
+            }
 
             const mesasWithColor = (data || []).map((m: Mesa) => {
                 const pedido = activePedidos?.find(p => p.mesa_id === m.id);
                 // If there is an active order, force the state to 'ocupada'
-                // This ensures the table shows as occupied even if the DB state is out of sync
                 const actualState = pedido ? "ocupada" : m.estado;
-                
-                // Supabase might return camarero as array or object depending on relation
-                const camareroObj = Array.isArray(pedido?.camarero) ? pedido.camarero[0] : pedido?.camarero;
+                const color = pedido?.camarero_id ? (camareroColors[pedido.camarero_id] || null) : null;
                 
                 return {
                     ...m,
                     estado: actualState,
-                    camarero_color: camareroObj?.color || null
+                    camarero_color: color
                 };
             });
             setMesas(mesasWithColor);
@@ -268,7 +279,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                         // Custom style for occupied tables with waiter color
                         const customStyle: any = {};
                         if (mesa.estado === 'ocupada' && mesa.camarero_color) {
-                            customStyle.backgroundColor = `${mesa.camarero_color}20`; // 20% opacity for background
+                            customStyle.backgroundColor = `${mesa.camarero_color}40`; // 25% opacity for background
                             customStyle.borderColor = mesa.camarero_color;
                             customStyle.color = mesa.camarero_color;
                         }

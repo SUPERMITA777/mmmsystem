@@ -54,8 +54,9 @@ async function doPrint(html: string, printerName?: string) {
     for (const port of BRIDGE_PORTS) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const res = await fetch(`http://localhost:${port}/print`, {
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const res = await fetch(`http://127.0.0.1:${port}/print`, {
+
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html, printerName }),
@@ -383,7 +384,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-  const printerName = c.impresoras?.["COCINA1"]?.printerName;
+  const printerName = c.impresoras?.["COCINA 1"]?.printerName || c.impresoras?.["COCINA1"]?.printerName;
   doPrint(html, printerName);
 }
 
@@ -479,7 +480,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  const printerName = c.impresoras?.["FACTURACION"]?.printerName;
+  const printerName = c.impresoras?.["FACTURACIÓN"]?.printerName || c.impresoras?.["FACTURACION"]?.printerName;
   doPrint(html, printerName);
 }
 
