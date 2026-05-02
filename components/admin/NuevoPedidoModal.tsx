@@ -597,11 +597,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         if (!sucursalId) return;
         try {
             const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-            const { data: suc } = await supabase.from("config_sucursal").select("nombre, panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: infoSuc } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
             const boldMap = suc?.panel_settings?.print_bold || {};
             const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
             const impresoras = suc?.panel_settings?.impresoras || {};
-            const nombre_local = suc?.nombre || "MMM Pizza Artesanal";
+            const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
             if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, nombre_local });
             else setPrintConfig({ boldMap, fuente_adicionales, impresoras, nombre_local });
         } catch {}
