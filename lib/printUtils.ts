@@ -320,21 +320,26 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   itemsToPrint.forEach((item: any) => {
     let printerKey = defaultPrinterKey;
     
-    // Obtener categoria_id de forma robusta
+    // Obtener categoria_id y nombre de forma robusta
     const itemCatId = item.productos?.categoria_id || 
                       item.categoria_id || 
-                      item.producto?.categoria_id ||
-                      (item.productos && item.productos.id_categoria); // Por si acaso hay variantes de nombres
+                      item.producto?.categoria_id;
+    
+    const itemCatName = item.productos?.categorias?.nombre || 
+                        item.categoria_nombre || 
+                        item.producto?.categorias?.nombre;
 
-    // Buscar en qué impresora está configurada esta categoría
+    // Buscar en qué impresora está configurada esta categoría (por ID o por Nombre)
     if (c.impresoras) {
       for (const [key, pConf] of Object.entries(c.impresoras)) {
         const conf = pConf as any;
-        if (conf.categoriasIds && Array.isArray(conf.categoriasIds) && itemCatId) {
-          if (conf.categoriasIds.includes(itemCatId)) {
-            printerKey = key;
-            break;
-          }
+        const catIds = conf.categoriasIds || [];
+        const catNames = (conf.categoriasNombres || []).map((n: string) => n.toUpperCase());
+
+        if ((itemCatId && catIds.includes(itemCatId)) || 
+            (itemCatName && catNames.includes(itemCatName.toUpperCase()))) {
+          printerKey = key;
+          break;
         }
       }
     }

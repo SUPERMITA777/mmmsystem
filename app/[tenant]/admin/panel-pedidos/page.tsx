@@ -98,6 +98,9 @@ const getLocalDate = () => getArgentinaDate();
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [repartidores, setRepartidores] = useState<any[]>([]);
+  const [waiterColors, setWaiterColors] = useState<Record<string, string>>({});
+  const [metodosPago, setMetodosPago] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<"todos" | "delivery" | "takeaway">("todos");
   const [busqueda, setBusqueda] = useState("");
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
@@ -124,9 +127,10 @@ export default function PanelPedidosPage() {
     fetchRepartidores();
     fetchPrintConfig();
     fetchSucursalConfig();
+    fetchWaiterColors();
+    fetchMetodosPago();
     fetchPromoConfig();
-
-    const timer = setInterval(() => setNow(new Date()), 60000);
+    const interval = setInterval(() => fetchPedidos(), 30000);
 
     // Polling de seguridad cada 15 segundos
     const pollTimer = setInterval(() => {
@@ -203,6 +207,22 @@ export default function PanelPedidosPage() {
     if (data) setSucursalConfig(data);
   }
 
+  async function fetchWaiterColors() {
+    try {
+      const res = await fetch("/api/staff");
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      data.forEach((u: any) => { if (u.color) map[u.id] = u.color; });
+      setWaiterColors(map);
+    } catch (e) { console.error("Error fetching waiter colors:", e); }
+  }
+
+  async function fetchMetodosPago() {
+    if (!sucursalId) return;
+    const { data } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
+    setMetodosPago(data || []);
+  }
+
   async function fetchPromoConfig() {
     if (!sucursalId) return;
     const { data } = await supabase
@@ -211,6 +231,21 @@ export default function PanelPedidosPage() {
       .eq("sucursal_id", sucursalId)
       .maybeSingle();
     setPromoActiva(data?.activo ?? false);
+  }
+
+  async function cambiarMetodoPago(pedido: Pedido, metodoId: string) {
+    const metodo = metodosPago.find(m => m.id === metodoId);
+    if (!metodo) return;
+    
+    await supabase.from("pedidos").update({ 
+      metodo_pago_id: metodoId,
+      metodo_pago_nombre: metodo.nombre 
+    }).eq("id", pedido.id);
+    
+    fetchPedidos();
+    if (selectedPedido?.id === pedido.id) {
+      setSelectedPedido({ ...pedido, metodo_pago_nombre: metodo.nombre });
+    }
   }
 
   const sendWhatsAppNotification = useCallback((pedido: Pedido, type: 'confirmado' | 'listo' | 'entregado') => {
@@ -507,7 +542,7 @@ export default function PanelPedidosPage() {
                               {pedido.tipo === "salon" ? (
                                 <div 
                                   className="px-4 py-2 text-center"
-                                  style={{ backgroundColor: pedido.camarero?.color || "#f3f4f6" }}
+                                  style={{ backgroundColor: (pedido.camarero_id && waiterColors[pedido.camarero_id]) || pedido.camarero?.color || "#f3f4f6" }}
                                 >
                                   <span className="text-[14px] font-black text-white drop-shadow-sm uppercase">
                                     MESA {(pedido as any).mesas?.numero || "?"}
@@ -753,6 +788,21 @@ export default function PanelPedidosPage() {
                       <option value="">Repartidor</option>
                       {repartidores.map(r => (
                         <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Método de Pago dropdown */}
+                  <div className="relative group border border-gray-100 rounded-xl bg-white overflow-hidden">
+                    <label className="absolute top-1.5 left-4 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Pago</label>
+                    <select
+                      value={metodosPago.find(m => m.nombre === selectedPedido.metodo_pago_nombre)?.id || ""}
+                      onChange={e => cambiarMetodoPago(selectedPedido, e.target.value)}
+                      className="w-full px-4 pt-5 pb-2 text-sm font-bold text-gray-800 bg-white cursor-pointer focus:ring-0 outline-none appearance-auto"
+                    >
+                      <option value="">Seleccionar pago...</option>
+                      {metodosPago.map(m => (
+                        <option key={m.id} value={m.id}>{m.nombre}</option>
                       ))}
                     </select>
                   </div>
