@@ -161,7 +161,7 @@ export default function PanelPedidosPage() {
     if (!sucursalId) return;
     let query = supabase
       .from("pedidos")
-      .select("*, pedido_items(*, productos(categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
+      .select("*, pedido_items(*, productos(*, categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
       .eq("sucursal_id", sucursalId)
       .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
       .gte("created_at", getStartOfDayArgentina(fechaDesde))

@@ -338,8 +338,14 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
     console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | Cat: "${itemCatName}" | ID: ${itemCatId}`);
 
-    // Buscar en qué impresora está configurada esta categoría (por ID o por Nombre)
-    if (c.impresoras) {
+    // 1. PRIORIDAD: Impresora asignada directamente al PRODUCTO
+    const prodPrinter = finalProd.impresora || item.impresora_id || item.impresora;
+    if (prodPrinter && c.impresoras?.[prodPrinter]) {
+      printerKey = prodPrinter;
+      console.log(`[PrintDebug] MATCH por PRODUCTO! Enviando a ${printerKey}`);
+    } 
+    // 2. SEGUNDA OPCIÓN: Buscar por categoría (si no hay impresora en el producto)
+    else if (c.impresoras) {
       for (const [key, pConf] of Object.entries(c.impresoras)) {
         const conf = pConf as any;
         const catIds = conf.categoriasIds || [];
@@ -348,7 +354,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
         if ((itemCatId && catIds.includes(itemCatId)) || 
             (itemCatName && catNames.includes(itemCatName))) {
           printerKey = key;
-          console.log(`[PrintDebug] MATCH encontrado! Enviando a ${key}`);
+          console.log(`[PrintDebug] MATCH por CATEGORÍA! Enviando a ${key}`);
           break;
         }
       }
