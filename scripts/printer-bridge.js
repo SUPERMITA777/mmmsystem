@@ -14,6 +14,63 @@ const url = require('url');
 const PORT = 9100;
 const FALLBACK_PORT = 9101;
 
+const printQueue = [];
+let isPrinting = false;
+
+function processQueue() {
+    if (isPrinting || printQueue.length === 0) return;
+    
+    isPrinting = true;
+    const job = printQueue.shift();
+    
+    console.log('\n>>> PROCESANDO TRABAJO EN COLA (' + printQueue.length + ' restantes)');
+    console.log('    Impresora destino: ' + job.printerName);
+
+    const tempFile = path.join(os.tmpdir(), 'mmm_print_' + Date.now() + '.html');
+    fs.writeFileSync(tempFile, job.html, 'utf8');
+
+    const psContent = buildPrintScript(job.printerName, tempFile);
+    const psFile = path.join(os.tmpdir(), 'mmm_print_' + Date.now() + '.ps1');
+    fs.writeFileSync(psFile, psContent, 'utf8');
+
+    console.log('    Ejecutando PowerShell...');
+
+    const child = spawn('powershell', ['-STA', '-ExecutionPolicy', 'Bypass', '-File', psFile]);
+
+    child.stdout.on('data', (data) => {
+        console.log('    [PS] ' + data.toString().trim());
+    });
+
+    child.stderr.on('data', (data) => {
+        console.error('    [PS ERR] ' + data.toString().trim());
+    });
+
+    child.on('close', (code) => {
+        // Cleanup temp files after a delay
+        setTimeout(() => {
+            try { fs.unlinkSync(tempFile); } catch(e) {}
+            try { fs.unlinkSync(psFile); } catch(e) {}
+        }, 10000);
+
+        if (code !== 0) {
+            console.error('*** Proceso termino con error (codigo ' + code + ')');
+            if (!job.res.writableEnded) {
+                job.res.writeHead(500);
+                job.res.end(JSON.stringify({ error: 'Error en proceso (codigo ' + code + ')' }));
+            }
+        } else {
+            console.log('>>> Impresion completada OK');
+            if (!job.res.writableEnded) {
+                job.res.writeHead(200, { 'Content-Type': 'application/json' });
+                job.res.end(JSON.stringify({ success: true }));
+            }
+        }
+        
+        isPrinting = false;
+        processQueue(); // Continuar con el siguiente trabajo
+    });
+}
+
 /**
  * Genera el contenido del script PowerShell para imprimir.
  * IMPORTANTE: Se usa concatenación de strings (NO template literals)
@@ -134,48 +191,10 @@ function startServer(port) {
                         return res.end(JSON.stringify({ error: 'Faltan html o printerName' }));
                     }
 
-                    console.log('    Impresora destino: ' + printerName);
-
-                    const tempFile = path.join(os.tmpdir(), 'mmm_print_' + Date.now() + '.html');
-                    fs.writeFileSync(tempFile, html, 'utf8');
-
-                    const psContent = buildPrintScript(printerName, tempFile);
-                    const psFile = path.join(os.tmpdir(), 'mmm_print_' + Date.now() + '.ps1');
-                    fs.writeFileSync(psFile, psContent, 'utf8');
-
-                    console.log('    Ejecutando PowerShell...');
-
-                    const child = spawn('powershell', ['-STA', '-ExecutionPolicy', 'Bypass', '-File', psFile]);
-
-                    child.stdout.on('data', (data) => {
-                        console.log('    [PS] ' + data.toString().trim());
-                    });
-
-                    child.stderr.on('data', (data) => {
-                        console.error('    [PS ERR] ' + data.toString().trim());
-                    });
-
-                    child.on('close', (code) => {
-                        // Cleanup temp files after a delay
-                        setTimeout(() => {
-                            try { fs.unlinkSync(tempFile); } catch(e) {}
-                            try { fs.unlinkSync(psFile); } catch(e) {}
-                        }, 10000);
-
-                        if (code !== 0) {
-                            console.error('*** Proceso termino con error (codigo ' + code + ')');
-                            if (!res.writableEnded) {
-                                res.writeHead(500);
-                                res.end(JSON.stringify({ error: 'Error en proceso (codigo ' + code + ')' }));
-                            }
-                        } else {
-                            console.log('>>> Impresion completada OK');
-                            if (!res.writableEnded) {
-                                res.writeHead(200, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ success: true }));
-                            }
-                        }
-                    });
+                    // ENCOLAR EL TRABAJO
+                    printQueue.push({ html, printerName, res });
+                    console.log(`[Cola] Trabajo añadido para ${printerName}. Posición: ${printQueue.length}`);
+                    processQueue();
 
                 } catch (e) {
                     console.error('Error procesando peticion:', e);
