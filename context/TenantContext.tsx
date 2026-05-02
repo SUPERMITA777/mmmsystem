@@ -63,6 +63,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
                 setSucursalId(data.id);
                 setSucursalData(data);
+                if (typeof window !== "undefined") {
+                    localStorage.setItem("last_tenant", tenantSlug);
+                }
             } catch (err) {
                 console.error("Error fetching tenant", err);
             } finally {
