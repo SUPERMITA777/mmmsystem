@@ -391,9 +391,9 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 <html><head>
 <meta charset="utf-8">
 <style>
-  @page { size: 80mm auto; margin: 4mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Arial Black', Gadget, sans-serif; width: 72mm; color: #000; line-height: 1.2; }
+  body { font-family: 'Arial Black', Gadget, sans-serif; width: 72mm; color: #000; line-height: 1.2; margin: 0; padding: 4mm; }
   .center { text-align: center; }
   .sep { border: none; border-top: 2px dashed #000; margin: 8px 0; }
 </style>
@@ -486,9 +486,9 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 <html><head>
 <meta charset="utf-8">
 <style>
-  @page { size: 80mm auto; margin: 5mm 4mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; color: #000; line-height: 1.4; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; color: #000; line-height: 1.4; margin: 0; padding: 5mm 4mm; }
   .center { text-align: center; }
   .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
   table { width: 100%; border-collapse: collapse; }

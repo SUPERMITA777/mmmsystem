@@ -294,6 +294,18 @@ export function ImpresorasTab() {
                                             <ChevronDown size={14} />
                                         </div>
                                     </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        placeholder="Nombre exacto de la impresora en Windows"
+                                        value={config[printer.id]?.printerName || ""}
+                                        onChange={(e) => setConfig({
+                                            ...config,
+                                            [printer.id]: { ...config[printer.id], printerName: e.target.value }
+                                        })}
+                                        disabled={!config[printer.id]?.enabled}
+                                        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
+                                    />
                                 )}
                             </div>
                             
