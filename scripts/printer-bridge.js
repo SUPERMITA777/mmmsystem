@@ -49,8 +49,11 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '        Start-Sleep -Milliseconds 100\r\n';
     ps += '        $timeout++\r\n';
     ps += '    }\r\n';
-    ps += '    Write-Host "Paso 6: Enviando a cola de impresion..."\r\n';
-    ps += '    $browser.Print()\r\n';
+    ps += '    Write-Host "Paso 6: Enviando a cola de impresion (silencioso)..."\r\n';
+    // Use ExecWB via ActiveXInstance for truly silent printing
+    // OLECMDID_PRINT = 6, OLECMDEXECOPT_DONTPROMPTUSER = 2
+    ps += '    $axIns = $browser.ActiveXInstance\r\n';
+    ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
     ps += '    Write-Host "Paso 7: Esperando procesamiento (5s)..."\r\n';
     ps += '    Start-Sleep -Seconds 5\r\n';
     ps += '    Write-Host "Paso 8: Restaurando impresora predeterminada..."\r\n';
