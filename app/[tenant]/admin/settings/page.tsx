@@ -16,6 +16,7 @@ import { LocalidadesTab } from "@/components/settings/LocalidadesTab";
 import { PanelTab } from "@/components/settings/PanelTab";
 import { DatabaseTab } from "@/components/settings/DatabaseTab";
 import { WebConfigTab } from "@/components/settings/WebConfigTab";
+import { InstallPwaButton } from "@/components/settings/InstallPwaButton";
 
 const TABS = [
   { id: "panel", label: "Panel" },
@@ -53,6 +54,7 @@ export default function SettingsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <InstallPwaButton />
           <button className="px-4 py-1.5 text-xs bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-all">
             Editar Perfil
           </button>
