@@ -8,14 +8,6 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  workboxOptions: {
-    additionalManifestEntries: [
-      { url: '/', revision: '1' }
-    ],
-  },
-  fallbacks: {
-    document: "/",
-  },
 });
 
 /** @type {import('next').NextConfig} */
