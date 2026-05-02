@@ -309,22 +309,9 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   const horaComandado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const fechaCorta = createdAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
 
-  const items = itemsOverride ?? pedido.pedido_items ?? [];
-
-  // Agrupar items por categoría para la cocina
-  const groupedItemsCoc: Record<string, any[]> = {};
-  items.forEach((item: any) => {
-    let catName = "PRODUCTOS";
-    if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
-      catName = item.productos.categorias.nombre.toUpperCase();
-    }
-    if (!groupedItemsCoc[catName]) groupedItemsCoc[catName] = [];
-    groupedItemsCoc[catName].push(item);
-  });
-
-  const itemsHtml = Object.keys(groupedItemsCoc).map(catName => {
-    const header = `<div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-top:8px;margin-bottom:4px;border-bottom:1px solid #000;padding-bottom:2px">${catName}</div>`;
   const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
+
+  // Agrupar items por impresora según configuración
 
   // Agrupar items por impresora según configuración
   const itemsByPrinter: Record<string, any[]> = {};
@@ -412,10 +399,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   <hr class="sep">
   <div class="center" style="font-size:10px;color:#666">Pedido #${pedido.numero_pedido || "—"}</div>
 
-</body></html>`;
-
-  const printerName = c.impresoras?.["COCINA 1"]?.printerName || c.impresoras?.["COCINA1"]?.printerName;
-  doPrint(html, printerName);
+    doPrint(html, printerName);
+  });
 }
 
 /* ──────────────────────────────────────────────────────
