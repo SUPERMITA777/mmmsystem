@@ -17,7 +17,7 @@ const FIXED_PRINTERS = [
 const BRIDGE_PORTS = [9100, 9101];
 
 export function ImpresorasTab() {
-    const [config, setConfig] = useState<Record<string, { enabled: boolean; ip: string; printerName: string }>>({});
+    const [config, setConfig] = useState<Record<string, { enabled: boolean; ip: string; printerName: string; categoriasNombres?: string[] }>>({});
     const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
     const [bridgeStatus, setBridgeStatus] = useState<"connected" | "disconnected" | "checking">("checking");
     const [bridgePort, setBridgePort] = useState<number | null>(null);
