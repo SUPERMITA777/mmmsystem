@@ -324,28 +324,58 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
   const itemsHtml = Object.keys(groupedItemsCoc).map(catName => {
     const header = `<div style="font-weight:bold;font-size:${c.fuente_subtitulo}px;margin-top:8px;margin-bottom:4px;border-bottom:1px solid #000;padding-bottom:2px">${catName}</div>`;
+  const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
 
-    const catItemsHtml = groupedItemsCoc[catName].map(item => `
-          <div style="font-weight:bold;font-size:${Math.max(c.fuente_cliente_nombre, 20)}px;margin:8px 0 2px;line-height:1.3">
-              ${item.cantidad} x ${(item.nombre_producto || item.nombre).toUpperCase()}
-          </div>
-          ${(item.adicionales ?? []).length
-        ? `<div style="font-size:${c.fuente_adicionales || 14}px;margin-left:10px;font-weight:bold;${bw(c, 'fuente_adicionales')}">${aggregateAdicionales(item.adicionales).map((a: any) => `+ ${a.nombre}`).join("<br>")}</div>`
-        : ""}
-          ${(item.notas || item.nota)
-        ? `<div style="font-size:${Math.max(c.fuente_cliente_detalles, 14)}px;margin-left:10px;margin-top:2px;font-weight:bold;font-style:italic;padding:4px 6px;border:1px dashed #000;border-radius:4px">📝 ${(item.notas || item.nota).toUpperCase()}</div>`
-        : ""}`
-    ).join("");
-    return header + catItemsHtml;
-  }).join("");
+  // Agrupar items por impresora según configuración
+  const itemsByPrinter: Record<string, any[]> = {};
+  const defaultPrinterKey = "COCINA 1";
+  
+  itemsToPrint.forEach((item: any) => {
+    let printerKey = defaultPrinterKey;
+    const itemCatId = item.productos?.categoria_id || item.categoria_id;
 
-  const html = `<!DOCTYPE html>
+    // Buscar en qué impresora está configurada esta categoría
+    if (c.impresoras) {
+      for (const [key, pConf] of Object.entries(c.impresoras)) {
+        const conf = pConf as any;
+        if (conf.categoriasIds && Array.isArray(conf.categoriasIds) && itemCatId) {
+          if (conf.categoriasIds.includes(itemCatId)) {
+            printerKey = key;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!itemsByPrinter[printerKey]) itemsByPrinter[printerKey] = [];
+    itemsByPrinter[printerKey].push(item);
+  });
+
+  // Imprimir un ticket por cada impresora que tenga ítems
+  Object.entries(itemsByPrinter).forEach(([pKey, items]) => {
+    const printerName = c.impresoras?.[pKey]?.printerName || c.impresoras?.[pKey.replace(" ", "")]?.printerName;
+    if (!printerName) return;
+
+    const itemsHtml = items.map(item => {
+      const aggregated = aggregateAdicionales(item.adicionales ?? []);
+      const ads = aggregated.map((a: any) =>
+        `<div style="font-size:18px;margin-left:12px;font-weight:bold">+ ${a.nombre}</div>`
+      ).join("");
+      const itemNotas = item.notas ? `<div style="font-size:16px;font-weight:bold;margin-left:12px;font-style:italic;background:#eee;padding:2px">📝 ${item.notas}</div>` : "";
+      return `
+        <div style="margin-bottom:8px">
+          <div style="font-size:24px;font-weight:900">${item.cantidad} x ${item.nombre_producto || item.nombre}</div>
+          ${ads}${itemNotas}
+        </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <style>
-  @page { size: 80mm auto; margin: 5mm 4mm; }
+  @page { size: 80mm auto; margin: 4mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; line-height: 1.4; }
+  body { font-family: 'Arial Black', Gadget, sans-serif; width: 72mm; color: #000; line-height: 1.2; }
   .center { text-align: center; }
   .sep { border: none; border-top: 2px dashed #000; margin: 8px 0; }
 </style>
@@ -364,8 +394,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   </div>
 
   ${pedido.cliente_nombre && pedido.tipo !== "salon"
-      ? `<div style="font-size:${c.fuente_cliente_detalles}px;font-weight:bold;color:#333;margin-top:4px">${pedido.cliente_nombre}</div>`
-      : ""}
+        ? `<div style="font-size:${c.fuente_cliente_detalles}px;font-weight:bold;color:#333;margin-top:4px">${pedido.cliente_nombre}</div>`
+        : ""}
 
   <hr class="sep">
 
