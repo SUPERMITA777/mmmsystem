@@ -209,12 +209,15 @@ export default function PanelPedidosPage() {
   }
 
   async function fetchWaiterColors() {
+    if (!sucursalId) return;
     try {
-      const res = await fetch("/api/staff");
+      const res = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
       const data = await res.json();
-      const map: Record<string, string> = {};
-      data.forEach((u: any) => { if (u.color) map[u.id] = u.color; });
-      setWaiterColors(map);
+      if (Array.isArray(data)) {
+        const map: Record<string, string> = {};
+        data.forEach((u: any) => { if (u.color) map[u.id] = u.color; });
+        setWaiterColors(map);
+      }
     } catch (e) { console.error("Error fetching waiter colors:", e); }
   }
 

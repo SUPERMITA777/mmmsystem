@@ -325,9 +325,12 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
                       item.categoria_id || 
                       item.producto?.categoria_id;
     
-    const itemCatName = item.productos?.categorias?.nombre || 
+    const itemCatName = (item.productos?.categorias?.nombre || 
                         item.categoria_nombre || 
-                        item.producto?.categorias?.nombre;
+                        item.producto?.categorias?.nombre || 
+                        "").toUpperCase();
+
+    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | Cat: ${itemCatName} | ID: ${itemCatId}`);
 
     // Buscar en qué impresora está configurada esta categoría (por ID o por Nombre)
     if (c.impresoras) {
@@ -337,8 +340,9 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
         const catNames = (conf.categoriasNombres || []).map((n: string) => n.toUpperCase());
 
         if ((itemCatId && catIds.includes(itemCatId)) || 
-            (itemCatName && catNames.includes(itemCatName.toUpperCase()))) {
+            (itemCatName && catNames.includes(itemCatName))) {
           printerKey = key;
+          console.log(`[PrintDebug] MATCH encontrado! Enviando a ${key}`);
           break;
         }
       }
