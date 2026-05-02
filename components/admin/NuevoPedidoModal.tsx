@@ -7,7 +7,7 @@ import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
 import { db, guardarPedidoLocal, generateLocalId } from "@/lib/db";
-import { printCocina, printCocinaIncremental } from "@/lib/printUtils";
+import { printCocina, printCocinaIncremental, printPreCuenta } from "@/lib/printUtils";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -597,12 +597,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         if (!sucursalId) return;
         try {
             const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-            const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: suc } = await supabase.from("config_sucursal").select("nombre, panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
             const boldMap = suc?.panel_settings?.print_bold || {};
             const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
             const impresoras = suc?.panel_settings?.impresoras || {};
-            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras });
-            else setPrintConfig({ boldMap, fuente_adicionales, impresoras });
+            const nombre_local = suc?.nombre || "MMM Pizza Artesanal";
+            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, nombre_local });
+            else setPrintConfig({ boldMap, fuente_adicionales, impresoras, nombre_local });
         } catch {}
     }
 
@@ -1730,13 +1731,23 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 Cancelar
                             </button>
                             {tipo === "salon" ? (
-                                <button
-                                    onClick={comandarSalon}
-                                    disabled={loading || carrito.length === 0}
-                                    className="flex-1 bg-orange-600 text-white py-3 rounded-full text-xs font-bold hover:bg-orange-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                >
-                                    {loading ? "Comandando..." : "🍳 COMANDAR"}
-                                </button>
+                                <>
+                                    {editPedido && (
+                                        <button
+                                            onClick={() => printPreCuenta(editPedido, printConfig)}
+                                            className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-xs font-bold transition-colors"
+                                        >
+                                            📄 PRE-CUENTA
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={comandarSalon}
+                                        disabled={loading || carrito.length === 0}
+                                        className="flex-1 bg-orange-600 text-white py-3 rounded-full text-xs font-bold hover:bg-orange-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                    >
+                                        {loading ? "Comandando..." : "🍳 COMANDAR"}
+                                    </button>
+                                </>
                             ) : (
                                 <button
                                     onClick={crearPedido}
