@@ -326,22 +326,25 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
     const finalProd = prodObj || prodSingular || {};
 
     // Obtener categoria_id y nombre de forma robusta
-    const itemCatId = finalProd.categoria_id || 
-                      item.categoria_id || 
-                      finalProd.id_categoria;
-    
-    const itemCatName = (finalProd.categorias?.nombre || 
-                        item.categoria_nombre || 
-                        finalProd.categoria_nombre || 
-                        item.nombre_categoria ||
-                        "").toUpperCase();
+    const itemCatId = finalProd.categoria_id || item.categoria_id || finalProd.id_categoria;
+    const itemCatName = (finalProd.categorias?.nombre || item.categoria_nombre || finalProd.categoria_nombre || "").toUpperCase();
 
-    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | Cat: "${itemCatName}" | ID: ${itemCatId}`);
+    // 1. PRIORIDAD: Impresora asignada directamente al ITEM o al PRODUCTO
+    // Buscamos en todas las variantes posibles de nombres de campos
+    const prodPrinter = item.impresora || 
+                       item.impresora_id || 
+                       finalProd.impresora || 
+                       finalProd.id_impresora || 
+                       finalProd.impresora_id;
 
-    // 1. PRIORIDAD: Impresora asignada directamente al PRODUCTO
-    const prodPrinter = finalProd.impresora || item.impresora_id || item.impresora;
-    if (prodPrinter && c.impresoras?.[prodPrinter]) {
-      printerKey = prodPrinter;
+    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | PrinterAsignada: ${prodPrinter} | Cat: "${itemCatName}"`);
+    if (!prodPrinter) console.log(`[PrintDebug] Objeto ITEM completo para inspección:`, item);
+
+    if (prodPrinter && (c.impresoras?.[prodPrinter] || Object.values(c.impresoras || {}).some((p: any) => p.printerName === prodPrinter))) {
+      // Si el prodPrinter es un ID (COCINA1) o el nombre real de la impresora
+      printerKey = c.impresoras?.[prodPrinter] ? prodPrinter : 
+                   Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === prodPrinter) || defaultPrinterKey;
+      
       console.log(`[PrintDebug] MATCH por PRODUCTO! Enviando a ${printerKey}`);
     } 
     // 2. SEGUNDA OPCIÓN: Buscar por categoría (si no hay impresora en el producto)
