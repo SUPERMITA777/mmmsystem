@@ -67,25 +67,33 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             setLayout(initialLayout);
 
             // Load active orders to get waiter colors
-            const { data: activePedidos } = await supabase
+            const { data: activePedidos, error: pedidosError } = await supabase
                 .from("pedidos")
                 .select("mesa_id, camarero_id")
                 .eq("sucursal_id", sucursalId)
                 .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"]);
 
+            console.log("[Salon] Pedidos activos:", activePedidos?.length, activePedidos);
+            if (pedidosError) console.error("[Salon] Error pedidos:", pedidosError);
+
             // Get unique camarero IDs and fetch their colors
             const camareroIds = [...new Set((activePedidos || []).map(p => p.camarero_id).filter(Boolean))];
+            console.log("[Salon] Camarero IDs encontrados:", camareroIds);
+            
             let camareroColors: Record<string, string> = {};
             if (camareroIds.length > 0) {
-                const { data: camareros } = await supabase
+                const { data: camareros, error: camError } = await supabase
                     .from("usuarios")
-                    .select("id, color")
+                    .select("id, color, nombre")
                     .in("id", camareroIds);
+                console.log("[Salon] Camareros con colores:", camareros);
+                if (camError) console.error("[Salon] Error camareros:", camError);
                 camareroColors = (camareros || []).reduce((acc: Record<string, string>, c: any) => {
                     if (c.color) acc[c.id] = c.color;
                     return acc;
                 }, {});
             }
+            console.log("[Salon] Mapa de colores:", camareroColors);
 
             const mesasWithColor = (data || []).map((m: Mesa) => {
                 const pedido = activePedidos?.find(p => p.mesa_id === m.id);
@@ -99,6 +107,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                     camarero_color: color
                 };
             });
+            console.log("[Salon] Mesas con color:", mesasWithColor.filter(m => m.camarero_color));
             setMesas(mesasWithColor);
 
         } catch (error) {
