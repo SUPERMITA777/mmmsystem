@@ -320,17 +320,23 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   itemsToPrint.forEach((item: any) => {
     let printerKey = defaultPrinterKey;
     
+    // Obtener el objeto de producto (manejar si viene como array u objeto)
+    const prodObj = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+    const prodSingular = Array.isArray(item.producto) ? item.producto[0] : item.producto;
+    const finalProd = prodObj || prodSingular || {};
+
     // Obtener categoria_id y nombre de forma robusta
-    const itemCatId = item.productos?.categoria_id || 
+    const itemCatId = finalProd.categoria_id || 
                       item.categoria_id || 
-                      item.producto?.categoria_id;
+                      finalProd.id_categoria;
     
-    const itemCatName = (item.productos?.categorias?.nombre || 
+    const itemCatName = (finalProd.categorias?.nombre || 
                         item.categoria_nombre || 
-                        item.producto?.categorias?.nombre || 
+                        finalProd.categoria_nombre || 
+                        item.nombre_categoria ||
                         "").toUpperCase();
 
-    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | Cat: ${itemCatName} | ID: ${itemCatId}`);
+    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | Cat: "${itemCatName}" | ID: ${itemCatId}`);
 
     // Buscar en qué impresora está configurada esta categoría (por ID o por Nombre)
     if (c.impresoras) {

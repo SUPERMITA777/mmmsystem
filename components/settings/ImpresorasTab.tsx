@@ -25,6 +25,7 @@ export function ImpresorasTab() {
     const [saving, setSaving] = useState(false);
     const [testingId, setTestingId] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<Record<string, "ok" | "error" | null>>({});
+    const [allCategorias, setAllCategorias] = useState<any[]>([]);
     const { sucursalId } = useTenant();
 
     /* ── Detectar el puente ── */
@@ -77,12 +78,21 @@ export function ImpresorasTab() {
 
             const dbConfig = data?.panel_settings?.impresoras || {};
             
-            const initialConfig: Record<string, { enabled: boolean; ip: string; printerName: string }> = {};
+            // Cargar categorías disponibles
+            const { data: cats } = await supabase
+                .from("categorias")
+                .select("id, nombre")
+                .eq("sucursal_id", sucursalId)
+                .order("nombre");
+            setAllCategorias(cats || []);
+            
+            const initialConfig: Record<string, { enabled: boolean; ip: string; printerName: string; categoriasNombres: string[] }> = {};
             FIXED_PRINTERS.forEach(p => {
                 initialConfig[p.id] = {
                     enabled: dbConfig[p.id]?.enabled ?? true,
                     ip: dbConfig[p.id]?.ip || "",
-                    printerName: dbConfig[p.id]?.printerName || ""
+                    printerName: dbConfig[p.id]?.printerName || "",
+                    categoriasNombres: dbConfig[p.id]?.categoriasNombres || []
                 };
             });
             setConfig(initialConfig);
@@ -284,23 +294,43 @@ export function ImpresorasTab() {
                                             <ChevronDown size={14} />
                                         </div>
                                     </div>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        placeholder="Nombre exacto de la impresora en Windows"
-                                        value={config[printer.id]?.printerName || ""}
-                                        onChange={(e) => setConfig({
-                                            ...config,
-                                            [printer.id]: { ...config[printer.id], printerName: e.target.value }
-                                        })}
-                                        disabled={!config[printer.id]?.enabled}
-                                        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                                    />
                                 )}
+                            </div>
+                            
+                            {/* Categories assignment */}
+                            <div className="w-64">
+                                <div className="flex flex-wrap gap-1 p-1.5 border border-slate-200 rounded-lg min-h-[42px] bg-slate-50/50">
+                                    {allCategorias.map(cat => {
+                                        const isSelected = config[printer.id]?.categoriasNombres?.includes(cat.nombre);
+                                        return (
+                                            <button
+                                                key={cat.id}
+                                                onClick={() => {
+                                                    const current = config[printer.id]?.categoriasNombres || [];
+                                                    const next = isSelected 
+                                                        ? current.filter(n => n !== cat.nombre)
+                                                        : [...current, cat.nombre];
+                                                    setConfig({
+                                                        ...config,
+                                                        [printer.id]: { ...config[printer.id], categoriasNombres: next }
+                                                    });
+                                                }}
+                                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                                    isSelected 
+                                                        ? "bg-purple-600 text-white" 
+                                                        : "bg-white text-slate-400 border border-slate-200 hover:border-purple-200"
+                                                }`}
+                                            >
+                                                {cat.nombre}
+                                            </button>
+                                        );
+                                    })}
+                                    {allCategorias.length === 0 && <span className="text-[10px] text-slate-400 p-1">Sin categorías</span>}
+                                </div>
                             </div>
 
                             {/* IP (optional) */}
-                            <div className="w-40 shrink-0">
+                            <div className="w-24 shrink-0">
                                 <input
                                     type="text"
                                     placeholder="IP (opcional)"
