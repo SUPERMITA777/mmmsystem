@@ -46,7 +46,9 @@ type Pedido = {
   repartidor_id?: string | null;
   tiempo_preparacion_minutos?: number;
   camarero?: { color: string } | null;
+  camarero_id?: string | null;
   mesa_id?: string | null;
+  metodo_pago_id?: string | null;
 };
 
 const ESTADOS_3_COLUMNAS = [
