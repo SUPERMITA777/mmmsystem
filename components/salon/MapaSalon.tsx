@@ -91,7 +91,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 const pedido = activePedidos?.find(p => p.mesa_id === m.id);
                 // If there is an active order, force the state to 'ocupada'
                 const actualState = pedido ? "ocupada" : m.estado;
-                const color = pedido?.camarero_id ? (camareroColors[pedido.camarero_id] || null) : null;
+                const color = pedido?.camarero_id ? (camareroColors[pedido.camarero_id] || undefined) : undefined;
                 
                 return {
                     ...m,
