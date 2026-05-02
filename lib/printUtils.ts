@@ -58,7 +58,6 @@ async function doPrint(html: string, printerName?: string) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         const res = await fetch(`http://127.0.0.1:${port}/print`, {
-
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html, printerName }),
@@ -68,10 +67,17 @@ async function doPrint(html: string, printerName?: string) {
         if (res.ok) {
           sent = true;
           break;
+        } else {
+            console.error("Bridge retornó error:", await res.text());
         }
-      } catch (e) {}
+      } catch (e) {
+          console.error("Error contactando bridge en puerto", port, e);
+      }
     }
     if (sent) return; // Silent print success
+    else {
+        alert(`Fallo la impresión silenciosa en la impresora "${printerName}". Verificá que esté conectada, que el nombre sea exacto, y que el Puente de Impresión esté abierto. Se abrirá el cuadro de Windows como respaldo.`);
+    }
   }
 
   // 2. Fallback to Browser Print
@@ -541,6 +547,9 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 </body></html>`;
 
   const printerName = c.impresoras?.["FACTURACIÓN"]?.printerName || c.impresoras?.["FACTURACION"]?.printerName;
+  if (!printerName) {
+      alert("No hay una impresora asignada a FACTURACIÓN en Ajustes > Impresoras. Se abrirá la ventana normal de impresión.");
+  }
   doPrint(html, printerName);
 }
 
