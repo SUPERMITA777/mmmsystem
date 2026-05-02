@@ -399,6 +399,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   <hr class="sep">
   <div class="center" style="font-size:10px;color:#666">Pedido #${pedido.numero_pedido || "—"}</div>
 
+</body></html>`;
+
     doPrint(html, printerName);
   });
 }
