@@ -543,6 +543,10 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
   <div class="center" style="font-size:${c.fuente_footer}px;color:#555;font-style:italic;margin-top:2px">
     Comprobante no válido como factura.
   </div>
+  ${(pedido as any).camarero_nombre ? `
+  <div class="center" style="font-size:${c.fuente_footer}px;color:#333;margin-top:6px;font-weight:bold;text-transform:uppercase">
+    USTED HA SIDO ATENDIDO POR ${(pedido as any).camarero_nombre}
+  </div>` : ''}
 
 </body></html>`;
 

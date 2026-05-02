@@ -1735,7 +1735,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 <>
                                     {editPedido && (
                                         <button
-                                            onClick={() => printPreCuenta(editPedido, printConfig)}
+                                            onClick={() => {
+                                                const mesaObj = mesas.find(m => m.id === mesaId);
+                                                const camareroObj = camareros.find(c => c.id === camareroId);
+                                                const patchedPedido = {
+                                                    ...editPedido,
+                                                    mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
+                                                    camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null
+                                                };
+                                                printPreCuenta(patchedPedido, printConfig);
+                                            }}
                                             className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-xs font-bold transition-colors"
                                         >
                                             📄 PRE-CUENTA
