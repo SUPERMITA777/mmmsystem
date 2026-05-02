@@ -648,12 +648,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 // Print only new items to kitchen
                 if (newItems.length > 0) {
                     const pedidoForPrint = { ...editPedido, tipo: "salon", mesa_numero: editPedido.mesas?.numero, numero_pedido: editPedido.numero_pedido, created_at: new Date().toISOString(), notas: notaPedido };
-                    const printItems = newItems.map(item => ({
-                        nombre_producto: item.nombre,
-                        cantidad: item.cantidad,
-                        adicionales: item.adicionales || [],
-                        notas: item.nota || "",
-                    }));
+                    const printItems = newItems.map(item => {
+                        const fullProd = productos.find(p => p.id === item.producto_id) || {};
+                        const catNombre = categorias.find(c => c.id === fullProd.categoria_id)?.nombre || "";
+                        return {
+                            nombre_producto: item.nombre,
+                            cantidad: item.cantidad,
+                            adicionales: item.adicionales || [],
+                            notas: item.nota || "",
+                            impresora: fullProd.impresora,
+                            categoria_id: fullProd.categoria_id,
+                            categoria_nombre: catNombre
+                        };
+                    });
                     printCocinaIncremental(pedidoForPrint, printItems, printConfig);
                 }
 
@@ -719,12 +726,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
                 // Print ALL items to kitchen (first comanda)
                 const pedidoForPrint = { ...createdPedido, mesas: { numero: mesas.find(m => m.id === mesaId)?.numero } };
-                const printItems = carrito.map(item => ({
-                    nombre_producto: item.nombre,
-                    cantidad: item.cantidad,
-                    adicionales: item.adicionales || [],
-                    notas: item.nota || "",
-                }));
+                const printItems = carrito.map(item => {
+                    const fullProd = productos.find(p => p.id === item.producto_id) || {};
+                    const catNombre = categorias.find(c => c.id === fullProd.categoria_id)?.nombre || "";
+                    return {
+                        nombre_producto: item.nombre,
+                        cantidad: item.cantidad,
+                        adicionales: item.adicionales || [],
+                        notas: item.nota || "",
+                        impresora: fullProd.impresora,
+                        categoria_id: fullProd.categoria_id,
+                        categoria_nombre: catNombre
+                    };
+                });
                 printCocina(pedidoForPrint, printConfig, printItems);
 
                 // Mark all items as commanded
