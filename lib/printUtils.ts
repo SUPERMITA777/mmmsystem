@@ -178,14 +178,15 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 <html><head>
 <meta charset="utf-8">
 <style>
-  @page { size: 80mm auto; margin: 5mm 4mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 12px;
-    width: 72mm;
+    width: 100%;
     color: #000;
     line-height: 1.4;
+    padding: 2mm 0;
   }
   .center { text-align: center; }
   .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
@@ -396,7 +397,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 <style>
   @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Arial Black', Gadget, sans-serif; width: 72mm; color: #000; line-height: 1.2; margin: 0; padding: 4mm; }
+  body { font-family: 'Arial Black', Gadget, sans-serif; width: 100%; color: #000; line-height: 1.2; margin: 0; padding: 2mm 0; }
   .center { text-align: center; }
   .sep { border: none; border-top: 2px dashed #000; margin: 8px 0; }
 </style>
@@ -554,9 +555,9 @@ export function printPromoQrWeb(url: string, texto: string, imageUrl?: string, c
 <html><head>
 <meta charset="utf-8">
 <style>
-  @page { size: 80mm auto; margin: 5mm 4mm; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; line-height: 1.4; color: #000; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 100%; line-height: 1.4; color: #000; padding: 2mm 0; }
   .center { text-align: center; }
   .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
 </style>
