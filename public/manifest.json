@@ -2,7 +2,7 @@
   "name": "MMM System - Gestión Gastronómica",
   "short_name": "MMM System",
   "description": "Sistema de gestión gastronómica con soporte offline",
-  "start_url": "/",
+  "start_url": "/admin",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
