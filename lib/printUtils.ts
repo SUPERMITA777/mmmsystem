@@ -319,7 +319,12 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   
   itemsToPrint.forEach((item: any) => {
     let printerKey = defaultPrinterKey;
-    const itemCatId = item.productos?.categoria_id || item.categoria_id;
+    
+    // Obtener categoria_id de forma robusta
+    const itemCatId = item.productos?.categoria_id || 
+                      item.categoria_id || 
+                      item.producto?.categoria_id ||
+                      (item.productos && item.productos.id_categoria); // Por si acaso hay variantes de nombres
 
     // Buscar en qué impresora está configurada esta categoría
     if (c.impresoras) {
@@ -356,6 +361,11 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
         </div>`;
     }).join("");
 
+    // Título simplificado para Salón
+    const mainTitle = (pedido.tipo === "salon" || pedido.tipo === "mesa") && mesaNum 
+      ? `MESA ${mesaNum}` 
+      : `N° ${numCorto}`;
+
     const html = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
@@ -369,18 +379,18 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 </head>
 <body>
 
-  <!-- NÚMERO DE PEDIDO GRANDE -->
-  <div class="center" style="font-weight:900;font-size:32px;letter-spacing:2px;margin-bottom:4px">
-    ${pedido.tipo === "salon" && mesaNum ? `MESA ${mesaNum}` : `N° ${numCorto}`}
+  <!-- NÚMERO DE MESA O PEDIDO GRANDE -->
+  <div class="center" style="font-weight:900;font-size:38px;letter-spacing:2px;margin-bottom:4px">
+    ${mainTitle}
   </div>
-  <div class="center" style="font-weight:bold;font-size:16px;margin-bottom:2px">${tipoLabel}</div>
+  <div class="center" style="font-weight:bold;font-size:18px;margin-bottom:2px">${tipoLabel}</div>
 
   <!-- HORARIO COMANDADO -->
   <div class="center" style="font-size:20px;font-weight:bold;margin:6px 0;padding:4px;border:2px solid #000;border-radius:4px">
-    ⏰ ${horaComandado} hs — ${fechaCorta}
+    ⏰ ${horaComandado} hs
   </div>
 
-  ${pedido.cliente_nombre && pedido.tipo !== "salon"
+  ${pedido.cliente_nombre && (pedido.tipo !== "salon" && pedido.tipo !== "mesa")
         ? `<div style="font-size:${c.fuente_cliente_detalles}px;font-weight:bold;color:#333;margin-top:4px">${pedido.cliente_nombre}</div>`
         : ""}
 
