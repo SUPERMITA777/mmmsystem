@@ -8,6 +8,9 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
+  fallbacks: {
+    document: "/launcher",
+  },
 });
 
 /** @type {import('next').NextConfig} */
