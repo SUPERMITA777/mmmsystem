@@ -194,12 +194,13 @@ export default function PanelPedidosPage() {
   async function fetchPrintConfig() {
     if (!sucursalId) return;
     const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-    const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+    const { data: suc } = await supabase.from("config_sucursal").select("nombre, panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
     const boldMap = suc?.panel_settings?.print_bold || {};
     const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
     const impresoras = suc?.panel_settings?.impresoras || {};
-    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras });
-    else setPrintConfig({ boldMap, fuente_adicionales, impresoras });
+    const nombre_local = suc?.nombre || "MMM Pizza Artesanal";
+    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, nombre_local });
+    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, nombre_local });
   }
 
   async function fetchSucursalConfig() {

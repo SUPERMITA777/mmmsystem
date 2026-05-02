@@ -20,6 +20,7 @@ export type PrintConfig = {
   boldMap?: Record<string, boolean>;
   impresoras?: Record<string, { enabled: boolean; ip: string; printerName: string }>;
   promoQrUrl?: string; // URL para el código QR de la promo
+  nombre_local?: string; // Nombre del local configurado en la web
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -39,6 +40,7 @@ const DEFAULT_CONFIG: PrintConfig = {
   color_accents: '#2563eb',
   boldMap: {},
   impresoras: {},
+  nombre_local: "MMM Pizza Artesanal",
 };
 
 const BRIDGE_PORTS = [9100, 9101];
@@ -200,7 +202,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   <div class="center" style="font-size:${c.fuente_titulo}px;${bw(c, 'fuente_titulo')}margin-bottom:2px">
     ${tipoLabel} N°${numCorto}
   </div>
-  <div class="center" style="font-size:${c.fuente_subtitulo}px;${bw(c, 'fuente_subtitulo')}margin-bottom:6px">MMM Pizza Artesanal</div>
+  <div class="center" style="font-size:${c.fuente_subtitulo}px;${bw(c, 'fuente_subtitulo')}margin-bottom:6px">${c.nombre_local}</div>
 
   <!-- FECHA Y HORA -->
   ${c.mostrar_fecha_hora ? `
