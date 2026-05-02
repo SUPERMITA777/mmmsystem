@@ -406,6 +406,12 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   <!-- PRODUCTOS -->
   ${itemsHtml}
 
+  <!-- CAMARERO -->
+  ${pedido.usuarios?.nombre || pedido.camarero_nombre ? `
+  <div class="center" style="font-size:18px;font-weight:bold;margin-top:10px;padding:4px;border:1px dashed #000">
+    ATENDIDO POR: ${(pedido.usuarios?.nombre || pedido.camarero_nombre).toUpperCase()}
+  </div>` : ""}
+
   <hr class="sep">
   <div class="center" style="font-size:10px;color:#666">Pedido #${pedido.numero_pedido || "—"}</div>
 
