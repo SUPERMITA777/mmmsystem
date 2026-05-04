@@ -108,6 +108,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
     const [alternativas, setAlternativas] = useState<any[]>([]);
+    const [showPreCuentaModal, setShowPreCuentaModal] = useState(false);
 
     useEffect(() => {
         if (isOpen && sucursalId) {
@@ -1923,39 +1924,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     {editPedido && (
                                         <div className="flex-1 flex gap-2">
                                              <button
-                                                onClick={async () => {
-                                                    if (!metodoPagoId) {
-                                                        alert("Por favor, seleccioná un método de pago antes de imprimir la pre-cuenta.");
-                                                        return;
-                                                    }
-                                                    
-                                                    const mesaObj = mesas.find(m => m.id === mesaId);
-                                                    const camareroObj = camareros.find(c => c.id === camareroId);
-                                                    const mpObj = metodosPago.find(m => m.id === metodoPagoId);
-
-                                                    // Update order in background if editing
-                                                    if (editPedido?.id) {
-                                                        await supabase.from("pedidos").update({ 
-                                                            metodo_pago_id: metodoPagoId 
-                                                        }).eq("id", editPedido.id);
-                                                    }
-
-                                                    const patchedPedido = {
-                                                        ...editPedido,
-                                                        mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
-                                                        camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
-                                                        metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
-                                                        subtotal,
-                                                        total,
-                                                        descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
-                                                    };
-                                                    printPreCuenta(patchedPedido, printConfig);
-                                                    onClose();
-                                                }}
+                                                onClick={() => setShowPreCuentaModal(true)}
                                                 className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-[10px] font-black transition-colors"
                                             >
                                                 📄 PRE-CUENTA
                                             </button>
+
 
                                             {isAdmin && (
                                                 <button
@@ -2031,6 +2005,123 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-500 disabled:opacity-40 shadow-lg shadow-red-500/20 active:scale-95 transition-all"
                                 >
                                     Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Mini Modal Pre-Cuenta Pago */}
+            {showPreCuentaModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="bg-amber-500 p-4 text-white">
+                            <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                                <ShoppingBag size={18} />
+                                Método de Pago
+                            </h3>
+                            <p className="text-[10px] opacity-90 mt-1">Seleccioná cómo va a pagar el cliente para el ticket.</p>
+                        </div>
+                        
+                        <div className="p-6 space-y-6">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Forma de Pago</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {metodosPago.map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => {
+                                                setMetodoPagoId(m.id);
+                                                setIsMixto(false);
+                                            }}
+                                            className={`py-3 px-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${
+                                                metodoPagoId === m.id && !isMixto
+                                                    ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200"
+                                                    : "bg-white text-gray-500 border-gray-100 hover:border-amber-200"
+                                            }`}
+                                        >
+                                            {m.nombre}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => setIsMixto(true)}
+                                        className={`py-3 px-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${
+                                            isMixto
+                                                ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200"
+                                                : "bg-white text-gray-500 border-gray-100 hover:border-amber-200"
+                                        }`}
+                                    >
+                                        🌓 MIXTO
+                                    </button>
+                                </div>
+                            </div>
+
+                            {isMixto && (
+                                <div className="space-y-4 p-4 bg-amber-50 rounded-xl border border-amber-100 animate-in fade-in slide-in-from-top-2">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Pago 1 (Monto)</label>
+                                            <input 
+                                                type="number"
+                                                value={montoMixto1}
+                                                onChange={e => setMontoMixto1(e.target.value)}
+                                                placeholder="$ 0"
+                                                className="w-full bg-white border border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-amber-700 uppercase block mb-1">Pago 2 (Resto)</label>
+                                            <select
+                                                value={metodoPago2Id}
+                                                onChange={e => setMetodoPago2Id(e.target.value)}
+                                                className="w-full bg-white border border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                                            >
+                                                <option value="">Seleccionar...</option>
+                                                {metodosPago.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    onClick={() => setShowPreCuentaModal(false)}
+                                    className="flex-1 py-3 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    disabled={!metodoPagoId && !isMixto}
+                                    onClick={async () => {
+                                        const mesaObj = mesas.find(m => m.id === mesaId);
+                                        const camareroObj = camareros.find(c => c.id === camareroId);
+                                        const mpObj = metodosPago.find(m => m.id === metodoPagoId);
+
+                                        // Update order in background if editing
+                                        if (editPedido?.id) {
+                                            await supabase.from("pedidos").update({ 
+                                                metodo_pago_id: isMixto ? null : metodoPagoId,
+                                                notas_internas: isMixto ? "MIXTO" : "" 
+                                            }).eq("id", editPedido.id);
+                                        }
+
+                                        const patchedPedido = {
+                                            ...editPedido,
+                                            mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
+                                            camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
+                                            metodo_pago_nombre: isMixto ? "Mixto" : (mpObj ? mpObj.nombre : "Efectivo"),
+                                            subtotal,
+                                            total,
+                                            descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
+                                        };
+                                        printPreCuenta(patchedPedido, printConfig);
+                                        setShowPreCuentaModal(false);
+                                        onClose();
+                                    }}
+                                    className="flex-[2] bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-200 transition-all active:scale-95 disabled:opacity-50"
+                                >
+                                    🖨️ Imprimir
                                 </button>
                             </div>
                         </div>
