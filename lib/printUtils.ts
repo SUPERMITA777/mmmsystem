@@ -21,6 +21,7 @@ export type PrintConfig = {
   impresoras?: Record<string, { enabled: boolean; ip: string; printerName: string }>;
   promoQrUrl?: string; // URL para el código QR de la promo
   nombre_local?: string; // Nombre del local configurado en la web
+  bridge_ip?: string;
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -49,15 +50,15 @@ function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
 }
 
-async function doPrint(html: string, printerName?: string) {
+async function doPrint(html: string, printerName?: string, bridgeIp: string = '127.0.0.1') {
   // 1. Try to send to Bridge if printerName is provided
   if (printerName) {
     let sent = false;
     for (const port of BRIDGE_PORTS) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const res = await fetch(`http://127.0.0.1:${port}/print`, {
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // Reducido a 10s
+        const res = await fetch(`http://${bridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html, printerName }),
@@ -76,7 +77,7 @@ async function doPrint(html: string, printerName?: string) {
     }
     if (sent) return; // Silent print success
     else {
-        alert(`Fallo la impresión silenciosa en la impresora "${printerName}". Verificá que esté conectada, que el nombre sea exacto, y que el Puente de Impresión esté abierto. Se abrirá el cuadro de Windows como respaldo.`);
+        console.warn("Fallo impresión silenciosa, intentando browser fallback.");
     }
   }
 
@@ -297,7 +298,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 </body></html>`;
 
   const printerName = c.impresoras?.["FACTURACION"]?.printerName;
-  doPrint(html, printerName);
+  doPrint(html, printerName, c.bridge_ip);
 }
 
 /* ──────────────────────────────────────────────────────
@@ -450,7 +451,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-    doPrint(html, printerName);
+    doPrint(html, printerName, c.bridge_ip);
   });
 }
 
@@ -554,7 +555,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
   if (!printerName) {
       alert("No hay una impresora asignada a FACTURACIÓN en Ajustes > Impresoras. Se abrirá la ventana normal de impresión.");
   }
-  doPrint(html, printerName);
+  doPrint(html, printerName, c.bridge_ip);
 }
 
 /* Alias legacy */
@@ -601,6 +602,31 @@ export function printPromoQrWeb(url: string, texto: string, imageUrl?: string, c
 
 </body></html>`;
 
-  doPrint(html);
+  doPrint(html, undefined, c.bridge_ip);
 }
 
+
+/**
+ * ──────────────────────────────────────────────────────
+ * LLAMADAS AL BRIDGE (LOCAL HUB)
+ * ──────────────────────────────────────────────────────
+ */
+export async function doBridgePost(endpoint: string, data: any, bridgeIp: string = '127.0.0.1') {
+    for (const port of BRIDGE_PORTS) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(`http://${bridgeIp}:${port}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (res.ok) return await res.json();
+        } catch (e) {
+            console.warn(`Bridge no responde en ${bridgeIp}:${port}${endpoint}`);
+        }
+    }
+    throw new Error("No se pudo contactar con el Bridge");
+}

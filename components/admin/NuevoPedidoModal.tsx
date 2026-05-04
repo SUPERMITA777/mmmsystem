@@ -6,8 +6,9 @@ import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle,
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
-import { db, guardarPedidoLocal, generateLocalId } from "@/lib/db";
+import { db, guardarPedidoLocal, generateLocalId, marcarSincronizado } from "@/lib/db";
 import { printCocina, printCocinaIncremental, printPreCuenta } from "@/lib/printUtils";
+import { persistirPedidoHibrido } from "@/lib/hybridService";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -602,9 +603,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const boldMap = suc?.panel_settings?.print_bold || {};
             const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
             const impresoras = suc?.panel_settings?.impresoras || {};
+            const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
             const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
-            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, nombre_local });
-            else setPrintConfig({ boldMap, fuente_adicionales, impresoras, nombre_local });
+            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
+            else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
         } catch {}
     }
 
@@ -921,7 +923,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (iError2) throw iError2;
                 pedidoFinalId = editPedido.id;
             } else {
-                // ═══ LOCAL-FIRST: Construir payloads y guardar en Dexie primero ═══
+                // ═══ HYBRID PERSISTENCE ═══
                 const localId = generateLocalId();
                 const now = new Date();
                 const formatter = new Intl.DateTimeFormat('en-CA', { 
@@ -931,12 +933,25 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const todayStr = formatter.format(now);
                 const datePart = todayStr.replace(/-/g, '');
                 const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
-                // Número provisional offline (se reemplazará en sync si hay colisión)
-                const numeroPedidoLocal = `${tipoPrefix}-${datePart}-LOCAL-${localId.slice(0, 6).toUpperCase()}`;
 
-                const pedidoPayload: Record<string, any> = {
+                // 1. Intentar obtener número real si hay red
+                let numeroPedidoFinal = `${tipoPrefix}-${datePart}-LOCAL-${localId.slice(0, 6).toUpperCase()}`;
+                if (navigator.onLine) {
+                    try {
+                        const { data: nextSeq } = await supabase.rpc('get_next_order_number', {
+                            p_sucursal_id: sucursalId,
+                            p_date_part: datePart
+                        });
+                        if (nextSeq) {
+                            numeroPedidoFinal = `${tipoPrefix}-${datePart}-${String(nextSeq).padStart(4, '0')}`;
+                        }
+                    } catch (e) { console.warn("Error getting real order number, using local one."); }
+                }
+
+                const pedidoPayload = {
+                    id: localId,
                     sucursal_id: sucursalId,
-                    numero_pedido: numeroPedidoLocal,
+                    numero_pedido: numeroPedidoFinal,
                     cliente_id: resolvedClienteId || null,
                     cliente_nombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
                     cliente_telefono: cliente.telefono,
@@ -966,78 +981,16 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     adicionales: item.adicionales || []
                 }));
 
-                // 1️⃣ GUARDAR EN DEXIE (siempre funciona, incluso sin red)
-                await guardarPedidoLocal({
-                    mesa: tipo === "salon" ? (mesaId || null) : null,
-                    items: itemsPayload,
-                    total,
-                    estado: "pendiente",
-                    sucursal_id: sucursalId!,
-                    payload_pedido: pedidoPayload,
-                    payload_items: itemsPayload,
-                });
-
+                // persistirPedidoHibrido handles IndexedDB -> Supabase -> Local Hub
+                const result = await persistirPedidoHibrido(
+                    pedidoPayload, 
+                    itemsPayload, 
+                    printConfig?.bridge_ip || "127.0.0.1",
+                    sucursalId!
+                );
+                
                 pedidoFinalId = localId;
-
-                // 2️⃣ INTENTAR SUBIR A SUPABASE (si hay red)
-                if (navigator.onLine) {
-                    try {
-                        // Intentar obtener número secuencial real desde el servidor
-                        let createdPedido: any = null;
-                        let attempts = 0;
-                        const maxAttempts = 10;
-
-                        while (attempts < maxAttempts && !createdPedido) {
-                            attempts++;
-                            if (attempts > 1) await new Promise(r => setTimeout(r, 300 * (attempts - 1)));
-
-                            const { data: nextSeq, error: rpcError } = await supabase.rpc('get_next_order_number', {
-                                p_sucursal_id: sucursalId,
-                                p_date_part: datePart
-                            });
-                            if (rpcError) throw rpcError;
-
-                            const paddedSeq = String(nextSeq).padStart(4, '0');
-                            const numeroPedido = `${tipoPrefix}-${datePart}-${paddedSeq}`;
-
-                            const { data: pedido, error: pError } = await supabase.from("pedidos").insert({
-                                ...pedidoPayload,
-                                id: localId,
-                                numero_pedido: numeroPedido,
-                            }).select().single();
-
-                            if (pError) {
-                                if (pError.code === '23505') {
-                                    console.warn(`[NuevoPedidoModal] Colisión para ${numeroPedido}, reintentando...`);
-                                    continue;
-                                }
-                                throw pError;
-                            }
-                            createdPedido = pedido;
-                        }
-
-                        if (!createdPedido) throw new Error("No se pudo generar número de pedido único.");
-
-                        const items = itemsPayload.map(item => ({ ...item, pedido_id: createdPedido.id }));
-                        const { error: iError3 } = await supabase.from("pedido_items").insert(items);
-                        if (iError3) throw iError3;
-
-                        // Marcar como sincronizado en Dexie
-                        const { marcarSincronizado } = await import("@/lib/db");
-                        // El guardarPedidoLocal genera su propio ID, buscar y marcar
-                        const { db: localDb } = await import("@/lib/db");
-                        const pendientes = await localDb.pedidos.where("sincronizado").equals(0).toArray();
-                        const match = pendientes.find(p => p.payload_pedido?.numero_pedido === numeroPedidoLocal);
-                        if (match) await marcarSincronizado(match.id);
-
-                        pedidoFinalId = createdPedido.id;
-                    } catch (syncErr: any) {
-                        // ⚡ La red falló PERO el pedido ya está seguro en Dexie
-                        console.warn("[Local-First] Pedido guardado localmente, sync fallido:", syncErr.message);
-                    }
-                } else {
-                    console.log("[Local-First] Sin red — pedido guardado localmente, se sincronizará después.");
-                }
+                console.log(`[Hybrid] Pedido guardado via: ${result.source}`);
             }
 
             onCreated();

@@ -12,6 +12,7 @@ import { useTenant } from "@/context/TenantContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { descontarStockDePedido } from "@/lib/stockUtils";
 import { getArgentinaDate, getStartOfDayArgentina, getEndOfDayArgentina, formatToArgentinaDateTime, formatToArgentinaTime } from "@/lib/dateUtils";
+import { useHybridPedidos } from "@/hooks/useHybridPedidos";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
@@ -119,6 +120,10 @@ export default function PanelPedidosPage() {
   const [promoActiva, setPromoActiva] = useState(false);
 
   const { sucursalId } = useTenant();
+  const { pedidos: hybridPedidos, lastSyncSource, refresh: refreshHybrid } = useHybridPedidos(
+    sucursalId, 
+    printConfig?.bridge_ip || "127.0.0.1"
+  );
   const { playNotificationSound, enableAudio, audioEnabled } = useNotifications();
 
   useEffect(() => {
@@ -158,28 +163,7 @@ export default function PanelPedidosPage() {
   }, [selectedPedido?.id]);
 
   async function fetchPedidos(fromRealtime = false) {
-    if (!sucursalId) return;
-    let query = supabase
-      .from("pedidos")
-      .select("*, pedido_items(*, productos(*, categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
-      .eq("sucursal_id", sucursalId)
-      .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
-      .gte("created_at", getStartOfDayArgentina(fechaDesde))
-      .lte("created_at", getEndOfDayArgentina(fechaHasta))
-      .order("created_at", { ascending: false });
-
-    const { data } = await query;
-    const rows = (data || []) as Pedido[];
-
-    setPedidos(rows);
-    setLoading(false);
-
-    // Keep selectedPedido in sync
-    setSelectedPedido((prev: Pedido | null) => {
-      if (!prev) return null;
-      const updated = rows.find(p => p.id === prev.id);
-      return updated || prev;
-    });
+    refreshHybrid();
   }
 
   async function fetchRepartidores() {
@@ -198,10 +182,12 @@ export default function PanelPedidosPage() {
     const { data: infoSuc } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
     const boldMap = suc?.panel_settings?.print_bold || {};
     const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
+    const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
     const impresoras = suc?.panel_settings?.impresoras || {};
+    const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
     const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
-    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, nombre_local });
-    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, nombre_local });
+    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
+    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
   }
 
   async function fetchSucursalConfig() {
@@ -341,7 +327,7 @@ export default function PanelPedidosPage() {
     fetchPedidos();
   }
 
-  const filtrados = pedidos.filter(p => {
+  const filtrados = (hybridPedidos || []).filter(p => {
     if (filtro !== "todos" && p.tipo !== filtro) return false;
     if (busqueda && !p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase()) &&
       !p.numero_pedido?.toLowerCase().includes(busqueda.toLowerCase())) return false;
@@ -375,6 +361,25 @@ export default function PanelPedidosPage() {
       {/* Main area */}
       <div className="flex-1 flex flex-col">
         {/* Top filters */}
+        <div className="px-6 py-2 flex items-center justify-between border-b border-gray-100 bg-slate-50/80">
+          <div className="flex items-center gap-2">
+             <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold ${
+               lastSyncSource === 'supabase' ? 'bg-green-100 text-green-700' :
+               lastSyncSource === 'bridge' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+             }`}>
+               <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                 lastSyncSource === 'supabase' ? 'bg-green-500' :
+                 lastSyncSource === 'bridge' ? 'bg-blue-500' : 'bg-orange-500'
+               }`} />
+               {lastSyncSource === 'supabase' ? 'CONECTADO (CLOUD)' : 
+                lastSyncSource === 'bridge' ? 'MODO LOCAL (LAN)' : 'SIN CONEXIÓN'}
+             </div>
+             {lastSyncSource !== 'supabase' && (
+               <span className="text-[10px] text-gray-400 italic">Usando Hub Local en {printConfig?.bridge_ip}</span>
+             )}
+          </div>
+        </div>
+
         <div className="px-6 py-4 flex items-center gap-4 flex-wrap border-b border-gray-100 bg-white">
           <div className="flex rounded-xl overflow-hidden border border-gray-200 bg-white shadow-sm">
             {[

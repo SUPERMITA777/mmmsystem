@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, Bell, MessageSquare, Monitor, Printer, Upload, Music, Trash2 } from "lucide-react";
+import { X, Settings, Bell, MessageSquare, Monitor, Printer, Upload, Music, Trash2, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
 interface PanelSettings {
@@ -20,6 +20,7 @@ interface PanelSettings {
     };
     promo_qr_text?: string;
     promo_qr_image_url?: string;
+    bridge_ip?: string;
 }
 
 interface OrderPanelSettingsModalProps {
@@ -49,7 +50,8 @@ export default function OrderPanelSettingsModal({
             listo: "TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!",
             entregado: "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido."
         },
-        promo_qr_text: "#GRACIAS POR ELEGIRNOS"
+        promo_qr_text: "#GRACIAS POR ELEGIRNOS",
+        bridge_ip: "127.0.0.1"
     });
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -169,6 +171,51 @@ export default function OrderPanelSettingsModal({
                                 />
                                 <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Ocultar pedidos con pago pendiente (Mercado Pago vinculado)</span>
                             </label>
+                        </div>
+                    </section>
+
+                    {/* Local Hub (Offline Mode) */}
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <Monitor size={14} className="text-blue-500" /> <span>Modo Offline / Local Hub</span>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+                            <p className="text-[11px] text-blue-700 leading-relaxed">
+                                Si usas tablets o varias PCs en red local, ingresa la IP de la PC que tiene las impresoras conectadas. 
+                                Esto permite imprimir y guardar pedidos incluso si se corta internet.
+                            </p>
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-blue-900 font-bold uppercase px-1">IP del Servidor Local (Puente)</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={settings.bridge_ip || ""}
+                                        onChange={e => setSettings({ ...settings, bridge_ip: e.target.value })}
+                                        placeholder="Ej: 192.168.1.50"
+                                        className="flex-1 bg-white border border-blue-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => setSettings({ ...settings, bridge_ip: "127.0.0.1" })}
+                                        className="px-3 py-2 text-[10px] font-bold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                                    >
+                                        Local
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-2 pt-2 border-t border-blue-100">
+                                <p className="text-[10px] text-blue-900 font-bold uppercase px-1">Instalador del Servidor</p>
+                                <a 
+                                    href="/INSTALAR_HUB_Y_SISTEMA.bat" 
+                                    download
+                                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                                >
+                                    <Download size={14} /> Descargar Instalador para PC Principal
+                                </a>
+                                <p className="text-[9px] text-blue-500 italic px-1">
+                                    Ejecuta esto en la PC que tiene las impresoras conectadas para habilitar el modo local.
+                                </p>
+                            </div>
                         </div>
                     </section>
 

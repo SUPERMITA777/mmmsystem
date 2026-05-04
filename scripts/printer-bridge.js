@@ -1,7 +1,6 @@
 /* ───────────────────────────────────────────────
-   Puente de Impresión MMM – Print Bridge
-   Se ejecuta en la PC del restaurante y permite
-   que la web imprima silenciosamente.
+   Puente de Impresión MMM – Local Hub & Print Bridge
+   v3.0 - Soporte Offline-First LAN
    ─────────────────────────────────────────────── */
 
 const http = require('http');
@@ -10,10 +9,36 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const url = require('url');
+const https = require('https');
 
 const PORT = 9100;
-const FALLBACK_PORT = 9101;
+const DB_PATH = path.join(os.homedir(), '.mmm_local_db.json');
 
+// --- CONFIG (FROM .ENV) ---
+const SUPABASE_URL = 'https://xnupjsxbvyirpeagbloe.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhudXBqc3hidnlpcnBlYWdibG9lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDY0OTg2OSwiZXhwIjoyMDg2MjI1ODY5fQ.abuUcTgjLUnHZqagnlk10l8BpsCnDg3q_IRPUg5hKw0';
+
+// --- DATABASE LOGIC ---
+function loadDb() {
+    try {
+        if (!fs.existsSync(DB_PATH)) return { orders: [] };
+        const data = fs.readFileSync(DB_PATH, 'utf8');
+        return JSON.parse(data);
+    } catch (e) {
+        console.error('Error cargando DB local:', e);
+        return { orders: [] };
+    }
+}
+
+function saveDb(data) {
+    try {
+        fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Error guardando DB local:', e);
+    }
+}
+
+// --- PRINT QUEUE LOGIC ---
 const printQueue = [];
 let isPrinting = false;
 
@@ -33,20 +58,9 @@ function processQueue() {
     const psFile = path.join(os.tmpdir(), 'mmm_print_' + Date.now() + '.ps1');
     fs.writeFileSync(psFile, psContent, 'utf8');
 
-    console.log('    Ejecutando PowerShell...');
-
     const child = spawn('powershell', ['-STA', '-ExecutionPolicy', 'Bypass', '-File', psFile]);
 
-    child.stdout.on('data', (data) => {
-        console.log('    [PS] ' + data.toString().trim());
-    });
-
-    child.stderr.on('data', (data) => {
-        console.error('    [PS ERR] ' + data.toString().trim());
-    });
-
     child.on('close', (code) => {
-        // Cleanup temp files after a delay
         setTimeout(() => {
             try { fs.unlinkSync(tempFile); } catch(e) {}
             try { fs.unlinkSync(psFile); } catch(e) {}
@@ -67,95 +81,63 @@ function processQueue() {
         }
         
         isPrinting = false;
-        processQueue(); // Continuar con el siguiente trabajo
+        processQueue();
     });
 }
 
-/**
- * Genera el contenido del script PowerShell para imprimir.
- * IMPORTANTE: Se usa concatenación de strings (NO template literals)
- * para evitar que JavaScript interprete los $() de PowerShell.
- */
 function buildPrintScript(printerName, htmlFilePath) {
     var ps = '';
     ps += '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\r\n';
     ps += 'Add-Type -AssemblyName System.Windows.Forms\r\n';
     ps += '$printerName = \'' + printerName.replace(/'/g, "''") + '\'\r\n';
     ps += '$htmlFile = \'file:///' + htmlFilePath.replace(/\\/g, '/') + '\'\r\n';
-    ps += '\r\n';
-    ps += 'Write-Host "Paso 1: Configurando margenes a 0 en el registro..."\r\n';
     ps += 'try {\r\n';
     ps += '    $regPath = "HKCU:\\Software\\Microsoft\\Internet Explorer\\PageSetup"\r\n';
-    ps += '    if (-not (Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "margin_bottom" -Value "0" -ErrorAction SilentlyContinue\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "margin_left" -Value "0" -ErrorAction SilentlyContinue\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "margin_right" -Value "0" -ErrorAction SilentlyContinue\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "margin_top" -Value "0" -ErrorAction SilentlyContinue\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "header" -Value "" -ErrorAction SilentlyContinue\r\n';
     ps += '    Set-ItemProperty -Path $regPath -Name "footer" -Value "" -ErrorAction SilentlyContinue\r\n';
-    ps += '} catch { Write-Host "Aviso: No se pudieron configurar los margenes." }\r\n';
-    ps += '\r\n';
-    ps += 'Write-Host "Paso 2: Buscando impresora [$printerName]..."\r\n';
-    ps += 'try {\r\n';
     ps += '    $printer = Get-CimInstance -ClassName Win32_Printer -Filter "Name=\'$printerName\'"\r\n';
-    ps += '    if (-not $printer) {\r\n';
-    ps += '        Write-Host "ERROR: No se encontro la impresora exacta: $printerName"\r\n';
-    ps += '        exit 1\r\n';
-    ps += '    }\r\n';
-    ps += '    \r\n';
-    ps += '    $status = if ($printer.PrinterStatus -eq 3) { "Online" } else { "Status:" + $printer.PrinterStatus }\r\n';
-    ps += '    $workOffline = if ($printer.WorkOffline) { "SI" } else { "NO" }\r\n';
-    ps += '    Write-Host "INFO: Impresora detectada. Estado: $status. Trabajando Offline: $workOffline"\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 2: Limpiando cola de trabajos previos..."\r\n';
-    ps += '    Get-PrintJob -PrinterName $printerName | Remove-PrintJob -ErrorAction SilentlyContinue\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 3: Guardando impresora predeterminada..."\r\n';
     ps += '    $currentDefault = (Get-CimInstance -ClassName Win32_Printer -Filter "Default=True").Name\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 4: Estableciendo impresora destino..."\r\n';
     ps += '    Invoke-CimMethod -InputObject $printer -MethodName SetDefaultPrinter | Out-Null\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 5: Creando motor de renderizado..."\r\n';
     ps += '    $browser = New-Object System.Windows.Forms.WebBrowser\r\n';
     ps += '    $browser.ScrollBarsEnabled = $false\r\n';
     ps += '    $browser.ScriptErrorsSuppressed = $true\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 6: Navegando al documento..."\r\n';
     ps += '    $browser.Navigate($htmlFile)\r\n';
-    ps += '    $timeout = 0\r\n';
-    ps += '    while ($browser.ReadyState -ne "Complete" -and $timeout -lt 200) {\r\n';
+    ps += '    while ($browser.ReadyState -ne "Complete") {\r\n';
     ps += '        [System.Windows.Forms.Application]::DoEvents()\r\n';
     ps += '        Start-Sleep -Milliseconds 50\r\n';
-    ps += '        $timeout++\r\n';
     ps += '    }\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 7: Enviando a cola de impresion (ExecWB)..."\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 8: Esperando que el spooler reciba el documento (8s)..."\r\n';
-    ps += '    Start-Sleep -Seconds 8\r\n';
-    ps += '    \r\n';
-    ps += '    Write-Host "Paso 9: Restaurando impresora predeterminada..."\r\n';
-    ps += '    if ($currentDefault -and $currentDefault -ne $printerName) {\r\n';
+    ps += '    Start-Sleep -Seconds 2\r\n';
+    ps += '    if ($currentDefault) {\r\n';
     ps += '        $orig = Get-CimInstance -ClassName Win32_Printer -Filter "Name=\'$currentDefault\'"\r\n';
-    ps += '        if ($orig) { Invoke-CimMethod -InputObject $orig -MethodName SetDefaultPrinter | Out-Null }\r\n';
+    ps += '        Invoke-CimMethod -InputObject $orig -MethodName SetDefaultPrinter | Out-Null\r\n';
     ps += '    }\r\n';
-    ps += '    Write-Host "Impresion enviada exitosamente al spooler de Windows."\r\n';
-    ps += '} catch {\r\n';
-    ps += '    Write-Host ("ERROR CRITICO EN POWERSHELL: " + $_.Exception.Message)\r\n';
-    ps += '    exit 1\r\n';
-    ps += '}\r\n';
+    ps += '} catch { exit 1 }\r\n';
     return ps;
+}
+
+function getLocalIp() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
 }
 
 function startServer(port) {
     const server = http.createServer((req, res) => {
-        // CORS headers for all requests
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Tenant-ID');
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
@@ -164,167 +146,199 @@ function startServer(port) {
 
         const parsedUrl = url.parse(req.url, true);
 
-        // ─── GET /printers ─── List all installed printers
+        // --- ENDPOINT: STATUS ---
+        if (req.method === 'GET' && parsedUrl.pathname === '/status') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ status: 'ok', version: '3.0.0', hub_active: true }));
+        }
+
+        // --- ENDPOINT: GET PRINTERS ---
         if (req.method === 'GET' && parsedUrl.pathname === '/printers') {
-            const cmd = 'powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"';
-            exec(cmd, { timeout: 5000 }, (err, stdout) => {
-                if (err) {
-                    console.error('Error listando impresoras:', err.message);
-                    return res.writeHead(500).end(JSON.stringify({ error: err.message }));
-                }
-                const printers = stdout
-                    .split('\n')
-                    .map(l => l.trim())
-                    .filter(l => l.length > 0);
-                console.log('Impresoras encontradas: ' + printers.join(', '));
+            exec('powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"', (err, stdout) => {
+                if (err) return res.writeHead(500).end(JSON.stringify({ error: err.message }));
+                const printers = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(printers));
             });
             return;
         }
 
-        // ─── GET /status ─── Health check
-        if (req.method === 'GET' && parsedUrl.pathname === '/status') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ status: 'ok', version: '2.0.0', port }));
-        }
-
-        // ─── POST /print ─── Print HTML to a specific printer
+        // --- ENDPOINT: PRINT ---
         if (req.method === 'POST' && parsedUrl.pathname === '/print') {
-            console.log('\n>>> RECIBIDA PETICION DE IMPRESION (/print)');
             let body = '';
-
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
                 try {
                     const { html, printerName } = JSON.parse(body);
-                    if (!html || !printerName) {
-                        res.writeHead(400);
-                        return res.end(JSON.stringify({ error: 'Faltan html o printerName' }));
-                    }
-
-                    // ENCOLAR EL TRABAJO
                     printQueue.push({ html, printerName, res });
-                    console.log(`[Cola] Trabajo añadido para ${printerName}. Posición: ${printQueue.length}`);
                     processQueue();
-
                 } catch (e) {
-                    console.error('Error procesando peticion:', e);
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'JSON invalido' }));
+                    res.writeHead(400).end(JSON.stringify({ error: 'Invalid JSON' }));
                 }
             });
             return;
         }
 
-        // ─── POST /print-test ─── Test a specific printer
-        if (req.method === 'POST' && parsedUrl.pathname === '/print-test') {
-            console.log('\n>>> RECIBIDA PETICION DE TEST (/print-test)');
+        // --- ENDPOINT: SAVE ORDER (LOCAL HUB) ---
+        if (req.method === 'POST' && (parsedUrl.pathname === '/api/save-order' || parsedUrl.pathname === '/api/orders')) {
             let body = '';
-
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
                 try {
-                    const { printerName } = JSON.parse(body);
-                    var testHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">';
-                    testHtml += '<style>@page{size:80mm auto;margin:5mm}body{font-family:Arial;width:72mm;text-align:center}</style>';
-                    testHtml += '</head><body>';
-                    testHtml += '<h1 style="font-size:24px">TEST OK</h1>';
-                    testHtml += '<p style="font-size:16px;font-weight:bold">Puente de Impresion MMM</p>';
-                    testHtml += '<hr>';
-                    testHtml += '<p>Impresora: ' + printerName + '</p>';
-                    testHtml += '<p>' + new Date().toLocaleString('es-AR') + '</p>';
-                    testHtml += '<p style="font-size:12px;color:#666">Si podes leer esto, la impresion funciona correctamente.</p>';
-                    testHtml += '</body></html>';
-
-                    const tempFile = path.join(os.tmpdir(), 'mmm_test_' + Date.now() + '.html');
-                    fs.writeFileSync(tempFile, testHtml, 'utf8');
-
-                    const psContent = buildPrintScript(printerName, tempFile);
-                    const psFile = path.join(os.tmpdir(), 'mmm_test_ps_' + Date.now() + '.ps1');
-                    fs.writeFileSync(psFile, psContent, 'utf8');
-
-                    const child = spawn('powershell', ['-STA', '-ExecutionPolicy', 'Bypass', '-File', psFile]);
-
-                    child.stdout.on('data', (data) => {
-                        console.log('    [PS] ' + data.toString().trim());
-                    });
-
-                    child.stderr.on('data', (data) => {
-                        console.error('    [PS ERR] ' + data.toString().trim());
-                    });
-
-                    child.on('close', (code) => {
-                        setTimeout(() => {
-                            try { fs.unlinkSync(tempFile); } catch(e) {}
-                            try { fs.unlinkSync(psFile); } catch(e) {}
-                        }, 10000);
-
-                        if (code !== 0) {
-                            console.error('*** Test fallo (codigo ' + code + ')');
-                            if (!res.writableEnded) {
-                                res.writeHead(500);
-                                res.end(JSON.stringify({ error: 'Test fallo (codigo ' + code + ')' }));
-                            }
-                        } else {
-                            console.log('>>> Test enviado OK a: ' + printerName);
-                            if (!res.writableEnded) {
-                                res.writeHead(200, { 'Content-Type': 'application/json' });
-                                res.end(JSON.stringify({ success: true }));
-                            }
-                        }
-                    });
-
+                    const orderData = JSON.parse(body);
+                    const db = loadDb();
+                    
+                    // Si ya existe por ID, lo actualizamos, sino lo agregamos
+                    const index = db.orders.findIndex(o => o.id === orderData.id);
+                    if (index !== -1) {
+                        db.orders[index] = { ...db.orders[index], ...orderData, last_updated: new Date().toISOString() };
+                    } else {
+                        db.orders.push({ ...orderData, created_at_local: new Date().toISOString(), synced: false });
+                    }
+                    
+                    saveDb(db);
+                    console.log('>>> PEDIDO GUARDADO LOCALMENTE:', orderData.id || orderData.numero_pedido);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, id: orderData.id }));
                 } catch (e) {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ error: 'JSON invalido' }));
+                    res.writeHead(400).end(JSON.stringify({ error: 'Invalid Order JSON' }));
                 }
             });
             return;
         }
 
-        // ─── 404 ───
+        // --- ENDPOINT: GET ORDERS (FOR LAN SYNC) ---
+        if (req.method === 'GET' && (parsedUrl.pathname === '/api/get-orders' || parsedUrl.pathname === '/api/orders')) {
+            const db = loadDb();
+            const sucursalId = req.headers['x-tenant-id'];
+            
+            let filteredOrders = db.orders;
+            if (sucursalId) {
+                filteredOrders = db.orders.filter(o => 
+                    o.sucursal_id === sucursalId || 
+                    o.tenantId === sucursalId || 
+                    (o.pedido && o.pedido.sucursal_id === sucursalId)
+                );
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(filteredOrders));
+            return;
+        }
+
+        // --- ENDPOINT: SYNC COMPLETE ---
+        if (req.method === 'POST' && parsedUrl.pathname === '/api/sync-complete') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const { ids } = JSON.parse(body);
+                    const db = loadDb();
+                    db.orders = db.orders.map(o => ids.includes(o.id) ? { ...o, synced: true } : o);
+                    saveDb(db);
+                    res.writeHead(200).end(JSON.stringify({ success: true }));
+                } catch (e) {
+                    res.writeHead(400).end();
+                }
+            });
+            return;
+        }
+
+        // Default 404
         res.writeHead(404);
         res.end(JSON.stringify({ error: 'Not found' }));
     });
 
-    server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE' && port === PORT) {
-            console.log('Puerto ' + PORT + ' ocupado, intentando ' + FALLBACK_PORT + '...');
-            startServer(FALLBACK_PORT);
-        } else {
-            console.error('Error del servidor:', err);
-        }
-    });
-
-    server.listen(port, () => {
-        console.log('');
-        console.log('========================================');
-        console.log('  PUENTE DE IMPRESION MMM v2.0');
-        console.log('  Ejecutandose en http://localhost:' + port);
-        console.log('  Listo para recibir comandas.');
-        console.log('========================================');
-        console.log('');
-
-        // List printers on startup
+    server.listen(port, '0.0.0.0', () => {
+        const localIp = getLocalIp();
+        console.log('\n=================================================');
+        console.log('   MMM LOCAL HUB & PRINT BRIDGE v3.0');
+        console.log('   -----------------------------------');
+        console.log('   ESTA MAQUINA ES EL SERVIDOR LOCAL');
+        console.log('   DIRECCION IP: ' + localIp);
+        console.log('   PUERTO: ' + port);
+        console.log('   URL PARA TABLETS: http://' + localIp + ':' + port);
+        console.log('=================================================\n');
+        console.log('Buscando impresoras...');
         exec('powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"', (err, stdout) => {
             if (!err) {
-                var printers = stdout.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l; });
-                console.log('Impresoras detectadas (' + printers.length + '):');
-                printers.forEach(function(p, i) { console.log('   ' + (i + 1) + '. ' + p); });
-                console.log('');
+                const printers = stdout.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                console.log('Impresoras encontradas: ' + printers.join(', '));
             }
         });
     });
 }
 
+// --- BACKGROUND SYNC TO SUPABASE ---
+async function syncToSupabase() {
+    const db = loadDb();
+    const unsynced = db.orders.filter(o => !o.synced);
+    if (unsynced.length === 0) return;
+
+    console.log(`[Sync] Intentando sincronizar ${unsynced.length} pedidos con Supabase...`);
+
+    for (const order of unsynced) {
+        try {
+            const payload = order.pedido || order;
+            const items = order.items || [];
+            
+            // 1. Subir pedido
+            const success = await supabasePost('/rest/v1/pedidos', payload);
+            if (success) {
+                // 2. Subir items
+                if (items.length > 0) {
+                    const itemsWithId = items.map(it => ({ ...it, pedido_id: payload.id }));
+                    await supabasePost('/rest/v1/pedido_items', itemsWithId);
+                }
+                order.synced = true;
+                console.log(`[Sync] Pedido ${payload.numero_pedido || payload.id} sincronizado OK`);
+            }
+        } catch (e) {
+            console.error(`[Sync] Error sincronizando ${order.id}:`, e.message);
+        }
+    }
+    saveDb(db);
+}
+
+function supabasePost(path, data) {
+    return new Promise((resolve, reject) => {
+        const urlObj = new URL(SUPABASE_URL);
+        const options = {
+            hostname: urlObj.hostname,
+            port: 443,
+            path: path,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`,
+                'Prefer': 'resolution=merge-duplicates'
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            if (res.statusCode >= 200 && res.statusCode < 300) resolve(true);
+            else {
+                let errData = '';
+                res.on('data', d => errData += d);
+                res.on('end', () => {
+                    console.warn(`[Supabase] Error ${res.statusCode}: ${errData}`);
+                    resolve(false);
+                });
+            }
+        });
+
+        req.on('error', (e) => reject(e));
+        req.write(JSON.stringify(data));
+        req.end();
+    });
+}
+
+// Iniciar loop de sincronización cada 30 segundos
+setInterval(syncToSupabase, 30000);
+
 startServer(PORT);
 
-// Manejo global de errores para evitar que el proceso muera
-process.on('uncaughtException', function(err) {
-    console.error('ERROR NO CONTROLADO:', err);
-});
+process.on('uncaughtException', err => console.error('CRITICAL ERROR:', err));
+process.on('unhandledRejection', r => console.error('REJECTION:', r));
 
-process.on('unhandledRejection', function(reason) {
-    console.error('PROMESA RECHAZADA:', reason);
-});
