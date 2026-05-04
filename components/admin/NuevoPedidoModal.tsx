@@ -1841,6 +1841,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                     camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null
                                                 };
                                                 printPreCuenta(patchedPedido, printConfig);
+                                                onClose();
                                             }}
                                             className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-xs font-bold transition-colors"
                                         >

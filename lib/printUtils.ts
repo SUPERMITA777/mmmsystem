@@ -45,6 +45,7 @@ const DEFAULT_CONFIG: PrintConfig = {
 };
 
 const BRIDGE_PORTS = [9100, 9101];
+let lastWorkingPort: number | null = null;
 
 function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
@@ -54,10 +55,14 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
   // 1. Try to send to Bridge if printerName is provided
   if (printerName) {
     let sent = false;
-    for (const port of BRIDGE_PORTS) {
+    
+    // Probar primero el último puerto que funcionó para ganar velocidad
+    const portsToTry = lastWorkingPort ? [lastWorkingPort, ...BRIDGE_PORTS.filter(p => p !== lastWorkingPort)] : BRIDGE_PORTS;
+
+    for (const port of portsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // Reducido a 10s
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // Reducido a 3s para respuesta rápida
         const res = await fetch(`http://${bridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -67,17 +72,16 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
         clearTimeout(timeoutId);
         if (res.ok) {
           sent = true;
+          lastWorkingPort = port;
           break;
-        } else {
-            console.error("Bridge retornó error:", await res.text());
         }
       } catch (e) {
-          console.error("Error contactando bridge en puerto", port, e);
+          // Ignorar errores de conexión y seguir probando
       }
     }
     if (sent) return; // Silent print success
     else {
-        console.warn("Fallo impresión silenciosa, intentando browser fallback.");
+        console.warn("Fallo impresión silenciosa o Bridge no encontrado.");
     }
   }
 
