@@ -864,7 +864,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
                 subtotal,
                 total,
-                descuento: subtotal + (tipo === "delivery" ? costoEnvio : 0) - promoDescuento - total
+                descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
             };
             printPreCuenta(patchedPedido, printConfig);
 
@@ -1947,7 +1947,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                         metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
                                                         subtotal,
                                                         total,
-                                                        descuento: subtotal + (tipo === "delivery" ? costoEnvio : 0) - promoDescuento - total
+                                                        descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
                                                     };
                                                     printPreCuenta(patchedPedido, printConfig);
                                                     onClose();
