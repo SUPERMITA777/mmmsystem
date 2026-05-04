@@ -67,6 +67,8 @@ export async function GET() {
             }
         }
 
+        const { data: { session } } = await supabase.auth.getSession();
+
         return NextResponse.json({
             user: {
                 id: user.id,
@@ -74,6 +76,7 @@ export async function GET() {
                 rol,
                 sucursal_id,
             },
+            session,
         });
     } catch (err) {
         console.error('Auth check error:', err);

@@ -87,6 +87,7 @@ export async function POST(req: Request) {
                 rol,
                 tenantSlug,
             },
+            session: data.session,
         });
     } catch (err: any) {
         console.error('Login error:', err);

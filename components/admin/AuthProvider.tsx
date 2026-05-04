@@ -44,11 +44,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const checkAuth = async () => {
         try {
+            // Check client-side session first
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log("[AuthProvider] Client session:", session ? "Found" : "Not found");
+
             const res = await fetch("/api/auth/me");
             if (res.ok) {
                 const data = await res.json();
                 const authUser = data.user as AuthUser;
                 setUser(authUser);
+
+                // Sincronizar sesión con el cliente de Supabase si es necesario
+                if (data.session) {
+                    const { data: { session: currentSession } } = await supabase.auth.getSession();
+                    if (!currentSession) {
+                        console.log("[AuthProvider] Recovering session from server...");
+                        await supabase.auth.setSession(data.session);
+                    }
+                }
 
                 // Tenant Verification (client-side safety net — middleware handles the primary check)
                 if (pathname.includes("/admin") && !pathname.includes("/admin/login") && authUser) {

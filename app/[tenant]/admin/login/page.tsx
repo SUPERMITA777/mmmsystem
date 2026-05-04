@@ -31,6 +31,12 @@ export default function LoginPage() {
                 return;
             }
 
+            // Sincronizar sesión con el cliente de Supabase
+            if (data.session) {
+                const { supabase } = await import("@/lib/supabaseClient");
+                await supabase.auth.setSession(data.session);
+            }
+
             // Redirect to the user's assigned tenant, not the URL tenant
             const targetSlug = data.user?.tenantSlug || tenantSlug;
             
