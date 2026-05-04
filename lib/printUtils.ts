@@ -51,9 +51,9 @@ function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
 }
 
-async function doPrint(html: string, printerName?: string, bridgeIp: string = '127.0.0.1') {
-  // 1. Try to send to Bridge if printerName is provided
-  if (printerName) {
+async function doPrint(html: string, printerName?: string, bridgeIp: string = '127.0.0.1', printerIp?: string) {
+  // 1. Try to send to Bridge if printerName or printerIp is provided
+  if (printerName || printerIp) {
     let sent = false;
     
     // Probar primero el último puerto que funcionó para ganar velocidad
@@ -66,7 +66,7 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
         const res = await fetch(`http://${bridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ html, printerName }),
+          body: JSON.stringify({ html, printerName, printerIp }),
           signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -301,8 +301,10 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  const printerName = c.impresoras?.["FACTURACION"]?.printerName;
-  doPrint(html, printerName, c.bridge_ip);
+  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const printerName = c.impresoras?.[pKey]?.printerName;
+  const printerIp = c.impresoras?.[pKey]?.ip;
+  doPrint(html, printerName, c.bridge_ip, printerIp);
 }
 
 /* ──────────────────────────────────────────────────────
@@ -324,8 +326,6 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   const fechaCorta = createdAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
 
   const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
-
-  // Agrupar items por impresora según configuración
 
   // Agrupar items por impresora según configuración
   const itemsByPrinter: Record<string, any[]> = {};
@@ -399,8 +399,10 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
   // Imprimir un ticket por cada impresora que tenga ítems
   Object.entries(itemsByPrinter).forEach(([pKey, items]) => {
-    const printerName = c.impresoras?.[pKey]?.printerName || c.impresoras?.[pKey.replace(" ", "")]?.printerName;
-    if (!printerName) return;
+    const pConf = c.impresoras?.[pKey] || c.impresoras?.[pKey.replace(" ", "")];
+    const printerName = pConf?.printerName;
+    const printerIp = pConf?.ip;
+    if (!printerName && !printerIp) return;
 
     const itemsHtml = items.map(item => {
       const aggregated = aggregateAdicionales(item.adicionales ?? []);
@@ -471,7 +473,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-    doPrint(html, printerName, c.bridge_ip);
+    doPrint(html, printerName, c.bridge_ip, printerIp);
   });
 }
 
@@ -571,11 +573,14 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  const printerName = c.impresoras?.["FACTURACIÓN"]?.printerName || c.impresoras?.["FACTURACION"]?.printerName;
-  if (!printerName) {
+  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const printerName = c.impresoras?.[pKey]?.printerName;
+  const printerIp = c.impresoras?.[pKey]?.ip;
+
+  if (!printerName && !printerIp) {
       alert("No hay una impresora asignada a FACTURACIÓN en Ajustes > Impresoras. Se abrirá la ventana normal de impresión.");
   }
-  doPrint(html, printerName, c.bridge_ip);
+  doPrint(html, printerName, c.bridge_ip, printerIp);
 }
 
 /* Alias legacy */
@@ -630,7 +635,7 @@ export function printPromoQrWeb(url: string, texto: string, imageUrl?: string, c
  * ──────────────────────────────────────────────────────
  * LLAMADAS AL BRIDGE (LOCAL HUB)
  * ──────────────────────────────────────────────────────
- */
+ * */
 export async function doBridgePost(endpoint: string, data: any, bridgeIp: string = '127.0.0.1') {
     for (const port of BRIDGE_PORTS) {
         try {

@@ -835,17 +835,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             return;
         }
         if (!editPedido || !editPedido.id) return;
+        if (!metodoPagoId) {
+            alert("Por favor, seleccioná un método de pago antes de finalizar el pedido.");
+            return;
+        }
         if (!confirm("¿Deseas cobrar y finalizar este pedido? La mesa quedará libre.")) return;
         setLoading(true);
         try {
-            // 1. Update order status to 'entregado' (finalized)
+            // 1. Update order status to 'entregado' (finalized) and save payment method
             const { error: uError } = await supabase
                 .from("pedidos")
-                .update({ estado: "entregado" })
+                .update({ 
+                    estado: "entregado",
+                    metodo_pago_id: metodoPagoId 
+                })
                 .eq("id", editPedido.id);
             if (uError) throw uError;
 
-            // 2. Free up the table
+            // 2. Print ticket (identical to pre-cuenta)
+            const mesaObj = mesas.find(m => m.id === mesaId);
+            const camareroObj = camareros.find(c => c.id === camareroId);
+            const mpObj = metodosPago.find(m => m.id === metodoPagoId);
+
+            const patchedPedido = {
+                ...editPedido,
+                mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
+                camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
+                metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
+                subtotal,
+                total,
+                descuento: subtotal + (tipo === "delivery" ? costoEnvio : 0) - promoDescuento - total
+            };
+            printPreCuenta(patchedPedido, printConfig);
+
+            // 3. Free up the table
             if (mesaId) {
                 await supabase.from("mesas").update({ estado: "libre" }).eq("id", mesaId);
             }
@@ -857,6 +880,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             alert("Error al cobrar: " + (e.message || ""));
         } finally { setLoading(false); }
     }
+
 
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
 
@@ -1898,14 +1922,32 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 <>
                                     {editPedido && (
                                         <div className="flex-1 flex gap-2">
-                                            <button
-                                                onClick={() => {
+                                             <button
+                                                onClick={async () => {
+                                                    if (!metodoPagoId) {
+                                                        alert("Por favor, seleccioná un método de pago antes de imprimir la pre-cuenta.");
+                                                        return;
+                                                    }
+                                                    
                                                     const mesaObj = mesas.find(m => m.id === mesaId);
                                                     const camareroObj = camareros.find(c => c.id === camareroId);
+                                                    const mpObj = metodosPago.find(m => m.id === metodoPagoId);
+
+                                                    // Update order in background if editing
+                                                    if (editPedido?.id) {
+                                                        await supabase.from("pedidos").update({ 
+                                                            metodo_pago_id: metodoPagoId 
+                                                        }).eq("id", editPedido.id);
+                                                    }
+
                                                     const patchedPedido = {
                                                         ...editPedido,
                                                         mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
-                                                        camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null
+                                                        camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
+                                                        metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
+                                                        subtotal,
+                                                        total,
+                                                        descuento: subtotal + (tipo === "delivery" ? costoEnvio : 0) - promoDescuento - total
                                                     };
                                                     printPreCuenta(patchedPedido, printConfig);
                                                     onClose();
@@ -1914,6 +1956,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             >
                                                 📄 PRE-CUENTA
                                             </button>
+
                                             {isAdmin && (
                                                 <button
                                                     onClick={cobrarMesa}
