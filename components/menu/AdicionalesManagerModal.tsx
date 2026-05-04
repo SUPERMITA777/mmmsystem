@@ -47,6 +47,16 @@ export default function AdicionalesManagerModal({
     const [availablePrinters, setAvailablePrinters] = useState<string[]>(["COCINA 1", "COCINA 2", "COCINA 3", "BARRA", "FACTURACIÓN"]);
 
     useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            console.log("[AdicionalesManagerModal] Session check:", {
+                user: session?.user?.email,
+                id: session?.user?.id,
+                sucursalId: sucursalId
+            });
+        });
+    }, [sucursalId]);
+
+    useEffect(() => {
         if (isOpen) { loadGrupos(); setView("list"); setGrupoSeleccionado(null); }
     }, [isOpen]);
 
