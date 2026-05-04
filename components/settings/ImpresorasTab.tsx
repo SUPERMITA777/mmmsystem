@@ -217,6 +217,26 @@ export function ImpresorasTab() {
                         <p className="font-bold text-green-800">Puente de Impresión activo</p>
                         <p className="text-sm text-green-600">{availablePrinters.length} impresora{availablePrinters.length !== 1 ? 's' : ''} detectada{availablePrinters.length !== 1 ? 's' : ''} en el sistema</p>
                     </div>
+                    <button
+                        onClick={async () => {
+                            if (!confirm("¿Deseas actualizar el Hub Local? Se descargarán los últimos cambios y el puente se reiniciará automáticamente.")) return;
+                            try {
+                                const res = await fetch(`http://localhost:${bridgePort}/update`, { method: 'POST' });
+                                if (res.ok) {
+                                    alert("✅ Actualización iniciada. El puente se reiniciará en unos segundos.");
+                                    setBridgeStatus("checking");
+                                } else {
+                                    alert("Error al iniciar la actualización");
+                                }
+                            } catch (e) {
+                                alert("No se pudo contactar con el puente para actualizar");
+                            }
+                        }}
+                        className="px-4 py-2 bg-white border border-green-200 text-green-700 hover:bg-green-100 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-sm"
+                    >
+                        <Download size={14} />
+                        Actualizar Hub Local
+                    </button>
                     <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
                 </div>
             )}

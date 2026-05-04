@@ -245,6 +245,27 @@ function startServer(port) {
             return;
         }
 
+        // --- ENDPOINT: SELF-UPDATE (GIT PULL) ---
+        if (req.method === 'POST' && parsedUrl.pathname === '/update') {
+            console.log('>>> SOLICITUD DE ACTUALIZACION RECIBIDA');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Iniciando actualización...' }));
+            
+            // Ejecutar git pull y salir (el .bat reiniciará)
+            setTimeout(() => {
+                exec('git pull', (err, stdout, stderr) => {
+                    if (err) {
+                        console.error('Error en git pull:', err);
+                    } else {
+                        console.log('Git pull completado:', stdout);
+                    }
+                    console.log('Reiniciando puente para aplicar cambios...');
+                    process.exit(0);
+                });
+            }, 500);
+            return;
+        }
+
         // Default 404
         res.writeHead(404);
         res.end(JSON.stringify({ error: 'Not found' }));
