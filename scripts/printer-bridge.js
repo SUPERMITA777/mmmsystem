@@ -106,13 +106,14 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    $browser.ScrollBarsEnabled = $false\r\n';
     ps += '    $browser.ScriptErrorsSuppressed = $true\r\n';
     ps += '    $browser.Navigate($htmlFile)\r\n';
-    ps += '    while ($browser.ReadyState -ne "Complete") {\r\n';
+    ps += '    $timeout = [DateTime]::Now.AddSeconds(5)\r\n';
+    ps += '    while ($browser.ReadyState -ne "Complete" -and [DateTime]::Now -lt $timeout) {\r\n';
     ps += '        [System.Windows.Forms.Application]::DoEvents()\r\n';
-    ps += '        Start-Sleep -Milliseconds 50\r\n';
+    ps += '        Start-Sleep -Milliseconds 20\r\n';
     ps += '    }\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
-    ps += '    Start-Sleep -Seconds 2\r\n';
+    ps += '    Start-Sleep -Milliseconds 500\r\n'; // Reducido de 2s a 500ms
     ps += '    if ($currentDefault) {\r\n';
     ps += '        $orig = Get-CimInstance -ClassName Win32_Printer -Filter "Name=\'$currentDefault\'"\r\n';
     ps += '        Invoke-CimMethod -InputObject $orig -MethodName SetDefaultPrinter | Out-Null\r\n';
