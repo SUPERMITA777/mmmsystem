@@ -830,6 +830,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }
 
     async function cobrarMesa() {
+        if (!isAdmin) {
+            alert("No tenés permisos para cobrar mesas.");
+            return;
+        }
         if (!editPedido || !editPedido.id) return;
         if (!confirm("¿Deseas cobrar y finalizar este pedido? La mesa quedará libre.")) return;
         setLoading(true);
@@ -1910,7 +1914,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             >
                                                 📄 PRE-CUENTA
                                             </button>
-                                            {!camareroMode && (
+                                            {isAdmin && (
                                                 <button
                                                     onClick={cobrarMesa}
                                                     disabled={loading}
