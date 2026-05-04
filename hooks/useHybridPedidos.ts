@@ -65,13 +65,13 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
         const combined = [...localPayloads];
         
         remotePedidos.forEach(rp => {
-            if (!combined.some(cp => cp.id === rp.id)) {
+            if (!combined.some((cp: any) => cp.id === rp.id)) {
                 combined.push(rp);
             }
         });
 
         // Ordenar por fecha
-        combined.sort((a, b) => new Date(b.created_at || b.created_at_local || 0).getTime() - new Date(a.created_at || a.created_at_local || 0).getTime());
+        combined.sort((a: any, b: any) => new Date(b.created_at || b.created_at_local || 0).getTime() - new Date(a.created_at || a.created_at_local || 0).getTime());
 
         setPedidos(combined);
         setLastSyncSource(source);
