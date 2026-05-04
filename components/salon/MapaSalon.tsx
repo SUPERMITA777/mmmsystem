@@ -110,6 +110,33 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
         }
     }
 
+    useEffect(() => {
+        if (!sucursalId) return;
+
+        const mesasChannel = supabase
+            .channel("mesas-changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "mesas", filter: `sucursal_id=eq.${sucursalId}` },
+                () => loadMesas()
+            )
+            .subscribe();
+
+        const pedidosChannel = supabase
+            .channel("pedidos-salon-changes")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` },
+                () => loadMesas()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(mesasChannel);
+            supabase.removeChannel(pedidosChannel);
+        };
+    }, [sucursalId]);
+
     async function handleAddMesa() {
         if (!sucursalId) return;
         

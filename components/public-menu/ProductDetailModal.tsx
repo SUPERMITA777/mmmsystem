@@ -153,7 +153,8 @@ export default function ProductDetailModal({
                         adicionalesSeleccionados.push({
                             nombre: opt.nombre,
                             precio: opt.precio_venta,
-                            grupo: g.titulo
+                            grupo: g.titulo,
+                            impresora: opt.impresora
                         });
                     }
                 }

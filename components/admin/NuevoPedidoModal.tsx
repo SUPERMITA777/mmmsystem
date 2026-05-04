@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft, Lock } from "lucide-react";
+import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft, Lock, User } from "lucide-react";
+import { useAuth } from "@/components/admin/AuthProvider";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
 import { useTenant } from "@/context/TenantContext";
@@ -42,6 +43,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [mesas, setMesas] = useState<any[]>([]);
 
     // UI State
+    const { user } = useAuth();
+    const isAdmin = user?.rol === "admin" || user?.rol === "super_admin";
     const [busqueda, setBusqueda] = useState("");
     const [catSeleccionada, setCatSeleccionada] = useState<string>("todos");
     const [view, setView] = useState<"catalog" | "customize">("catalog");
@@ -50,6 +53,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [customNota, setCustomNota] = useState("");
     const [customAdicionales, setCustomAdicionales] = useState<Record<string, number>>({});
     const [editCartIndex, setEditCartIndex] = useState<number | null>(null);
+    const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+    const [motivoEliminacion, setMotivoEliminacion] = useState("");
+    const [showMotivoModal, setShowMotivoModal] = useState(false);
 
     // Cart
     const [carrito, setCarrito] = useState<CartItem[]>([]);
@@ -61,6 +67,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     // Order metadata
     const [tipo, setTipo] = useState<"delivery" | "takeaway" | "salon">("delivery");
+    const [salonStep, setSalonStep] = useState<"setup" | "catalog">("catalog");
     const [metodoPagoId, setMetodoPagoId] = useState("");
     
     // Mixed payments state
@@ -139,6 +146,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setMesaId(editPedido.mesa_id || "");
                 setCamareroId(editPedido.camarero_id || "");
                 setComensales(editPedido.comensales || 1);
+                // If it's a new salon order, force setup step
+                if (editPedido.tipo === "salon" && !editPedido.id) {
+                    setSalonStep("setup");
+                } else {
+                    setSalonStep("catalog");
+                }
                 setCubiertoCobrado(editPedido.cubierto_cobrado || false);
                 // Preserve original payment method
                 if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
@@ -176,9 +189,19 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setValidacionDelivery({ valid: false, costo: 0, loading: false });
                 setDireccionGeocoded(null);
                 setAlternativas([]);
+                setSalonStep("catalog");
             }
         }
     }, [isOpen, sucursalId]);
+
+    // Handle salon step when tipo changes manually
+    useEffect(() => {
+        if (tipo === "salon" && !editPedido?.id) {
+            setSalonStep("setup");
+        } else {
+            setSalonStep("catalog");
+        }
+    }, [tipo]);
 
     useEffect(() => {
         // Skip reset during initial load of an existing order
@@ -503,7 +526,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             .filter(([_, qty]) => qty > 0)
             .map(([id, qty]) => {
                 const ad = adicionales.find(a => a.id === id);
-                return { nombre: ad?.nombre || "", precio: ad?.precio_venta || 0, cantidad: qty };
+                return { 
+                    nombre: ad?.nombre || "", 
+                    precio: ad?.precio_venta || 0, 
+                    cantidad: qty,
+                    impresora: ad?.impresora
+                };
             });
 
         if (editCartIndex !== null) {
@@ -562,10 +590,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     function updateCartQty(idx: number, delta: number) {
         const item = carrito[idx];
         if (!item) return;
-        // Prevent decreasing commanded items
-        if (delta < 0 && itemsComandados.has(item.id)) {
-            alert("No se puede disminuir la cantidad de un producto ya comandado.");
+        if (itemsComandados.has(item.id) && !isAdmin) {
+            alert("Solo un administrador puede modificar la cantidad de un producto ya comandado.");
             return;
+        }
+        if (delta < 0 && itemsComandados.has(item.id)) {
+            // Even admins might want a warning or reason here, but for now we just allow it.
         }
         setCarrito(prev => prev.map((it, i) => {
             if (i !== idx) return it;
@@ -583,15 +613,54 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         setCarrito(prev => prev.map((item, i) => i === idx ? { ...item, precioOverride: price } : item));
     }
 
-    function removeFromCart(idx: number) {
-        const item = carrito[idx];
-        if (item && itemsComandados.has(item.id)) {
-            alert("No se puede eliminar un producto ya comandado.");
+    function removeFromCart(index: number) {
+        const item = carrito[index];
+        const isComandado = itemsComandados.has(item.id);
+
+        if (isComandado) {
+            if (!isAdmin) {
+                alert("Solo un administrador puede eliminar productos comandados.");
+                return;
+            }
+            setItemToDelete(index);
+            setMotivoEliminacion("");
+            setShowMotivoModal(true);
             return;
         }
-        const motivo = itemsComandados.size > 0 ? prompt("Motivo de la eliminación del producto:") : "ok";
-        if (!motivo) return;
-        setCarrito(prev => prev.filter((_, i) => i !== idx));
+
+        const newCarrito = [...carrito];
+        newCarrito.splice(index, 1);
+        setCarrito(newCarrito);
+    }
+
+    async function confirmRemoveComandado() {
+        if (itemToDelete === null || !motivoEliminacion.trim() || !sucursalId) return;
+        
+        const item = carrito[itemToDelete];
+        
+        try {
+            // Log to database
+            await supabase.from("logs_eliminacion_pedidos").insert({
+                sucursal_id: sucursalId,
+                pedido_id: editPedido?.id,
+                producto_nombre: item.nombre,
+                cantidad: item.cantidad,
+                motivo: motivoEliminacion.trim(),
+                usuario_id: user?.id,
+                usuario_nombre: user?.email
+            });
+
+            const newCarrito = [...carrito];
+            newCarrito.splice(itemToDelete, 1);
+            setCarrito(newCarrito);
+            
+            setShowMotivoModal(false);
+            setItemToDelete(null);
+            setMotivoEliminacion("");
+        } catch (error) {
+            console.error("Error logging deletion:", error);
+            alert("Error al registrar la eliminación. Intente de nuevo.");
+        }
     }
 
     async function fetchPrintConfig() {
@@ -738,7 +807,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         cantidad: item.cantidad,
                         adicionales: item.adicionales || [],
                         notas: item.nota || "",
-                        impresora: fullProd.impresora,
+                        impresora: fullProd.impresora || item.impresora,
                         categoria_id: fullProd.categoria_id,
                         categoria_nombre: catNombre
                     };
@@ -1089,11 +1158,15 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                     <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1">
                                         <button
                                             onClick={() => updateCartQty(idx, -1)}
-                                            disabled={itemsComandados.has(item.id)}
-                                            className={`${itemsComandados.has(item.id) ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                            disabled={itemsComandados.has(item.id) && !isAdmin}
+                                            className={`${itemsComandados.has(item.id) && !isAdmin ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
                                         ><Minus size={12} /></button>
                                         <span className="text-xs font-bold w-4 text-center">{item.cantidad}</span>
-                                        <button onClick={() => updateCartQty(idx, 1)} className="text-gray-400 hover:text-gray-900"><Plus size={12} /></button>
+                                        <button 
+                                            onClick={() => updateCartQty(idx, 1)} 
+                                            disabled={itemsComandados.has(item.id) && !isAdmin}
+                                            className={`${itemsComandados.has(item.id) && !isAdmin ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:text-gray-900'}`}
+                                        ><Plus size={12} /></button>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         {itemsComandados.has(item.id) && (
@@ -1104,9 +1177,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         </button>
                                         <button
                                             onClick={() => removeFromCart(idx)}
-                                            disabled={itemsComandados.has(item.id)}
-                                            className={`text-xs font-bold transition-colors ${itemsComandados.has(item.id) ? 'text-gray-300 cursor-not-allowed' : 'text-red-400 hover:text-red-600'}`}
+                                            className={`text-xs font-bold transition-colors flex items-center gap-1 ${itemsComandados.has(item.id) && !isAdmin ? 'text-gray-300 cursor-not-allowed' : 'text-red-400 hover:text-red-600'}`}
                                         >
+                                            <Trash2 size={12} />
                                             Eliminar
                                         </button>
                                     </div>
@@ -1198,9 +1271,79 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     )}
                 </div>
 
-                {/* ═══ CENTER PANEL: Catalog / Customization ═══ */}
+                {/* ═══ CENTER PANEL: Catalog / Customization / Setup ═══ */}
                 <div className="flex-1 flex flex-col bg-white min-h-0">
-                    {view === "catalog" ? (
+                    {tipo === "salon" && salonStep === "setup" ? (
+                        /* APERTURA DE MESA SETUP */
+                        <div className="flex-1 flex flex-col items-center justify-center p-10 bg-slate-50">
+                            <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8 space-y-8 animate-in fade-in zoom-in-95 duration-300">
+                                <div className="text-center space-y-2">
+                                    <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                        <User size={32} />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-gray-900 uppercase">Apertura de Mesa</h3>
+                                    <p className="text-gray-500 text-sm">Seleccione los datos para iniciar el pedido</p>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Camarero Responsable</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {camareros.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => setCamareroId(c.id)}
+                                                    type="button"
+                                                    className={`flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left ${camareroId === c.id
+                                                        ? "border-orange-500 bg-orange-50 ring-4 ring-orange-500/10"
+                                                        : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                                                        }`}
+                                                >
+                                                    <div className="w-8 h-8 rounded-full shrink-0" style={{ backgroundColor: c.color || '#ccc' }} />
+                                                    <span className={`text-xs font-bold truncate ${camareroId === c.id ? "text-orange-700" : "text-gray-700"}`}>
+                                                        {c.nombre}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Cantidad de Comensales</label>
+                                        <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                                            <button
+                                                type="button"
+                                                onClick={() => setComensales(Math.max(1, comensales - 1))}
+                                                className="w-12 h-12 bg-white rounded-xl border border-gray-200 flex items-center justify-center text-xl font-bold hover:bg-gray-100 active:scale-95 transition-all"
+                                            >
+                                                -
+                                            </button>
+                                            <div className="flex-1 text-center">
+                                                <span className="text-3xl font-black text-gray-900">{comensales}</span>
+                                                <span className="text-[10px] text-gray-400 font-bold block uppercase">Personas</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setComensales(comensales + 1)}
+                                                className="w-12 h-12 bg-white rounded-xl border border-gray-200 flex items-center justify-center text-xl font-bold hover:bg-gray-100 active:scale-95 transition-all"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setSalonStep("catalog")}
+                                    disabled={!camareroId || comensales < 1}
+                                    className="w-full bg-orange-600 text-white py-4 rounded-2xl text-sm font-black uppercase tracking-wider hover:bg-orange-500 transition-all shadow-lg shadow-orange-500/20 disabled:bg-gray-200 disabled:shadow-none disabled:cursor-not-allowed active:scale-[0.98]"
+                                >
+                                    Comenzar Pedido
+                                </button>
+                            </div>
+                        </div>
+                    ) : view === "catalog" ? (
                         <>
                             {/* Search */}
                             <div className="px-5 py-4 border-b border-gray-100">
@@ -1708,7 +1851,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         disabled={loading || carrito.length === 0}
                                         className="flex-1 bg-orange-600 text-white py-3 rounded-full text-xs font-bold hover:bg-orange-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                                     >
-                                        {loading ? "Comandando..." : "🍳 COMANDAR"}
+                                        {loading ? "Procesando..." : (editPedido ? "ACTUALIZAR PEDIDO" : "🍳 COMANDAR")}
                                     </button>
                                 </>
                             ) : (
@@ -1724,6 +1867,54 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     </div>
                 </div>
             </div>
+ 
+            {/* Motivo de Eliminación Modal */}
+            {showMotivoModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="p-8 space-y-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0">
+                                    <AlertCircle size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 uppercase italic">Motivo de Eliminación</h3>
+                                    <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">Es obligatorio para productos comandados</p>
+                                </div>
+                            </div>
+ 
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                                    Estás eliminando <span className="font-bold text-gray-900">{itemToDelete !== null && carrito[itemToDelete]?.nombre}</span>. Por favor, indica el motivo:
+                                </p>
+                                <textarea
+                                    autoFocus
+                                    value={motivoEliminacion}
+                                    onChange={e => setMotivoEliminacion(e.target.value)}
+                                    placeholder="Ej: Error al comandar, plato devuelto, etc..."
+                                    className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-medium outline-none focus:border-red-500 bg-gray-50/50 transition-all min-h-[100px] resize-none"
+                                />
+                            </div>
+ 
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={() => { setShowMotivoModal(false); setItemToDelete(null); }}
+                                    className="flex-1 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={confirmRemoveComandado}
+                                    disabled={!motivoEliminacion.trim()}
+                                    className="flex-1 bg-red-600 text-white px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-500 disabled:opacity-40 shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                                >
+                                    Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

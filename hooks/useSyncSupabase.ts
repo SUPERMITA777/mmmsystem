@@ -167,15 +167,13 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
           // Intentar filtrar por sucursal_id
           let query = supabase.from(table).select("*");
           
-          // Tablas que sabemos que NO tienen sucursal_id (junction tables simples)
-          if (table !== 'producto_grupos_adicionales') {
-            query = query.eq("sucursal_id", sucursalId);
-          }
+          // All tables in the list should have sucursal_id
+          query = query.eq("sucursal_id", sucursalId);
 
           const { data, error } = await query;
 
           if (error) {
-            console.error(`[Sync] Error en Supabase para tabla ${table}:`, error.message, error.details);
+            console.error(`[Sync] Error fetching ${table}:`, error.message, error.details);
             continue;
           }
 

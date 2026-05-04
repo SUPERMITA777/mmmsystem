@@ -328,53 +328,69 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   const defaultPrinterKey = "COCINA 1";
   
   itemsToPrint.forEach((item: any) => {
-    let printerKey = defaultPrinterKey;
-    
-    // Obtener el objeto de producto (manejar si viene como array u objeto)
-    const prodObj = Array.isArray(item.productos) ? item.productos[0] : item.productos;
-    const prodSingular = Array.isArray(item.producto) ? item.producto[0] : item.producto;
-    const finalProd = prodObj || prodSingular || {};
+    const mainProdObj = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+    const mainProdSingular = Array.isArray(item.producto) ? item.producto[0] : item.producto;
+    const finalMainProd = mainProdObj || mainProdSingular || {};
 
-    // Obtener categoria_id y nombre de forma robusta
-    const itemCatId = finalProd.categoria_id || item.categoria_id || finalProd.id_categoria;
-    const itemCatName = (finalProd.categorias?.nombre || item.categoria_nombre || finalProd.categoria_nombre || "").toUpperCase();
+    const mainItemCatId = finalMainProd.categoria_id || item.categoria_id || finalMainProd.id_categoria;
+    const mainItemCatName = (finalMainProd.categorias?.nombre || item.categoria_nombre || finalMainProd.categoria_nombre || "").toUpperCase();
 
-    // 1. PRIORIDAD: Impresora asignada directamente al ITEM o al PRODUCTO
-    // Buscamos en todas las variantes posibles de nombres de campos
+    // Determine main item printer
+    let mainPrinterKey = defaultPrinterKey;
     const prodPrinter = item.impresora || 
                        item.impresora_id || 
-                       finalProd.impresora || 
-                       finalProd.id_impresora || 
-                       finalProd.impresora_id;
-
-    console.log(`[PrintDebug] Producto: ${item.nombre_producto || item.nombre} | PrinterAsignada: ${prodPrinter} | Cat: "${itemCatName}"`);
-    if (!prodPrinter) console.log(`[PrintDebug] Objeto ITEM completo para inspección:`, item);
+                       finalMainProd.impresora || 
+                       finalMainProd.id_impresora || 
+                       finalMainProd.impresora_id;
 
     if (prodPrinter && (c.impresoras?.[prodPrinter] || Object.values(c.impresoras || {}).some((p: any) => p.printerName === prodPrinter))) {
-      // Si el prodPrinter es un ID (COCINA1) o el nombre real de la impresora
-      printerKey = c.impresoras?.[prodPrinter] ? prodPrinter : 
-                   Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === prodPrinter) || defaultPrinterKey;
-      
-      console.log(`[PrintDebug] MATCH por PRODUCTO! Enviando a ${printerKey}`);
-    } 
-    // 2. SEGUNDA OPCIÓN: Buscar por categoría (si no hay impresora en el producto)
-    else if (c.impresoras) {
+      mainPrinterKey = c.impresoras?.[prodPrinter] ? prodPrinter : 
+                       Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === prodPrinter) || defaultPrinterKey;
+    } else if (c.impresoras) {
       for (const [key, pConf] of Object.entries(c.impresoras)) {
         const conf = pConf as any;
         const catIds = conf.categoriasIds || [];
         const catNames = (conf.categoriasNombres || []).map((n: string) => n.toUpperCase());
-
-        if ((itemCatId && catIds.includes(itemCatId)) || 
-            (itemCatName && catNames.includes(itemCatName))) {
-          printerKey = key;
-          console.log(`[PrintDebug] MATCH por CATEGORÍA! Enviando a ${key}`);
+        if ((mainItemCatId && catIds.includes(mainItemCatId)) || (mainItemCatName && catNames.includes(mainItemCatName))) {
+          mainPrinterKey = key;
           break;
         }
       }
     }
 
-    if (!itemsByPrinter[printerKey]) itemsByPrinter[printerKey] = [];
-    itemsByPrinter[printerKey].push(item);
+    // Separate additionals that have a different printer
+    const mainItemAdditionals: any[] = [];
+    const satelliteAdditionals: Record<string, any[]> = {};
+
+    (item.adicionales || []).forEach((ad: any) => {
+      const adPrinter = ad.impresora;
+      if (adPrinter && adPrinter !== mainPrinterKey && c.impresoras?.[adPrinter]) {
+        if (!satelliteAdditionals[adPrinter]) satelliteAdditionals[adPrinter] = [];
+        satelliteAdditionals[adPrinter].push(ad);
+      } else {
+        mainItemAdditionals.push(ad);
+      }
+    });
+
+    // Add main item (with its remaining additionals) to its printer
+    if (!itemsByPrinter[mainPrinterKey]) itemsByPrinter[mainPrinterKey] = [];
+    itemsByPrinter[mainPrinterKey].push({
+      ...item,
+      adicionales: mainItemAdditionals
+    });
+
+    // Add satellite additionals to their respective printers
+    Object.entries(satelliteAdditionals).forEach(([sKey, ads]) => {
+      if (!itemsByPrinter[sKey]) itemsByPrinter[sKey] = [];
+      ads.forEach(ad => {
+        itemsByPrinter[sKey].push({
+          nombre: `${ad.nombre} (PARA ${item.nombre_producto || item.nombre})`,
+          cantidad: item.cantidad * (ad.cantidad || 1),
+          adicionales: [], // It's already an additional
+          notas: item.notas ? `Ref: ${item.nombre_producto || item.nombre} - ${item.notas}` : `Ref: ${item.nombre_producto || item.nombre}`
+        });
+      });
+    });
   });
 
   // Imprimir un ticket por cada impresora que tenga ítems

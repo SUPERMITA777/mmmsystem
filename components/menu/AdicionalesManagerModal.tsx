@@ -25,6 +25,7 @@ type Adicional = {
     stock: boolean;
     restaurar: boolean;
     vender_sin_stock: boolean;
+    impresora?: string;
 };
 
 export default function AdicionalesManagerModal({
@@ -43,6 +44,7 @@ export default function AdicionalesManagerModal({
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [counts, setCounts] = useState<Record<string, number>>({});
+    const [availablePrinters, setAvailablePrinters] = useState<string[]>(["COCINA 1", "COCINA 2", "COCINA 3", "BARRA", "FACTURACIÓN"]);
 
     useEffect(() => {
         if (isOpen) { loadGrupos(); setView("list"); setGrupoSeleccionado(null); }
@@ -65,6 +67,13 @@ export default function AdicionalesManagerModal({
         const c: Record<string, number> = {};
         ads?.forEach(a => { c[a.grupo_id] = (c[a.grupo_id] || 0) + 1; });
         setCounts(c);
+        
+        // Load printers from sucursal config
+        const { data: suc } = await supabase.from("sucursales").select("config_impresion").eq("id", sucursalId).single();
+        if (suc?.config_impresion?.impresoras) {
+            setAvailablePrinters(Object.keys(suc.config_impresion.impresoras));
+        }
+        
         setLoading(false);
     }
 
@@ -379,6 +388,19 @@ export default function AdicionalesManagerModal({
                                                 onChange={e => { const n = [...adicionales]; n[idx].seleccion_maxima = parseInt(e.target.value) || 1; setAdicionales(n); }}
                                                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-center focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                                             />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs text-gray-400 font-medium">Impresora</label>
+                                            <select
+                                                value={ad.impresora || ""}
+                                                onChange={e => { const n = [...adicionales]; n[idx].impresora = e.target.value; setAdicionales(n); }}
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                                            >
+                                                <option value="">Por defecto</option>
+                                                {availablePrinters.map(p => (
+                                                    <option key={p} value={p}>{p}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
 

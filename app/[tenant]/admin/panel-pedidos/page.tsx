@@ -22,7 +22,7 @@ type PedidoItemType = {
   cantidad: number;
   precio_unitario: number;
   notas?: string;
-  adicionales?: { nombre: string; precio: number }[];
+  adicionales?: { nombre: string; precio: number; cantidad?: number; impresora?: string }[];
 };
 
 type Pedido = {
@@ -101,6 +101,7 @@ const getLocalDate = () => getArgentinaDate();
 export default function PanelPedidosPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [repartidores, setRepartidores] = useState<any[]>([]);
+  const [camareros, setCamareros] = useState<any[]>([]);
   const [waiterColors, setWaiterColors] = useState<Record<string, string>>({});
   const [metodosPago, setMetodosPago] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,6 +202,7 @@ export default function PanelPedidosPage() {
       const res = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
       const data = await res.json();
       if (Array.isArray(data)) {
+        setCamareros(data);
         const map: Record<string, string> = {};
         data.forEach((u: any) => { if (u.color) map[u.id] = u.color; });
         setWaiterColors(map);
@@ -273,7 +275,7 @@ export default function PanelPedidosPage() {
       printCocina(pedido, printConfig);
     } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
       sendWhatsAppNotification(pedido, 'listo');
-    } else if (nuevoEstado === "entregado") {
+    } else if (nuevoEstado === "entregado" || nuevoEstado === "cancelado") {
       sendWhatsAppNotification(pedido, 'entregado');
       // Free up the table for salon orders
       if (pedido.tipo === "salon" && (pedido as any).mesa_id) {
@@ -299,6 +301,14 @@ export default function PanelPedidosPage() {
   async function asignarRepartidor(pedidoId: string, repartidorId: string) {
     await supabase.from("pedidos").update({ repartidor_id: repartidorId }).eq("id", pedidoId);
     fetchPedidos();
+  }
+
+  async function asignarCamarero(pedidoId: string, camareroId: string) {
+    await supabase.from("pedidos").update({ camarero_id: camareroId }).eq("id", pedidoId);
+    fetchPedidos();
+    if (selectedPedido?.id === pedidoId) {
+      setSelectedPedido({ ...selectedPedido, camarero_id: camareroId });
+    }
   }
 
   async function handleConfirmOrder(minutes: number) {
@@ -723,7 +733,7 @@ export default function PanelPedidosPage() {
                       }}
                       className="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-gray-800 transition-colors"
                     >
-                      {selectedPedido.tipo === "salon" ? "Comandar" : "Editar"}
+                      Editar Pedido
                     </button>
                   </div>
 
@@ -788,18 +798,31 @@ export default function PanelPedidosPage() {
                     )}
                   </div>
 
-                  {/* Repartidor dropdown */}
+                  {/* Repartidor / Camarero dropdown */}
                   <div className="border border-gray-100 rounded-xl bg-white overflow-hidden">
-                    <select
-                      value={selectedPedido.repartidor_id || ""}
-                      onChange={e => asignarRepartidor(selectedPedido.id, e.target.value)}
-                      className="w-full px-4 py-3 text-sm text-gray-600 bg-transparent outline-none cursor-pointer"
-                    >
-                      <option value="">Repartidor</option>
-                      {repartidores.map(r => (
-                        <option key={r.id} value={r.id}>{r.nombre}</option>
-                      ))}
-                    </select>
+                    {selectedPedido.tipo === "salon" ? (
+                      <select
+                        value={selectedPedido.camarero_id || ""}
+                        onChange={e => asignarCamarero(selectedPedido.id, e.target.value)}
+                        className="w-full px-4 py-3 text-sm text-gray-600 bg-transparent outline-none cursor-pointer"
+                      >
+                        <option value="">Camarero</option>
+                        {camareros.map(c => (
+                          <option key={c.id} value={c.id}>{c.nombre}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={selectedPedido.repartidor_id || ""}
+                        onChange={e => asignarRepartidor(selectedPedido.id, e.target.value)}
+                        className="w-full px-4 py-3 text-sm text-gray-600 bg-transparent outline-none cursor-pointer"
+                      >
+                        <option value="">Repartidor</option>
+                        {repartidores.map(r => (
+                          <option key={r.id} value={r.id}>{r.nombre}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   {/* Método de Pago dropdown */}

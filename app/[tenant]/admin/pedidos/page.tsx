@@ -17,6 +17,7 @@ type Pedido = {
     total: number;
     metodo_pago_nombre: string;
     created_at: string;
+    mesa_id?: string | null;
     pedido_items: { id: string; nombre_producto: string; cantidad: number; precio_unitario: number }[];
 };
 
@@ -117,6 +118,11 @@ export default function PedidosPage() {
 
             if (error) throw error;
             
+            // Free up the table if salon order is delivered or cancelled
+            if (pedido.tipo === "salon" && (nuevoEstado === "entregado" || nuevoEstado === "cancelado") && pedido.mesa_id) {
+                await supabase.from("mesas").update({ estado: "libre" }).eq("id", pedido.mesa_id);
+            }
+
             // Refresh local list
             fetchPedidos();
         } catch (error) {
