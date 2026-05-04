@@ -182,7 +182,6 @@ export default function PanelPedidosPage() {
     const { data: infoSuc } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
     const boldMap = suc?.panel_settings?.print_bold || {};
     const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
-    const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
     const impresoras = suc?.panel_settings?.impresoras || {};
     const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
     const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
