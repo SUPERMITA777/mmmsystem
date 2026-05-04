@@ -827,7 +827,33 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         } finally { setLoading(false); }
     }
 
+    async function cobrarMesa() {
+        if (!editPedido || !editPedido.id) return;
+        if (!confirm("¿Deseas cobrar y finalizar este pedido? La mesa quedará libre.")) return;
+        setLoading(true);
+        try {
+            // 1. Update order status to 'entregado' (finalized)
+            const { error: uError } = await supabase
+                .from("pedidos")
+                .update({ estado: "entregado" })
+                .eq("id", editPedido.id);
+            if (uError) throw uError;
+
+            // 2. Free up the table
+            if (mesaId) {
+                await supabase.from("mesas").update({ estado: "libre" }).eq("id", mesaId);
+            }
+
+            onCreated(); // Refresh map
+            onClose();
+        } catch (e: any) {
+            console.error(e);
+            alert("Error al cobrar: " + (e.message || ""));
+        } finally { setLoading(false); }
+    }
+
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
+
     const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
 
     // Descuento promo QR
@@ -1831,22 +1857,33 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             {tipo === "salon" ? (
                                 <>
                                     {editPedido && (
-                                        <button
-                                            onClick={() => {
-                                                const mesaObj = mesas.find(m => m.id === mesaId);
-                                                const camareroObj = camareros.find(c => c.id === camareroId);
-                                                const patchedPedido = {
-                                                    ...editPedido,
-                                                    mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
-                                                    camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null
-                                                };
-                                                printPreCuenta(patchedPedido, printConfig);
-                                                onClose();
-                                            }}
-                                            className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-xs font-bold transition-colors"
-                                        >
-                                            📄 PRE-CUENTA
-                                        </button>
+                                        <div className="flex-1 flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    const mesaObj = mesas.find(m => m.id === mesaId);
+                                                    const camareroObj = camareros.find(c => c.id === camareroId);
+                                                    const patchedPedido = {
+                                                        ...editPedido,
+                                                        mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
+                                                        camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null
+                                                    };
+                                                    printPreCuenta(patchedPedido, printConfig);
+                                                    onClose();
+                                                }}
+                                                className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3 rounded-full text-[10px] font-black transition-colors"
+                                            >
+                                                📄 PRE-CUENTA
+                                            </button>
+                                            {!camareroMode && (
+                                                <button
+                                                    onClick={cobrarMesa}
+                                                    disabled={loading}
+                                                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-full text-[10px] font-black transition-colors shadow-lg shadow-emerald-500/20"
+                                                >
+                                                    💰 COBRAR
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                     <button
                                         onClick={comandarSalon}

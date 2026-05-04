@@ -180,9 +180,13 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
         const texto = prompt("Texto de la etiqueta:", "Nuevo Sector");
         if (!texto) return;
 
+        // Buscar el número más bajo (negativo) para las etiquetas para evitar conflictos de unicidad
+        const numerosEtiquetas = mesas.map(m => m.numero).filter(n => n <= 0);
+        const numero = numerosEtiquetas.length > 0 ? Math.min(...numerosEtiquetas) - 1 : 0;
+
         const newLabel = {
             sucursal_id: sucursalId,
-            numero: 0,
+            numero,
             nombre: texto,
             capacidad: 0,
             estado: "libre",
@@ -234,7 +238,9 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             
             alert("Mapa guardado correctamente");
             setEditMode(false);
+            // After saving layout, we should refresh to get clean state
             await loadMesas();
+
         } catch (error) {
             console.error("Error saving layout:", error);
             alert("Error guardando el mapa");
@@ -264,8 +270,10 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 if (action === "1") {
                     const nuevoTexto = prompt("Texto de la etiqueta:", mesa.nombre);
                     if (nuevoTexto !== null) {
-                        await supabase.from("mesas").update({ nombre: nuevoTexto }).eq("id", mesa.id);
-                        loadMesas();
+                        const { error } = await supabase.from("mesas").update({ nombre: nuevoTexto }).eq("id", mesa.id);
+                        if (!error) {
+                            setMesas(prev => prev.map(m => m.id === mesa.id ? { ...m, nombre: nuevoTexto } : m));
+                        }
                     }
                 } else if (action === "2") {
                     const colores = [
@@ -275,16 +283,21 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                         { n: "Verde", c: "#dcfce7" },
                         { n: "Rojo", c: "#fee2e2" },
                         { n: "Púrpura", c: "#f3e8ff" },
-                        { n: "Naranja", c: "#ffedd5" }
+                        { n: "Naranja", c: "#ffedd5" },
+                        { n: "Negro", c: "#111827" },
+                        { n: "Blanco", c: "#ffffff" }
                     ];
                     const colorList = colores.map((c, i) => `${i+1}: ${c.n}`).join("\n");
-                    const colorIdx = prompt(`Selecciona un color:\n${colorList}`, "1");
+                    const colorIdx = prompt(`Selecciona un color de fondo:\n${colorList}`, "1");
                     const selected = colores[parseInt(colorIdx || "1") - 1];
                     if (selected) {
-                        await supabase.from("mesas").update({ ubicacion: selected.c }).eq("id", mesa.id);
-                        loadMesas();
+                        const { error } = await supabase.from("mesas").update({ ubicacion: selected.c }).eq("id", mesa.id);
+                        if (!error) {
+                            setMesas(prev => prev.map(m => m.id === mesa.id ? { ...m, ubicacion: selected.c } : m));
+                        }
                     }
                 } else if (action === "3") {
+
                     handleDeleteMesa(mesa.id);
                 }
             }
@@ -388,12 +401,15 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                     <div 
                                         onClick={(e) => { e.stopPropagation(); handleMesaClick(mesa); }}
                                         className={`w-full h-full flex items-center justify-center transition-all p-2 border-2
-                                        ${editMode ? 'cursor-move border-dashed border-purple-300 rounded-lg hover:ring-4 hover:ring-purple-200' : 'cursor-default border-transparent rounded-lg'}
+                                        ${editMode ? 'cursor-move border-dashed border-purple-400 rounded-lg hover:ring-4 hover:ring-purple-200' : 'cursor-default border-transparent rounded-lg'}
                                     `}
                                     style={{ backgroundColor: labelBg }}
                                     >
-                                        <span className="font-extrabold text-sm text-gray-600 uppercase tracking-[0.1em] text-center">{mesa.nombre}</span>
+                                        <span className={`font-extrabold text-sm uppercase tracking-[0.1em] text-center ${labelBg === '#111827' ? 'text-white' : 'text-gray-600'}`}>
+                                            {mesa.nombre}
+                                        </span>
                                     </div>
+
                                     {editMode && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleDeleteMesa(mesa.id); }}
