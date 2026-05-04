@@ -22,6 +22,7 @@ type Adicional = {
     nombre: string;
     precio_venta: number;
     seleccion_maxima: number;
+    impresora?: string;
 };
 
 type GrupoAdicional = {

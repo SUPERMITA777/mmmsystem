@@ -9,7 +9,7 @@ export type CartItem = {
     precio: number;
     cantidad: number;
     imagen_url?: string;
-    adicionales?: { nombre: string; precio: number; grupo: string }[];
+    adicionales?: { nombre: string; precio: number; grupo: string; impresora?: string }[];
     opciones?: string; // texto de opciones seleccionadas
     notas?: string;
     categoriaNombre?: string;

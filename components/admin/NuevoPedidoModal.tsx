@@ -28,7 +28,8 @@ type CartItem = {
     cantidad: number;
     imagen_url?: string;
     nota?: string;
-    adicionales?: { nombre: string; precio: number; cantidad: number }[];
+    adicionales?: { nombre: string; precio: number; cantidad: number; impresora?: string }[];
+    impresora?: string;
 };
 
 export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedido, camareroMode = false }: NuevoPedidoModalProps) {
