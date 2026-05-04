@@ -69,9 +69,13 @@ export default function AdicionalesManagerModal({
         setCounts(c);
         
         // Load printers from sucursal config
-        const { data: suc } = await supabase.from("sucursales").select("config_impresion").eq("id", sucursalId).single();
-        if (suc?.config_impresion?.impresoras) {
-            setAvailablePrinters(Object.keys(suc.config_impresion.impresoras));
+        const { data: suc } = await supabase.from("config_sucursal")
+            .select("panel_settings")
+            .eq("sucursal_id", sucursalId)
+            .maybeSingle();
+            
+        if (suc?.panel_settings?.impresoras) {
+            setAvailablePrinters(Object.keys(suc.panel_settings.impresoras));
         }
         
         setLoading(false);
@@ -83,10 +87,19 @@ export default function AdicionalesManagerModal({
     }
 
     async function handleToggleGroupVisibility(g: GrupoAdicional) {
-        // Since 'visible' is missing in DB for grupos_adicionales, we'll only update local state
-        // and avoid the DB call that causes 400 until migration is run.
-        setGrupos(grupos.map(x => x.id === g.id ? { ...x, visible: !g.visible } : x));
-        console.warn("Visibility toggle for groups is disabled because 'visible' column is missing in DB.");
+        const nextVisible = !g.visible;
+        setGrupos(grupos.map(x => x.id === g.id ? { ...x, visible: nextVisible } : x));
+        
+        try {
+            const { error } = await supabase.from("grupos_adicionales")
+                .update({ visible: nextVisible })
+                .eq("id", g.id);
+            if (error) throw error;
+        } catch (e) {
+            console.error("Error toggling visibility:", e);
+            // Revert local state on error
+            setGrupos(grupos.map(x => x.id === g.id ? { ...x, visible: g.visible } : x));
+        }
     }
 
     async function handleDuplicateGrupo(id: string) {
@@ -152,12 +165,12 @@ export default function AdicionalesManagerModal({
         try {
             let gid = grupoSeleccionado.id;
             if (gid.startsWith("temp-")) {
-                const { id, visible, ...gd } = grupoSeleccionado as any;
-                const { data, error } = await supabase.from("grupos_adicionales").insert(gd).select().single();
+                const { id, ...gd } = grupoSeleccionado as any;
+                const { data, error } = await supabase.from("grupos_adicionales").insert({ ...gd, sucursal_id: sucursalId }).select().single();
                 if (error) throw error;
                 gid = data.id;
             } else {
-                const { id, visible, created_at, updated_at, ...gd } = grupoSeleccionado as any;
+                const { id, created_at, updated_at, ...gd } = grupoSeleccionado as any;
                 const { error } = await supabase.from("grupos_adicionales").update(gd).eq("id", gid);
                 if (error) throw error;
             }
