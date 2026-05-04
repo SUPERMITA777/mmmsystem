@@ -37,12 +37,9 @@ export default function LoginPage() {
                 await supabase.auth.setSession(data.session);
             }
 
-            // Redirect to the user's assigned tenant, not the URL tenant
-            const targetSlug = data.user?.tenantSlug || tenantSlug;
-            
-            // If user is super_admin without a specific branch, keep current tenant
-            const isSuperAdmin = data.user?.rol === 'super_admin';
-            const redirectSlug = isSuperAdmin ? tenantSlug : targetSlug;
+            // Redirect to the user's assigned tenant if they have one, 
+            // otherwise stay in the current URL tenant (useful for global superadmins)
+            const redirectSlug = data.user?.tenantSlug || tenantSlug;
 
             router.push(`/${redirectSlug}/admin`);
             router.refresh();
