@@ -49,6 +49,16 @@ export default function CartModal({ onClose, isOpen, descuentos = [], metodosPag
     const ALIAS_TRANSFERENCIA = "MMM.PIZZA";
     const COSTO_ENVIO = tipoEntrega === "delivery" ? costoEnvioCalc : 0;
 
+    // Descuento promo QR
+    const promoDescuento = (() => {
+        if (!promoResult?.valid || !promoResult?.codigo?.premio) return 0;
+        const p = promoResult.codigo.premio;
+        if (p.tipo === "envio_gratis") return COSTO_ENVIO;
+        if (p.tipo === "porcentaje" && p.valor) return Math.round(total * p.valor / 100);
+        if (p.tipo === "fijo" && p.valor) return Math.min(p.valor, total);
+        return 0;
+    })();
+
     // Descuento automático (por método de pago / mínimo de compra)
     const autoDescuento = (() => {
         if (!descuentos.length || !metodoPago) return 0;
@@ -78,6 +88,7 @@ export default function CartModal({ onClose, isOpen, descuentos = [], metodosPag
         }
         return maxDesc;
     })();
+
 
     const totalConPropina = total + propina + COSTO_ENVIO - promoDescuento - autoDescuento;
 
