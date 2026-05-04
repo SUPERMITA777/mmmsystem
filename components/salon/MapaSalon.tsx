@@ -204,6 +204,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
 
     async function handleSaveLayout() {
         setSaving(true);
+        console.log("[Salon] Guardando layout...", layout);
         try {
             const updates = layout.map(l => ({
                 id: l.i,
@@ -213,8 +214,9 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 height: l.h * 50
             }));
 
+            // Perform updates in chunks or one by one
             for (const upd of updates) {
-                await supabase
+                const { error } = await supabase
                     .from("mesas")
                     .update({
                         pos_x: upd.pos_x,
@@ -223,10 +225,15 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                         height: upd.height
                     })
                     .eq("id", upd.id);
+                
+                if (error) {
+                    console.error(`[Salon] Error actualizando mesa ${upd.id}:`, error);
+                }
             }
-            alert("Mapa guardado");
+            
+            alert("Mapa guardado correctamente");
             setEditMode(false);
-            loadMesas();
+            await loadMesas();
         } catch (error) {
             console.error("Error saving layout:", error);
             alert("Error guardando el mapa");
@@ -251,10 +258,33 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
     const handleMesaClick = async (mesa: Mesa) => {
         if (editMode) {
             if (mesa.forma === 'label') {
-                const nuevoTexto = prompt("Texto de la etiqueta:", mesa.nombre);
-                if (nuevoTexto !== null) {
-                    await supabase.from("mesas").update({ nombre: nuevoTexto }).eq("id", mesa.id);
-                    loadMesas();
+                const action = prompt("¿Qué deseas editar? (1: Texto, 2: Color, 3: Eliminar)", "1");
+                
+                if (action === "1") {
+                    const nuevoTexto = prompt("Texto de la etiqueta:", mesa.nombre);
+                    if (nuevoTexto !== null) {
+                        await supabase.from("mesas").update({ nombre: nuevoTexto }).eq("id", mesa.id);
+                        loadMesas();
+                    }
+                } else if (action === "2") {
+                    const colores = [
+                        { n: "Gris", c: "#f3f4f6" },
+                        { n: "Amarillo", c: "#fef9c3" },
+                        { n: "Azul", c: "#dbeafe" },
+                        { n: "Verde", c: "#dcfce7" },
+                        { n: "Rojo", c: "#fee2e2" },
+                        { n: "Púrpura", c: "#f3e8ff" },
+                        { n: "Naranja", c: "#ffedd5" }
+                    ];
+                    const colorList = colores.map((c, i) => `${i+1}: ${c.n}`).join("\n");
+                    const colorIdx = prompt(`Selecciona un color:\n${colorList}`, "1");
+                    const selected = colores[parseInt(colorIdx || "1") - 1];
+                    if (selected) {
+                        await supabase.from("mesas").update({ ubicacion: selected.c }).eq("id", mesa.id);
+                        loadMesas();
+                    }
+                } else if (action === "3") {
+                    handleDeleteMesa(mesa.id);
                 }
             }
             return;
@@ -351,15 +381,17 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 >
                     {mesas.map((mesa) => {
                         if (mesa.forma === 'label') {
+                            const labelBg = mesa.ubicacion || '#f3f4f6';
                             return (
                                 <div key={mesa.id} className="relative group flex items-center justify-center">
                                     <div 
                                         onClick={(e) => { e.stopPropagation(); handleMesaClick(mesa); }}
-                                        className={`w-full h-full flex items-center justify-center transition-all p-2
-                                        ${editMode ? 'cursor-move border-2 border-dashed border-purple-300 bg-purple-50 rounded-lg hover:ring-4 hover:ring-purple-200' : 'cursor-default'}
+                                        className={`w-full h-full flex items-center justify-center transition-all p-2 border-2
+                                        ${editMode ? 'cursor-move border-dashed border-purple-300 rounded-lg hover:ring-4 hover:ring-purple-200' : 'cursor-default border-transparent rounded-lg'}
                                     `}
+                                    style={{ backgroundColor: labelBg }}
                                     >
-                                        <span className="font-extrabold text-sm text-gray-400 uppercase tracking-[0.2em] text-center">{mesa.nombre}</span>
+                                        <span className="font-extrabold text-sm text-gray-600 uppercase tracking-[0.1em] text-center">{mesa.nombre}</span>
                                     </div>
                                     {editMode && (
                                         <button 
