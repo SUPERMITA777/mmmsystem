@@ -25,7 +25,10 @@ type Descuento = {
     hora_hasta: string | null;
     productos_ids: string[] | null;
     categorias_ids: string[] | null;
+    metodo_pago_id: string | null;
+    auto_aplicar: boolean;
 };
+
 
 export default function DescuentosPage() {
     const [descuentos, setDescuentos] = useState<Descuento[]>([]);
@@ -41,14 +44,19 @@ export default function DescuentosPage() {
         categorias_ids: [] as string[],
         no_acumulable: false,
         fecha_desde: "", fecha_hasta: "",
-        hora_desde: "", hora_hasta: ""
+        hora_desde: "", hora_hasta: "",
+        metodo_pago_id: "",
+        auto_aplicar: false
     });
+
 
     // Lookups
     const [productos, setProductos] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
+    const [metodosPago, setMetodosPago] = useState<any[]>([]);
     const [searchProd, setSearchProd] = useState("");
     const [showProdSearch, setShowProdSearch] = useState(false);
+
 
     const { sucursalId } = useTenant();
 
@@ -72,14 +80,19 @@ export default function DescuentosPage() {
         setProductos(prods || []);
         const { data: cats } = await supabase.from("categorias").select("id, nombre").eq("sucursal_id", sucursalId).eq("activo", true).order("orden");
         setCategorias(cats || []);
+        const { data: mPagos } = await supabase.from("metodos_pago").select("id, nombre").eq("sucursal_id", sucursalId).eq("activo", true).order("orden");
+        setMetodosPago(mPagos || []);
     }
+
 
     function resetForm() {
         setForm({
             nombre: "", codigo: "", tipo: "porcentaje", valor: "", minimo_compra: "", uso_limite: "",
             aplicar_a: "general", productos_ids: [], categorias_ids: [], no_acumulable: false,
-            fecha_desde: "", fecha_hasta: "", hora_desde: "", hora_hasta: ""
+            fecha_desde: "", fecha_hasta: "", hora_desde: "", hora_hasta: "",
+            metodo_pago_id: "", auto_aplicar: false
         });
+
         setEditingId(null);
         setShowForm(false);
     }
@@ -103,8 +116,11 @@ export default function DescuentosPage() {
             fecha_desde: d.fecha_desde || "",
             fecha_hasta: d.fecha_hasta || "",
             hora_desde: d.hora_desde ? d.hora_desde.substring(0, 5) : "",
-            hora_hasta: d.hora_hasta ? d.hora_hasta.substring(0, 5) : ""
+            hora_hasta: d.hora_hasta ? d.hora_hasta.substring(0, 5) : "",
+            metodo_pago_id: d.metodo_pago_id || "",
+            auto_aplicar: !!d.auto_aplicar
         });
+
         setEditingId(d.id);
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -128,10 +144,13 @@ export default function DescuentosPage() {
             hora_hasta: form.hora_hasta ? form.hora_hasta + ":00" : null,
             productos_ids: form.aplicar_a === "producto" && form.productos_ids.length > 0 ? form.productos_ids : null,
             categorias_ids: form.aplicar_a === "categoria" && form.categorias_ids.length > 0 ? form.categorias_ids : null,
+            metodo_pago_id: form.metodo_pago_id || null,
+            auto_aplicar: form.auto_aplicar,
             // Keep legacy fields null on new edits to prioritize arrays
             producto_id: null,
             categoria_id: null
         };
+
 
         if (editingId) {
             await supabase.from("descuentos").update(payload).eq("id", editingId);
@@ -203,6 +222,38 @@ export default function DescuentosPage() {
                             <input type="number" value={form.uso_limite} onChange={e => setForm({ ...form, uso_limite: e.target.value })} className="w-full bg-transparent outline-none text-sm text-gray-900" placeholder="Sin límite" />
                         </fieldset>
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-emerald-50/30 p-4 rounded-2xl border border-emerald-100/50">
+                        <fieldset className="border border-emerald-200 bg-white rounded-lg px-3 py-2">
+                            <legend className="text-xs text-emerald-600 font-bold px-1">Forma de Pago Requerida</legend>
+                            <select 
+                                value={form.metodo_pago_id} 
+                                onChange={e => setForm({ ...form, metodo_pago_id: e.target.value })} 
+                                className="w-full bg-transparent outline-none text-sm text-gray-900 font-medium"
+                            >
+                                <option value="">Cualquier medio de pago</option>
+                                {metodosPago.map(m => (
+                                    <option key={m.id} value={m.id}>{m.nombre}</option>
+                                ))}
+                            </select>
+                        </fieldset>
+                        <div 
+                            className="flex items-center border border-emerald-200 bg-white rounded-lg px-4 py-2 gap-3 cursor-pointer hover:bg-emerald-50 transition-colors shadow-sm"
+                            onClick={() => setForm({ ...form, auto_aplicar: !form.auto_aplicar })}
+                        >
+                            <input 
+                                type="checkbox" 
+                                checked={form.auto_aplicar} 
+                                onChange={e => setForm({ ...form, auto_aplicar: e.target.checked })} 
+                                className="w-5 h-5 text-emerald-600 rounded-md border-emerald-300 focus:ring-emerald-500" 
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-sm font-black text-emerald-800 leading-none">Auto-aplicar</span>
+                                <span className="text-[10px] text-emerald-600 font-medium mt-1">Se aplica solo al cumplir condiciones</span>
+                            </div>
+                        </div>
+                    </div>
+
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-blue-50/50 p-3 rounded-xl border border-blue-100">
                         <fieldset className="border border-blue-200 bg-white rounded-lg px-3 py-1.5 focus-within:border-blue-400 text-sm">
@@ -347,7 +398,18 @@ export default function DescuentosPage() {
 
                                         {d.minimo_compra > 0 && <span className="ml-1">Mínimo: ${d.minimo_compra}</span>}
                                         {d.uso_limite && <span className="ml-1 opacity-70">Usos: {d.uso_actual}/{d.uso_limite}</span>}
+                                        {d.metodo_pago_id && (
+                                            <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-black uppercase ml-1">
+                                                💳 {metodosPago.find(m => m.id === d.metodo_pago_id)?.nombre || 'Pago específico'}
+                                            </span>
+                                        )}
+                                        {d.auto_aplicar && (
+                                            <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-black uppercase ml-1">
+                                                ✨ Automático
+                                            </span>
+                                        )}
                                     </div>
+
                                 </div>
                                 <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
                                     <button

@@ -214,6 +214,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             setAlternativas([]);
         }
     }, [cliente.direccion, tipo]);
+    
+    // Auto-apply discounts logic
+    useEffect(() => {
+        if (!descuentos.length || !metodoPagoId || editPedido?.id) return;
+        
+        // Find candidate auto-apply discounts
+        const autoDescs = descuentos.filter(d => 
+            d.activo && 
+            d.auto_aplicar && 
+            (!d.metodo_pago_id || d.metodo_pago_id === metodoPagoId) &&
+            (!d.minimo_compra || subtotal >= d.minimo_compra)
+        );
+
+        if (autoDescs.length > 0) {
+            // Sort by better value for customer (higher discount)
+            const sorted = [...autoDescs].sort((a, b) => {
+                const valA = a.tipo === 'porcentaje' ? (subtotal * a.valor / 100) : a.valor;
+                const valB = b.tipo === 'porcentaje' ? (subtotal * b.valor / 100) : b.valor;
+                return valB - valA;
+            });
+            
+            const best = sorted[0];
+            if (codigoDescuentoId !== best.id) {
+                setCodigoDescuentoId(best.id);
+            }
+        } else if (codigoDescuentoId) {
+            // If we had an auto-applied discount and now it's not valid, clear it
+            const current = descuentos.find(d => d.id === codigoDescuentoId);
+            if (current && current.auto_aplicar) {
+                setCodigoDescuentoId("");
+            }
+        }
+    }, [metodoPagoId, subtotal, descuentos, codigoDescuentoId]);
+
 
     async function fetchAll(isEditing: boolean = false) {
         if (!sucursalId) return;

@@ -48,6 +48,8 @@ function PublicMenuContent() {
   const [statusMessage, setStatusMessage] = useState("");
   const [storeColors, setStoreColors] = useState({ primario: "#f97316", secundario: "#1a1a2e" });
   const [descuentos, setDescuentos] = useState<any[]>([]);
+  const [metodosPago, setMetodosPago] = useState<any[]>([]);
+
   const [webConfig, setWebConfig] = useState({
     primario: "#f97316",
     secundario: "#1a1a2e",
@@ -288,6 +290,15 @@ function PublicMenuContent() {
         .eq("sucursal_id", sucursalId)
         .eq("activo", true);
       setDescuentos(descs || []);
+
+      // Fetch payment methods
+      const { data: mps } = await supabase
+        .from("metodos_pago")
+        .select("*")
+        .eq("sucursal_id", sucursalId)
+        .eq("activo", true);
+      setMetodosPago(mps || []);
+
     } catch (error) {
       console.error("Error fetching menu data:", error);
     } finally {
@@ -395,8 +406,14 @@ function PublicMenuContent() {
 
       {/* Cart Modal */}
       {cartOpen && (
-        <CartModal onClose={closeCart} isOpen={isOpen} />
+        <CartModal 
+          onClose={closeCart} 
+          isOpen={isOpen} 
+          descuentos={descuentos}
+          metodosPago={metodosPago}
+        />
       )}
+
 
       {/* Flyer Overlay */}
       {sucursal?.id && flyerOpen && (

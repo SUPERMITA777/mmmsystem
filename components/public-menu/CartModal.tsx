@@ -21,7 +21,9 @@ type ZonaEntrega = {
     precio_por_km: number;
 };
 
-export default function CartModal({ onClose, isOpen }: { onClose: () => void, isOpen: boolean }) {
+export default function CartModal({ onClose, isOpen, descuentos = [], metodosPago = [] }: { onClose: () => void, isOpen: boolean, descuentos?: any[], metodosPago?: any[] }) {
+
+
     const { items, updateQty, removeItem, total, clearCart } = useCart();
     const { sucursalId, sucursalData } = useTenant();
     const [tipoEntrega, setTipoEntrega] = useState<"delivery" | "takeaway">("delivery");
@@ -47,17 +49,39 @@ export default function CartModal({ onClose, isOpen }: { onClose: () => void, is
     const ALIAS_TRANSFERENCIA = "MMM.PIZZA";
     const COSTO_ENVIO = tipoEntrega === "delivery" ? costoEnvioCalc : 0;
 
-    // Descuento promo QR
-    const promoDescuento = (() => {
-        if (!promoResult?.valid || !promoResult?.codigo?.premio) return 0;
-        const p = promoResult.codigo.premio;
-        if (p.tipo === "envio_gratis") return COSTO_ENVIO;
-        if (p.tipo === "porcentaje" && p.valor) return Math.round(total * p.valor / 100);
-        if (p.tipo === "fijo" && p.valor) return Math.min(p.valor, total);
-        return 0;
+    // Descuento automático (por método de pago / mínimo de compra)
+    const autoDescuento = (() => {
+        if (!descuentos.length || !metodoPago) return 0;
+        
+        // Encontrar el ID del método de pago actual
+        const currentMP = metodosPago.find(m => m.codigo === metodoPago);
+        const currentMPId = currentMP?.id;
+        
+        const autoDescs = descuentos.filter(d => 
+            d.activo && 
+            d.auto_aplicar && 
+            (!d.minimo_compra || total >= d.minimo_compra) &&
+            (!d.metodo_pago_id || d.metodo_pago_id === currentMPId)
+        );
+
+        if (autoDescs.length === 0) return 0;
+
+        let maxDesc = 0;
+        for (const d of autoDescs) {
+            let val = 0;
+            if (d.tipo === 'porcentaje') {
+                val = Math.round(total * d.valor / 100);
+            } else {
+                val = Math.min(d.valor, total);
+            }
+            if (val > maxDesc) maxDesc = val;
+        }
+        return maxDesc;
     })();
 
-    const totalConPropina = total + propina + COSTO_ENVIO - promoDescuento;
+    const totalConPropina = total + propina + COSTO_ENVIO - promoDescuento - autoDescuento;
+
+
 
     const propinaOpciones = [0, 100, 200, 500];
 
