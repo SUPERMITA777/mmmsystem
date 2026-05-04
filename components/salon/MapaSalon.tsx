@@ -20,6 +20,7 @@ type Mesa = {
     nombre: string;
     capacidad: number;
     estado: string;
+    ubicacion?: string | null;
     pos_x: number;
     pos_y: number;
     forma: string;
