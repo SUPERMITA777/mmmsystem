@@ -197,11 +197,30 @@ export function ImpresorasTab() {
                             <div className="mt-3 flex gap-2">
                                 <button 
                                     onClick={checkBridge}
-                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm"
                                 >
                                     <RefreshCw size={14} />
                                     Reintentar conexión
                                 </button>
+
+                                <div className="flex gap-2">
+                                    <a 
+                                        href="/bridge/iniciar-impresoras.bat" 
+                                        download="iniciar-impresoras.bat"
+                                        className="px-4 py-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm"
+                                    >
+                                        <Download size={14} />
+                                        Descargar .BAT
+                                    </a>
+                                    <a 
+                                        href="/bridge/printer-bridge.js" 
+                                        download="printer-bridge.js"
+                                        className="px-4 py-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm"
+                                    >
+                                        <Download size={14} />
+                                        Descargar .JS
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -413,6 +432,49 @@ export function ImpresorasTab() {
                 >
                     {saving ? "Guardando..." : "💾 Guardar Configuración"}
                 </button>
+            </div>
+
+            {/* ── Downloads ── */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                        <Download className="text-slate-600" size={20} />
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-gray-900">Centro de Descargas</h4>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mt-0.5">Versión v3.1 – Direct IP Ready</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <a 
+                        href="/bridge/iniciar-impresoras.bat" 
+                        download="iniciar-impresoras.bat"
+                        className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-purple-300 hover:shadow-md transition-all group"
+                    >
+                        <div className="flex flex-col">
+                            <span className="font-bold text-sm text-gray-800">Lanzador Windows (.BAT)</span>
+                            <span className="text-[10px] text-gray-400">Doble clic para iniciar el servicio</span>
+                        </div>
+                        <Download size={18} className="text-slate-300 group-hover:text-purple-500 transition-colors" />
+                    </a>
+                    <a 
+                        href="/bridge/printer-bridge.js" 
+                        download="printer-bridge.js"
+                        className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-purple-300 hover:shadow-md transition-all group"
+                    >
+                        <div className="flex flex-col">
+                            <span className="font-bold text-sm text-gray-800">Script del Puente (.JS)</span>
+                            <span className="text-[10px] text-gray-400">Archivo de lógica del servidor local</span>
+                        </div>
+                        <Download size={18} className="text-slate-300 group-hover:text-purple-500 transition-colors" />
+                    </a>
+                </div>
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-lg flex items-start gap-2">
+                    <Info size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-[11px] text-amber-700">
+                        <strong>Importante:</strong> Debes colocar ambos archivos en la misma carpeta y tener instalado <strong>Node.js</strong> en la computadora que actuará como servidor de impresión.
+                    </p>
+                </div>
             </div>
 
             {/* ── Info: Sin puente ── */}
