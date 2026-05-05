@@ -85,82 +85,131 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     }, [sucursalId, mesaId]);
 
     async function fetchData() {
+        if (!sucursalId) return;
         try {
             setLoading(true);
             
-            // Fetch All Mesas
-            const { data: mesasData } = await supabase
-                .from("mesas")
-                .select("*")
-                .eq("sucursal_id", sucursalId)
-                .order("numero");
-            setMesas(mesasData || []);
+            // 1. Load from Dexie (Local DB) first for maximum responsiveness
+            try {
+                const [localProds, localCats, localMesas, localConfig] = await Promise.all([
+                    db.productos.where("sucursal_id").equals(sucursalId).toArray(),
+                    db.categorias.where("sucursal_id").equals(sucursalId).sortBy("orden"),
+                    db.mesas.where("sucursal_id").equals(sucursalId).sortBy("numero"),
+                    db.config_sucursal.where("sucursal_id").equals(sucursalId).first()
+                ]);
 
-            if (mesaId) {
-                const m = mesasData?.find(m => m.id === mesaId);
-                if (m) {
-                    setMesa(m);
-                    setSelectedMesaId(m.id);
-                    // Si ya viene con mesa_id, podríamos saltar el setup, 
-                    // pero el usuario pidió que le pregunte el número de mesa.
-                    // Sin embargo, para agilizar si escanean QR de mesa, lo pre-seleccionamos.
+                if (localMesas.length > 0) {
+                    setMesas(localMesas);
+                    if (mesaId) {
+                        const m = localMesas.find(m => m.id === mesaId);
+                        if (m) {
+                            setMesa(m);
+                            setSelectedMesaId(m.id);
+                        }
+                    }
                 }
+                if (localProds.length > 0) {
+                    setProductos(localProds);
+                }
+                if (localCats.length > 0) {
+                    setCategorias(localCats);
+                }
+                if (localConfig) {
+                    setPrintConfig(localConfig);
+                }
+            } catch (err) {
+                console.error("[MobileOrder] Error loading local Dexie data:", err);
             }
 
-            if (!sucursalId) return;
+            // 2. Fetch from Supabase if online to sync/refresh
+            if (navigator.onLine) {
+                // Fetch Mesas
+                const { data: mesasData } = await supabase
+                    .from("mesas")
+                    .select("*")
+                    .eq("sucursal_id", sucursalId)
+                    .order("numero");
+                if (mesasData) {
+                    setMesas(mesasData);
+                    if (mesaId) {
+                        const m = mesasData.find(m => m.id === mesaId);
+                        if (m) {
+                            setMesa(m);
+                            setSelectedMesaId(m.id);
+                        }
+                    }
+                }
 
-            // Fetch Print Config (Bridge IP etc)
-            const localConfig = await db.config_sucursal.where("sucursal_id").equals(sucursalId).first();
-            if (localConfig) {
-                setPrintConfig(localConfig);
-            } else {
+                // Fetch Print Config
                 const { data: remoteConfig } = await supabase
                     .from("config_sucursal")
                     .select("*")
                     .eq("sucursal_id", sucursalId)
                     .maybeSingle();
-                setPrintConfig(remoteConfig);
-            }
+                if (remoteConfig) setPrintConfig(remoteConfig);
 
-            // Fetch Categories
-            const { data: catData } = await supabase
-                .from("categorias")
-                .select("*")
-                .eq("sucursal_id", sucursalId)
-                .order("nombre");
-            setCategorias(catData || []);
+                // Fetch Categories
+                const { data: catData } = await supabase
+                    .from("categorias")
+                    .select("*")
+                    .eq("sucursal_id", sucursalId)
+                    .order("orden");
+                if (catData) setCategorias(catData);
 
-            // Fetch Waiters
-            const { data: staffData } = await supabase
-                .from("usuarios")
-                .select("*")
-                .eq("sucursal_id", sucursalId)
-                .eq("rol", "camarero")
-                .order("nombre");
-            setCamareros(staffData || []);
+                // Fetch Waiters (via server API to bypass RLS seamlessly)
+                try {
+                    const staffRes = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
+                    if (staffRes.ok) {
+                        const staffData = await staffRes.json();
+                        setCamareros(staffData || []);
+                    }
+                } catch (staffErr) {
+                    console.error("[MobileOrder] Error fetching staff:", staffErr);
+                    // Fallback to direct supabase query
+                    const { data: directStaff } = await supabase
+                        .from("usuarios")
+                        .select("*")
+                        .eq("sucursal_id", sucursalId)
+                        .eq("rol", "camarero")
+                        .order("nombre");
+                    if (directStaff) setCamareros(directStaff);
+                }
 
-            // Fetch Products
-            console.log("[MobileOrder] Starting product fetch for sucursal:", sucursalId);
-            const { data: prodData, error: pErr } = await supabase
-                .from("productos")
-                .select("*")
-                .eq("sucursal_id", sucursalId)
-                .eq("activo", true)
-                .order("nombre");
-            
-            if (pErr) {
-                console.error("[MobileOrder] Error fetching products:", pErr);
-                setError("Error al cargar productos.");
-            } else {
-                const fetchedProds = prodData || [];
-                console.log(`[MobileOrder] Success! Fetched ${fetchedProds.length} products`);
-                setProductos(fetchedProds);
-                
-                if (fetchedProds.length > 0) {
-                    const catsInProds = [...new Set(fetchedProds.map(p => p.categoria_id))];
-                    console.log("[MobileOrder] Categories present in products:", catsInProds);
-                } else {
-                    console.warn("[MobileOrder] NO PRODUCTS FOUND in DB for this sucursal!");
+                // Fetch Products - Direct
+                const { data: prods, error: pErr } = await supabase
+                    .from("productos")
+                    .select("*")
+                    .eq("sucursal_id", sucursalId)
+                    .order("nombre");
+
+                // Fetch Products - Via Category Join (prevents missing sucursal_id rows from being ignored)
+                const { data: catsWithProds } = await supabase
+                    .from("categorias")
+                    .select("productos(*)")
+                    .eq("sucursal_id", sucursalId);
+
+                const prodsFromCats = (catsWithProds || []).flatMap((c: any) => c.productos || []);
+
+                const allProds = [...(prods || [])];
+                prodsFromCats.forEach((p: any) => {
+                    if (!allProds.some(existing => existing.id === p.id)) {
+                        allProds.push(p);
+                    }
+                });
+
+                // Deduplicate by ID, preferring items with assigned category
+                const uniqueProds = allProds.reduce((acc: any[], current: any) => {
+                    const existing = acc.find(p => p.id === current.id);
+                    if (!existing) {
+                        acc.push(current);
+                    } else if (!existing.categoria_id && current.categoria_id) {
+                        acc = acc.map(p => p.id === existing.id ? current : p);
+                    }
+                    return acc;
+                }, []);
+
+                if (uniqueProds.length > 0) {
+                    setProductos(uniqueProds);
                 }
             }
 
@@ -352,10 +401,10 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         </button>
                     </div>
 
-                    <div className="bg-white/10 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/10 space-y-6 shadow-2xl overflow-hidden flex flex-col">
+                    <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-5 border border-white/10 space-y-4 shadow-2xl overflow-hidden flex flex-col">
                         {/* Mesa Selector - Now Input */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
                             <input 
                                 type="number"
                                 inputMode="numeric"
@@ -371,32 +420,32 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                         setSelectedMesaId("");
                                     }
                                 }}
-                                className="w-full bg-white/10 border border-white/20 rounded-2xl py-4 px-6 text-2xl font-black text-white text-center focus:bg-white/20 focus:ring-2 focus:ring-white/30 outline-none transition-all placeholder:text-white/20"
+                                className="w-full bg-white/10 border border-white/20 rounded-xl py-2 px-4 text-lg font-black text-white text-center focus:bg-white/20 focus:ring-2 focus:ring-white/30 outline-none transition-all placeholder:text-white/20"
                             />
                         </div>
 
                         {/* Comensales Selector - Now Input */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Cantidad de Comensales</label>
-                            <div className="flex items-center gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-[9px] font-black text-indigo-100 uppercase tracking-widest px-1">Cantidad de Comensales</label>
+                            <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => setComensales(Math.max(1, comensales - 1))}
-                                    className="w-14 h-14 flex items-center justify-center bg-white/10 rounded-2xl text-white active:scale-90 transition-all border border-white/10"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all border border-white/10 shrink-0"
                                 >
-                                    <Minus className="w-6 h-6" />
+                                    <Minus className="w-4 h-4" />
                                 </button>
                                 <input 
                                     type="number"
                                     inputMode="numeric"
                                     value={comensales}
                                     onChange={(e) => setComensales(parseInt(e.target.value) || 1)}
-                                    className="flex-1 bg-white/10 border border-white/20 rounded-2xl py-4 text-2xl font-black text-white text-center focus:bg-white/20 outline-none transition-all"
+                                    className="flex-1 min-w-0 bg-white/10 border border-white/20 rounded-xl py-2 text-lg font-black text-white text-center focus:bg-white/20 outline-none transition-all"
                                 />
                                 <button 
                                     onClick={() => setComensales(comensales + 1)}
-                                    className="w-14 h-14 flex items-center justify-center bg-white/10 rounded-2xl text-white active:scale-90 transition-all border border-white/10"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all border border-white/10 shrink-0"
                                 >
-                                    <Plus className="w-6 h-6" />
+                                    <Plus className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -404,7 +453,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         <button 
                             onClick={() => selectedMesaId && setStep("ordering")}
                             disabled={!selectedMesaId}
-                            className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl ${
+                            className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl ${
                                 selectedMesaId 
                                 ? "bg-white text-indigo-600 hover:bg-indigo-50 active:scale-95 shadow-indigo-800/20" 
                                 : "bg-white/10 text-white/40 cursor-not-allowed"
