@@ -897,6 +897,7 @@ export default function SuperAdminPage() {
                                 )}
                             </div>
                         </div>
+                    </div>
                 )}
 
                 {activeTab === "landing_config" && (
