@@ -1,0 +1,48 @@
+{
+  "phone": "+54 9 11 1234-5678",
+  "whatsapp": "5491112345678",
+  "email": "contacto@mmmsystem.com",
+  "title": "MMM System",
+  "subtitle": "El ecosistema definitivo para la gestión integral y automatizada de tu restaurante o sucursal.",
+  "heroTitle": "Revoluciona la Gestión de tu Restaurante",
+  "heroSubtitle": "Control centralizado de pedidos, salón interactivo, delivery sincronizado y un asistente de Inteligencia Artificial disponible las 24 horas para tus clientes.",
+  "aboutTitle": "Diseñado por Gastronómicos, para Gastronómicos",
+  "aboutText": "MMM System nace para dar respuesta a la necesidad de un control absoluto, rápido y sin fricciones. Desde la toma del pedido en la mesa con códigos QR por parte del mozo, hasta la impresión automática en las cocinas y la analítica inteligente de ventas para el administrador.",
+  "features": [
+    {
+      "title": "Salón & Mesas Interactivas",
+      "description": "Visualiza el estado de tu salón en tiempo real. Configura mesas, controla el estado de pre-cuenta parpadeante y optimiza la rotación de tus clientes."
+    },
+    {
+      "title": "Módulo de Camareras QR",
+      "description": "Toma de pedidos ultra-rápida desde el celular del mozo sin necesidad de instalar apps pesadas. Cero scroll, interfaces optimizadas y productos siempre al día."
+    },
+    {
+      "title": "Asistente IA WhatsApp",
+      "description": "Un agente virtual inteligente que atiende a tus clientes las 24 horas, responde dudas de la carta, sugiere promociones y toma pedidos de manera autónoma."
+    },
+    {
+      "title": "Impresión Silenciosa Directa",
+      "description": "Comandas automáticas enviadas directamente a impresoras de cocina, barra o facturación por red IP local, eliminando demoras y errores humanos."
+    }
+  ],
+  "pricingTitle": "Planes a la Medida de tu Negocio",
+  "pricingSubtitle": "Escalabilidad asegurada con licencias flexibles y soporte prioritario.",
+  "plans": [
+    {
+      "name": "Plan Emprendedor",
+      "price": "$15.000 / mes",
+      "features": ["1 Sucursal activa", "Panel de pedidos clásico", "Soporte estándar", "Métricas básicas"]
+    },
+    {
+      "name": "Plan Premium Pro",
+      "price": "$29.000 / mes",
+      "features": ["1 Sucursal activa", "Salón interactivo con parpadeo", "Módulo de Camareras QR", "Soporte prioritario", "Métricas detalladas"]
+    },
+    {
+      "name": "Plan Enterprise AI",
+      "price": "$45.000 / mes",
+      "features": ["Múltiples sucursales", "Agente IA WhatsApp autónomo", "Impresión directa por IP", "Soporte VIP 24/7", "Exportación completa de datos"]
+    }
+  ]
+}

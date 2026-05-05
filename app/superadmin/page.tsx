@@ -116,8 +116,64 @@ export default function SuperAdminPage() {
         }
     }
 
-    const [activeTab, setActiveTab] = useState<"tenants" | "users" | "metrics">("tenants");
+    const [activeTab, setActiveTab] = useState<"tenants" | "users" | "metrics" | "landing_config">("tenants");
     const [users, setUsers] = useState<any[]>([]);
+
+    const [landingForm, setLandingForm] = useState<any>({
+        phone: "",
+        whatsapp: "",
+        email: "",
+        title: "",
+        subtitle: "",
+        heroTitle: "",
+        heroSubtitle: "",
+        aboutTitle: "",
+        aboutText: "",
+        features: [],
+        pricingTitle: "",
+        pricingSubtitle: "",
+        plans: []
+    });
+    const [landingLoading, setLandingLoading] = useState(false);
+
+    async function fetchLandingConfig() {
+        setLandingLoading(true);
+        try {
+            const res = await fetch("/api/superadmin/landing-config");
+            if (res.ok) {
+                const data = await res.json();
+                setLandingForm(data);
+            }
+        } catch (err) {
+            console.error("Error loading landing config:", err);
+        } finally {
+            setLandingLoading(false);
+        }
+    }
+
+    async function handleSaveLandingConfig(e: React.FormEvent) {
+        e.preventDefault();
+        setLandingLoading(true);
+        try {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/superadmin/landing-config", {
+                method: "POST",
+                headers,
+                body: JSON.stringify(landingForm)
+            });
+            if (res.ok) {
+                alert("Configuración de página de ventas guardada correctamente!");
+            } else {
+                const err = await res.json();
+                alert("Error al guardar: " + (err.error || "Desconocido"));
+            }
+        } catch (err: any) {
+            alert("Error: " + err.message);
+        } finally {
+            setLandingLoading(false);
+        }
+    }
+
     
     // Metrics filtering
     const [startDate, setStartDate] = useState(() => {
@@ -204,6 +260,12 @@ export default function SuperAdminPage() {
             fetchMetrics();
         }
     }, [activeTab, isSuperAdmin, startDate, endDate, selectedSucursalFilter]);
+
+    useEffect(() => {
+        if (isSuperAdmin && activeTab === "landing_config") {
+            fetchLandingConfig();
+        }
+    }, [activeTab, isSuperAdmin]);
 
     async function handleExtendSubscription(tenantId: string) {
         if(!extendDays || isNaN(Number(extendDays))) return alert("Días inválidos");
@@ -407,6 +469,7 @@ export default function SuperAdminPage() {
                         { id: "tenants", label: "Locales", icon: Building2 },
                         { id: "users", label: "Usuarios", icon: UsersIcon },
                         { id: "metrics", label: "Métricas", icon: BarChart3 },
+                        { id: "landing_config", label: "Pág. Ventas", icon: Bot },
                     ].map((t) => (
                         <button
                             key={t.id}
@@ -834,6 +897,170 @@ export default function SuperAdminPage() {
                                 )}
                             </div>
                         </div>
+                )}
+
+                {activeTab === "landing_config" && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex justify-between items-center bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                            <div>
+                                <h2 className="text-3xl font-black text-white tracking-tight">Página de <span className="text-[#00B2FF]">Ventas</span></h2>
+                                <p className="text-sm text-slate-400 mt-2 font-medium">Define los textos, contactos, características y planes de tu landing page global.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <a 
+                                    href="/ventas" 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold px-5 py-3 rounded-xl transition-all flex items-center gap-2 text-xs"
+                                >
+                                    <ExternalLink size={16} className="text-[#00B2FF]" /> Ver Landing Page
+                                </a>
+                            </div>
+                        </div>
+
+                        {landingLoading ? (
+                            <div className="bg-white/5 rounded-[2rem] border border-white/10 p-20 flex flex-col items-center justify-center">
+                                <Loader2 className="animate-spin text-[#00B2FF] w-10 h-10 mb-4" />
+                                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Cargando configuraciones...</p>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSaveLandingConfig} className="space-y-8">
+                                {/* Seccion General e Info de Contacto */}
+                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl space-y-6">
+                                    <h3 className="font-black text-white uppercase tracking-widest text-xs flex items-center gap-3 border-b border-white/5 pb-4">
+                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                        Configuraciones de Contacto e Identidad
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nombre del Sistema</label>
+                                            <input required type="text" value={landingForm.title || ""} onChange={e => setLandingForm({...landingForm, title: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Teléfono de Contacto</label>
+                                            <input required type="text" value={landingForm.phone || ""} onChange={e => setLandingForm({...landingForm, phone: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">WhatsApp Enlace (Sin + ni espacios)</label>
+                                            <input required type="text" value={landingForm.whatsapp || ""} onChange={e => setLandingForm({...landingForm, whatsapp: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" placeholder="Ej: 5491112345678" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Correo de Soporte</label>
+                                            <input required type="email" value={landingForm.email || ""} onChange={e => setLandingForm({...landingForm, email: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Presentación Hero */}
+                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl space-y-6">
+                                    <h3 className="font-black text-white uppercase tracking-widest text-xs flex items-center gap-3 border-b border-white/5 pb-4">
+                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                        Textos Principales & Hero
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Título Hero</label>
+                                            <input required type="text" value={landingForm.heroTitle || ""} onChange={e => setLandingForm({...landingForm, heroTitle: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Subtítulo Hero</label>
+                                            <textarea required rows={3} value={landingForm.heroSubtitle || ""} onChange={e => setLandingForm({...landingForm, heroSubtitle: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all resize-none" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Título Sección "Nosotros"</label>
+                                                <input required type="text" value={landingForm.aboutTitle || ""} onChange={e => setLandingForm({...landingForm, aboutTitle: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Texto Sección "Nosotros"</label>
+                                                <textarea required rows={3} value={landingForm.aboutText || ""} onChange={e => setLandingForm({...landingForm, aboutText: e.target.value})} className="w-full bg-black/30 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all resize-none" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Características / Módulos */}
+                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl space-y-6">
+                                    <h3 className="font-black text-white uppercase tracking-widest text-xs flex items-center gap-3 border-b border-white/5 pb-4">
+                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                        Características / Módulos del Sistema
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        {(landingForm.features || []).map((feat: any, idx: number) => (
+                                            <div key={idx} className="bg-black/20 p-6 rounded-2xl border border-white/5 space-y-4">
+                                                <span className="text-[10px] font-black text-[#00B2FF] uppercase tracking-widest">Módulo {idx + 1}</span>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Título</label>
+                                                    <input required type="text" value={feat.title || ""} onChange={e => {
+                                                        const updated = [...landingForm.features];
+                                                        updated[idx].title = e.target.value;
+                                                        setLandingForm({...landingForm, features: updated});
+                                                    }} className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Descripción</label>
+                                                    <textarea required rows={2} value={feat.description || ""} onChange={e => {
+                                                        const updated = [...landingForm.features];
+                                                        updated[idx].description = e.target.value;
+                                                        setLandingForm({...landingForm, features: updated});
+                                                    }} className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-xs font-bold text-white outline-none focus:border-[#00B2FF] transition-all resize-none" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Planes y Precios */}
+                                <div className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-xl space-y-6">
+                                    <h3 className="font-black text-white uppercase tracking-widest text-xs flex items-center gap-3 border-b border-white/5 pb-4">
+                                        <div className="w-2 h-2 bg-[#00B2FF] rounded-full" />
+                                        Planes & Licencias
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                        {(landingForm.plans || []).map((plan: any, idx: number) => (
+                                            <div key={idx} className="bg-black/20 p-6 rounded-2xl border border-white/5 space-y-4">
+                                                <span className="text-[10px] font-black text-[#00B2FF] uppercase tracking-widest">Plan {idx + 1}</span>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Nombre del Plan</label>
+                                                    <input required type="text" value={plan.name || ""} onChange={e => {
+                                                        const updated = [...landingForm.plans];
+                                                        updated[idx].name = e.target.value;
+                                                        setLandingForm({...landingForm, plans: updated});
+                                                    }} className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Precio</label>
+                                                    <input required type="text" value={plan.price || ""} onChange={e => {
+                                                        const updated = [...landingForm.plans];
+                                                        updated[idx].price = e.target.value;
+                                                        setLandingForm({...landingForm, plans: updated});
+                                                    }} className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-[#00B2FF] transition-all" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Características (Separadas por comas)</label>
+                                                    <textarea required rows={4} value={(plan.features || []).join(", ")} onChange={e => {
+                                                        const updated = [...landingForm.plans];
+                                                        updated[idx].features = e.target.value.split(",").map(f => f.trim()).filter(Boolean);
+                                                        setLandingForm({...landingForm, plans: updated});
+                                                    }} className="w-full bg-black/30 border border-white/10 rounded-2xl px-4 py-3 text-xs font-bold text-white outline-none focus:border-[#00B2FF] transition-all resize-none" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-4 border-t border-white/5 pt-8">
+                                    <button 
+                                        type="submit" 
+                                        disabled={landingLoading}
+                                        className="bg-[#00B2FF] hover:bg-[#0092d1] text-white px-10 py-4 text-xs font-black rounded-2xl shadow-xl shadow-cyan-900/40 uppercase tracking-widest transition-all disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        {landingLoading && <Loader2 className="animate-spin" size={14} />}
+                                        Guardar Configuración
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 )}
             </main>
