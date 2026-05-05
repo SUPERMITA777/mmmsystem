@@ -160,7 +160,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const total = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
     const handleSendOrder = async () => {
-        if (carrito.length === 0 || !selectedMesaId) return;
+        if (carrito.length === 0 || !selectedMesaId || !sucursalId) return;
         setIsSending(true);
         setError(null);
 
