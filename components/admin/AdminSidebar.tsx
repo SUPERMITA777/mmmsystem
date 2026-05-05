@@ -90,11 +90,11 @@ export function AdminSidebar() {
     }));
 
   if (user?.rol === "camarero") {
-    // Check if camarero has any custom permissions, otherwise default to salon only
-    const hasCustomPerms = dynamicItems.length > 0;
-    if (!hasCustomPerms) {
+    // For waiters, we only show items they HAVE explicit permission for, 
+    // or the Salon if they have no other permissions.
+    if (dynamicItems.length === 0) {
       dynamicItems = [
-        { id: "camarero", href: `/${tenant}/admin/camarero`, icon: Store, label: "Salón (Camarero)", readOnly: false }
+        { id: "salon", href: `/${tenant}/admin/salon`, icon: Store, label: "Salón", readOnly: false }
       ];
     }
   }

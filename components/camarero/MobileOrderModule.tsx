@@ -323,7 +323,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
             {/* Header */}
-            <div className="bg-white px-4 py-3 shadow-sm flex items-center justify-between z-10">
+            <div className="bg-white px-4 py-3 shadow-sm flex items-center justify-between sticky top-0 z-20">
                 <button 
                     onClick={() => setStep("setup")}
                     className="p-2 -ml-2 text-slate-400 hover:text-slate-600"
@@ -347,7 +347,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             </div>
 
             {/* Search and Categories */}
-            <div className="bg-white border-b border-slate-100 px-4 py-3 space-y-3 z-10">
+            <div className="bg-white border-b border-slate-100 px-4 py-3 space-y-3 sticky top-[65px] z-10">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
@@ -389,32 +389,67 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             {/* Product Grid */}
             <div className="flex-1 overflow-y-auto p-4 pb-24">
                 <div className="grid grid-cols-2 gap-4">
-                    {filteredProducts.map(p => (
-                        <div 
-                            key={p.id}
-                            onClick={() => addToCart(p)}
-                            className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 active:scale-95 transition-transform"
-                        >
-                            <div className="aspect-square bg-slate-100 relative overflow-hidden">
-                                {p.imagen_url ? (
-                                    <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                        <ShoppingBag className="w-8 h-8 text-slate-300" />
+                    {filteredProducts.map(p => {
+                        const inCart = carrito.find(i => i.producto_id === p.id);
+                        return (
+                            <div 
+                                key={p.id}
+                                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 transition-all flex flex-col"
+                            >
+                                <div 
+                                    className="aspect-square bg-slate-100 relative overflow-hidden"
+                                    onClick={() => !inCart && addToCart(p)}
+                                >
+                                    {p.imagen_url ? (
+                                        <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <ShoppingBag className="w-8 h-8 text-slate-300" />
+                                        </div>
+                                    )}
+                                    
+                                    {!inCart && (
+                                        <div className="absolute top-2 right-2">
+                                            <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm">
+                                                <Plus className="w-4 h-4 text-indigo-600" />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-3 space-y-2 flex-1 flex flex-col">
+                                    <div onClick={() => !inCart && addToCart(p)}>
+                                        <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{p.nombre}</h3>
+                                        <p className="text-indigo-600 font-extrabold text-sm">${p.precio}</p>
                                     </div>
-                                )}
-                                <div className="absolute top-2 right-2">
-                                    <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm">
-                                        <Plus className="w-4 h-4 text-indigo-600" />
-                                    </div>
+
+                                    {inCart ? (
+                                        <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 mt-auto">
+                                            <button 
+                                                onClick={() => updateQuantity(inCart.id, inCart.cantidad - 1)}
+                                                className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 active:bg-slate-100"
+                                            >
+                                                <Minus className="w-4 h-4" />
+                                            </button>
+                                            <span className="font-black text-sm text-slate-900">{inCart.cantidad}</span>
+                                            <button 
+                                                onClick={() => updateQuantity(inCart.id, inCart.cantidad + 1)}
+                                                className="w-8 h-8 flex items-center justify-center bg-indigo-600 rounded-lg shadow-sm text-white active:bg-indigo-700"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={() => addToCart(p)}
+                                            className="w-full py-2 bg-slate-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-wider mt-auto"
+                                        >
+                                            Agregar
+                                        </button>
+                                    )}
                                 </div>
                             </div>
-                            <div className="p-3 space-y-1">
-                                <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{p.nombre}</h3>
-                                <p className="text-indigo-600 font-extrabold text-sm">${p.precio}</p>
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 

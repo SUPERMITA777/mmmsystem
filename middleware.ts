@@ -55,7 +55,9 @@ export async function middleware(request: NextRequest) {
 
     if (adminMatch) {
         const urlTenant = adminMatch[1];
-        const subPath = adminMatch[2] || '';
+        const section = adminMatch[2]; // 'admin' or 'camarero'
+        const subPath = adminMatch[3] || '';
+
         if (urlTenant === 'superadmin') return response;
 
         const { data: { user } } = await supabase.auth.getUser();
@@ -65,20 +67,27 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(loginUrl);
         }
 
-        // ── Tenant Enforcement ──
-        // Look up the user's role and assigned branch
+        // 1. Look up user role and sucursal
         const { data: userData } = await supabaseAdmin
             .from('usuarios')
             .select('rol, sucursal_id')
             .eq('id', user.id)
             .maybeSingle();
 
-        // Super admins can access any tenant
-        if (userData?.rol === 'super_admin') {
+        const userRol = userData?.rol;
+
+        // 2. Role Authorization: 'camarero' cannot access '/admin'
+        if (section === 'admin' && userRol === 'camarero') {
+            const waiterUrl = new URL(`/${urlTenant}/camarero/pedir`, request.url);
+            return NextResponse.redirect(waiterUrl);
+        }
+
+        // 3. Super admins bypass tenant enforcement
+        if (userRol === 'super_admin') {
             return response;
         }
 
-        // Non-super_admin: verify they belong to the URL tenant
+        // 4. Tenant Enforcement
         if (userData?.sucursal_id) {
             const { data: sucData } = await supabaseAdmin
                 .from('sucursales')
@@ -88,7 +97,6 @@ export async function middleware(request: NextRequest) {
 
             if (sucData?.slug && sucData.slug !== urlTenant) {
                 // Redirect to their correct tenant, preserving the section (admin/camarero) and sub-path
-                const section = adminMatch[2]; // 'admin' or 'camarero'
                 const correctUrl = new URL(`/${sucData.slug}/${section}${subPath}`, request.url);
                 return NextResponse.redirect(correctUrl);
             }
