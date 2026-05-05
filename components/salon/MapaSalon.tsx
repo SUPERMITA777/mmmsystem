@@ -27,6 +27,7 @@ type Mesa = {
     width: number;
     height: number;
     camarero_color?: string;
+    is_precuenta?: boolean;
 };
 
 export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean }) {
@@ -69,10 +70,10 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             }));
             setLayout(initialLayout);
 
-            // Load active orders to get waiter colors
+            // Load active orders to get waiter colors and Pre-Cuenta status
             const { data: activePedidos, error: pedidosError } = await supabase
                 .from("pedidos")
-                .select("mesa_id, camarero_id")
+                .select("id, mesa_id, camarero_id, notas_internas")
                 .eq("sucursal_id", sucursalId)
                 .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"]);
 
@@ -106,11 +107,13 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
 
                 const actualState = pedido ? "ocupada" : m.estado;
                 const color = pedido?.camarero_id ? (camareroColors[pedido.camarero_id] || undefined) : undefined;
+                const isPrecuenta = pedido?.notas_internas?.includes("PRECUENTA");
                 
                 return {
                     ...m,
                     estado: actualState,
-                    camarero_color: color
+                    camarero_color: color,
+                    is_precuenta: isPrecuenta
                 };
             });
             setMesas(mesasWithColor);
@@ -463,12 +466,15 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                 `}
                                 style={customStyle}
                                 >
-                                    <span className="font-black text-xl">{mesa.numero}</span>
-                                    <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70 flex items-center gap-1 mt-1">
+                                    {mesa.is_precuenta && (
+                                        <div className="absolute inset-0 bg-yellow-400/30 animate-pulse rounded-[inherit] z-0" />
+                                    )}
+                                    <span className="font-black text-xl z-10">{mesa.numero}</span>
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70 flex items-center gap-1 mt-1 z-10">
                                         <Users size={10} /> {mesa.capacidad}
                                     </span>
                                     {mesa.camarero_color && mesa.estado === 'ocupada' && (
-                                        <div className="absolute top-1 right-1">
+                                        <div className="absolute top-1 right-1 z-10">
                                             <User size={12} fill={mesa.camarero_color} />
                                         </div>
                                     )}

@@ -1942,7 +1942,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             )}
                                         </div>
                                     )}
-                                    <button
+                                            <button
                                         onClick={comandarSalon}
                                         disabled={loading || carrito.length === 0}
                                         className="flex-1 bg-orange-600 text-white py-3 rounded-full text-xs font-bold hover:bg-orange-500 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
@@ -1963,7 +1963,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     </div>
                 </div>
             </div>
- 
+
             {/* Motivo de Eliminación Modal */}
             {showMotivoModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2011,6 +2011,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     </div>
                 </div>
             )}
+
             {/* Mini Modal Pre-Cuenta Pago */}
             {showPreCuentaModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2102,7 +2103,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                         if (editPedido?.id) {
                                             await supabase.from("pedidos").update({ 
                                                 metodo_pago_id: isMixto ? null : metodoPagoId,
-                                                notas_internas: isMixto ? "MIXTO" : "" 
+                                                notas_internas: (isMixto ? "MIXTO" : "") + " | PRECUENTA" 
                                             }).eq("id", editPedido.id);
                                         }
 

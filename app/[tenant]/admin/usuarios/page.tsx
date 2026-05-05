@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, Edit2, Trash2, X, Lock, Mail, User, Shield, Key } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Lock, Mail, User, Shield, Key, QrCode } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 
 type Usuario = {
@@ -51,7 +51,10 @@ export default function UsuariosPage() {
     const [submitting, setSubmitting] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [activeTab, setActiveTab] = useState<"usuarios" | "permisos">("usuarios");
-    const { sucursalId } = useTenant();
+    const { sucursalId, tenantSlug } = useTenant();
+    
+    // QR Modal State
+    const [qrModalUser, setQrModalUser] = useState<Usuario | null>(null);
     
     // PERMISOS STATE
     const [permisos, setPermisos] = useState<Record<string, any>>({});
@@ -426,11 +429,14 @@ export default function UsuariosPage() {
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDelete(u.id)}
-                                                    className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all active:scale-90"
-                                                >
                                                     <Trash2 size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setQrModalUser(u)}
+                                                    className="p-3 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all active:scale-90"
+                                                    title="Generar QR de Acceso"
+                                                >
+                                                    <QrCode size={18} />
                                                 </button>
                                             </div>
                                         </td>
@@ -671,6 +677,48 @@ export default function UsuariosPage() {
                                 >
                                     {submitting ? "Guardando..." : "Guardar"}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── QR MODAL ── */}
+            {qrModalUser && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+                    <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="px-8 pt-8 pb-4 flex items-center justify-between">
+                            <h3 className="text-xl font-black text-gray-900 uppercase italic">QR Acceso Rápido</h3>
+                            <button onClick={() => setQrModalUser(null)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all">
+                                <X size={20} className="text-gray-400" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6 text-center">
+                            <div className="space-y-1">
+                                <p className="text-lg font-black text-indigo-600">{qrModalUser.nombre}</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{ROL_LABELS[qrModalUser.rol] || qrModalUser.rol}</p>
+                            </div>
+                            
+                            <div className="bg-white p-4 rounded-3xl border-4 border-indigo-50 aspect-square flex items-center justify-center mx-auto shadow-inner">
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                                        window.location.origin + "/" + tenantSlug + "/camarero/pedir?waiter_id=" + qrModalUser.id
+                                    )}`} 
+                                    alt="QR Code"
+                                    className="w-full h-full"
+                                />
+                            </div>
+
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={() => window.print()}
+                                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-xl shadow-indigo-100 active:scale-95"
+                                >
+                                    Imprimir Credencial
+                                </button>
+                                <p className="text-[9px] text-gray-400 font-medium">
+                                    Este QR permite al usuario acceder directamente al módulo de pedidos sin necesidad de logueo manual.
+                                </p>
                             </div>
                         </div>
                     </div>

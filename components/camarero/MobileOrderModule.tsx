@@ -53,6 +53,20 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [comensales, setComensales] = useState(1);
 
     useEffect(() => {
+        // 1. Check URL for waiter_id (Auto-login via QR)
+        const params = new URLSearchParams(window.location.search);
+        const waiterIdParam = params.get("waiter_id");
+        
+        if (waiterIdParam && camareros.length > 0) {
+            const found = camareros.find(c => c.id === waiterIdParam);
+            if (found) {
+                setActiveWaiter(found);
+                localStorage.setItem("active_waiter", JSON.stringify(found));
+                setStep("setup");
+                return;
+            }
+        }
+
         const savedWaiter = localStorage.getItem("active_waiter");
         if (savedWaiter) {
             const waiter = JSON.parse(savedWaiter);
@@ -62,7 +76,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             setActiveWaiter(user);
             setStep("setup");
         }
-    }, [user]);
+    }, [user, camareros]);
 
     useEffect(() => {
         if (sucursalId) {
@@ -126,13 +140,29 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             setCamareros(staffData || []);
 
             // Fetch Products
-            const { data: prodData } = await supabase
+            console.log("[MobileOrder] Starting product fetch for sucursal:", sucursalId);
+            const { data: prodData, error: pErr } = await supabase
                 .from("productos")
                 .select("*")
                 .eq("sucursal_id", sucursalId)
                 .eq("activo", true)
                 .order("nombre");
-            setProductos(prodData || []);
+            
+            if (pErr) {
+                console.error("[MobileOrder] Error fetching products:", pErr);
+                setError("Error al cargar productos.");
+            } else {
+                const fetchedProds = prodData || [];
+                console.log(`[MobileOrder] Success! Fetched ${fetchedProds.length} products`);
+                setProductos(fetchedProds);
+                
+                if (fetchedProds.length > 0) {
+                    const catsInProds = [...new Set(fetchedProds.map(p => p.categoria_id))];
+                    console.log("[MobileOrder] Categories present in products:", catsInProds);
+                } else {
+                    console.warn("[MobileOrder] NO PRODUCTS FOUND in DB for this sucursal!");
+                }
+            }
 
         } catch (err) {
             console.error("Error fetching data:", err);
@@ -144,9 +174,11 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
 
     const filteredProducts = productos.filter(p => {
         const matchSearch = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
-        const matchCat = catSeleccionada === "todos" || p.categoria_id === catSeleccionada;
+        const matchCat = catSeleccionada === "todos" || String(p.categoria_id) === String(catSeleccionada);
         return matchSearch && matchCat;
     });
+
+    console.log(`[MobileOrder] Render: Total=${productos.length}, Filtered=${filteredProducts.length}, Cat=${catSeleccionada}`);
 
     const addToCart = (p: any) => {
         setCarrito(prev => {
@@ -266,8 +298,8 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/20">
                             <UtensilsCrossed className="text-white w-8 h-8" />
                         </div>
-                        <h1 className="text-2xl font-black text-white italic tracking-tighter uppercase">¿Quién eres? 👋</h1>
-                        <p className="text-indigo-100 font-medium text-xs">Selecciona tu nombre para comenzar.</p>
+                        <h1 className="text-lg font-black text-white italic tracking-tighter uppercase">¿Quién eres? 👋</h1>
+                        <p className="text-indigo-100 font-medium text-[10px]">Selecciona tu nombre para comenzar.</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
@@ -295,29 +327,36 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
 
     if (step === "setup") {
         return (
-            <div className="flex flex-col h-full bg-indigo-600 p-4 overflow-hidden">
-                <div className="flex-1 flex flex-col justify-center space-y-4 max-w-md mx-auto w-full">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <h1 className="text-xl font-black text-white italic tracking-tight">HOLA, {activeWaiter?.nombre?.split(' ')[0] || "MOZO"}! 👋</h1>
-                            <p className="text-indigo-200 font-medium text-[10px] uppercase tracking-widest">Inicia pedido en mesa</p>
+            <div className="flex flex-col h-[100dvh] bg-indigo-600 p-4 overflow-hidden">
+                <div className="flex-1 flex flex-col justify-center space-y-3 max-w-md mx-auto w-full">
+                    <div className="flex items-center justify-between bg-white/10 p-3 rounded-2xl border border-white/20">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-indigo-600 font-black shadow-lg">
+                                {activeWaiter?.nombre?.charAt(0) || "M"}
+                            </div>
+                            <div className="space-y-0">
+                                <p className="text-white font-black text-xs tracking-tight leading-none uppercase italic">
+                                    ¡Hola, {activeWaiter?.nombre?.split(' ')[0] || "Mozo"}!
+                                </p>
+                                <p className="text-indigo-200 text-[9px] font-bold uppercase tracking-widest mt-0.5">Mesa para abrir</p>
+                            </div>
                         </div>
                         <button 
                             onClick={() => {
                                 localStorage.removeItem("active_waiter");
                                 setStep("identification");
                             }}
-                            className="bg-white/10 px-3 py-1.5 rounded-xl text-white text-[10px] font-bold border border-white/10 active:scale-95"
+                            className="bg-white/10 px-3 py-1.5 rounded-xl text-white text-[9px] font-black border border-white/10 active:scale-95 uppercase"
                         >
-                            CAMBIAR
+                            Cambiar
                         </button>
                     </div>
 
-                    <div className="bg-white/10 backdrop-blur-xl rounded-[32px] p-6 border border-white/10 space-y-6 shadow-2xl">
+                    <div className="bg-white/10 backdrop-blur-xl rounded-[2.5rem] p-5 border border-white/10 space-y-4 shadow-2xl overflow-hidden flex flex-col">
                         {/* Mesa Selector */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
                             <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
-                            <div className="grid grid-cols-5 gap-2 max-h-[30vh] overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="grid grid-cols-4 gap-2 overflow-y-auto pr-1 custom-scrollbar">
                                 {mesas.filter(m => m.forma !== 'label').map(m => (
                                     <button
                                         key={m.id}
@@ -327,8 +366,8 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                         }}
                                         className={`aspect-square flex items-center justify-center rounded-xl font-black text-sm transition-all ${
                                             selectedMesaId === m.id 
-                                            ? "bg-white text-indigo-600 scale-110 shadow-xl" 
-                                            : "bg-white/10 text-white hover:bg-white/20"
+                                            ? "bg-white text-indigo-600 scale-105 shadow-xl ring-2 ring-indigo-400" 
+                                            : "bg-white/10 text-white hover:bg-white/20 border border-white/5"
                                         }`}
                                     >
                                         {m.numero}
@@ -338,19 +377,32 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         </div>
 
                         {/* Comensales Selector */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Comensales</label>
-                            <div className="flex items-center justify-between bg-white/5 rounded-2xl p-1.5 border border-white/10">
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Comensales</label>
+                                <span className="text-sm font-black text-white">{comensales}</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-white/5 rounded-2xl p-1 border border-white/10">
                                 <button 
                                     onClick={() => setComensales(Math.max(1, comensales - 1))}
-                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all shadow-lg"
                                 >
                                     <Minus className="w-5 h-5" />
                                 </button>
-                                <span className="text-2xl font-black text-white">{comensales}</span>
+                                <div className="flex items-center gap-1">
+                                    {[1, 2, 3, 4, 5, 6].slice(0, 4).map(n => (
+                                        <button 
+                                            key={n}
+                                            onClick={() => setComensales(n)}
+                                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${comensales === n ? "bg-white text-indigo-600" : "text-white/40"}`}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>
                                 <button 
                                     onClick={() => setComensales(comensales + 1)}
-                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all shadow-lg"
                                 >
                                     <Plus className="w-5 h-5" />
                                 </button>
@@ -360,13 +412,13 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         <button 
                             onClick={() => selectedMesaId && setStep("ordering")}
                             disabled={!selectedMesaId}
-                            className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl ${
+                            className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl ${
                                 selectedMesaId 
-                                ? "bg-white text-indigo-600 hover:bg-indigo-50 active:scale-95 shadow-white/10" 
+                                ? "bg-white text-indigo-600 hover:bg-indigo-50 active:scale-95 shadow-indigo-800/20" 
                                 : "bg-white/10 text-white/40 cursor-not-allowed"
                             }`}
                         >
-                            Comenzar
+                            Abrir Pedido
                         </button>
                     </div>
                 </div>
@@ -389,29 +441,42 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+        <div className="flex flex-col h-[100dvh] bg-slate-50 overflow-hidden">
             {/* Consolidated Sticky Top Section */}
             <div className="sticky top-0 z-20 bg-white shadow-md">
                 {/* Header */}
-                <div className="px-4 py-3 flex items-center justify-between border-b border-slate-50">
-                    <button 
-                        onClick={() => setStep("setup")}
-                        className="p-2 -ml-2 text-slate-400 hover:text-slate-600"
-                    >
-                        <ArrowLeft className="w-6 h-6" />
-                    </button>
+                <div className="px-4 py-2 flex items-center justify-between border-b border-slate-100 bg-white">
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setStep("setup")}
+                            className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                        >
+                            <LayoutGrid className="w-5 h-5" />
+                        </button>
+                        <button 
+                            onClick={() => {
+                                localStorage.removeItem("active_waiter");
+                                setActiveWaiter(null);
+                                setStep("identification");
+                            }}
+                            className="p-2 text-red-400 hover:text-red-600 transition-colors"
+                            title="Cerrar Sesión"
+                        >
+                            <LogOut className="w-4 h-4" />
+                        </button>
+                    </div>
                     <div className="flex flex-col items-center">
-                        <h1 className="text-lg font-black text-slate-900 tracking-tight">
-                            Mesa {mesa?.numero || "..."}
+                        <h1 className="text-sm font-black text-slate-900 tracking-tight leading-none">
+                            MESA {mesa?.numero || "..."}
                         </h1>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                        <span className="text-[8px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-0.5">
                             {mesa?.nombre || "Carga de Pedido"}
                         </span>
                     </div>
-                    <div className="bg-indigo-50 px-3 py-1.5 rounded-full flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                        <span className="text-[10px] font-bold text-indigo-700 uppercase">
-                            {activeWaiter?.nombre || user?.nombre || "SISTEMA"}
+                    <div className="bg-indigo-50 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="text-[8px] font-black text-indigo-700 uppercase">
+                            {activeWaiter?.nombre?.split(' ')[0] || "..."}
                         </span>
                     </div>
                 </div>
@@ -462,12 +527,12 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 {filteredProducts.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
                         <ShoppingBag className="w-12 h-12 opacity-20" />
-                        <p className="text-sm font-medium">No se encontraron productos</p>
+                        <p className="text-sm font-medium">No se encontraron {productos.length === 0 ? "productos en la sucursal" : "productos en esta categoría"}</p>
                         <button 
                             onClick={() => { setBusqueda(""); setCatSeleccionada("todos"); }}
                             className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full"
                         >
-                            VER TODOS
+                            VER TODOS {productos.length > 0 && `(${productos.length})`}
                         </button>
                     </div>
                 ) : (
