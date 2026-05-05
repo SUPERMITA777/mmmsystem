@@ -293,13 +293,13 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     if (step === "identification") {
         return (
             <div className="flex flex-col h-full bg-indigo-600 p-6 overflow-hidden">
-                <div className="flex-1 flex flex-col justify-center space-y-6 max-w-md mx-auto w-full">
-                    <div className="text-center space-y-2">
-                        <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/20">
-                            <UtensilsCrossed className="text-white w-8 h-8" />
+                <div className="flex-1 flex flex-col justify-center space-y-4 max-w-md mx-auto w-full">
+                    <div className="text-center space-y-1">
+                        <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-white/20">
+                            <UtensilsCrossed className="text-white w-6 h-6" />
                         </div>
-                        <h1 className="text-lg font-black text-white italic tracking-tighter uppercase">¿Quién eres? 👋</h1>
-                        <p className="text-indigo-100 font-medium text-[10px]">Selecciona tu nombre para comenzar.</p>
+                        <h1 className="text-md font-black text-white italic tracking-tighter uppercase">Identificación 👋</h1>
+                        <p className="text-indigo-100 font-medium text-[9px]">Selecciona tu nombre para comenzar.</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
@@ -352,59 +352,51 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         </button>
                     </div>
 
-                    <div className="bg-white/10 backdrop-blur-xl rounded-[2.5rem] p-5 border border-white/10 space-y-4 shadow-2xl overflow-hidden flex flex-col">
-                        {/* Mesa Selector */}
-                        <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
+                    <div className="bg-white/10 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/10 space-y-6 shadow-2xl overflow-hidden flex flex-col">
+                        {/* Mesa Selector - Now Input */}
+                        <div className="space-y-2">
                             <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
-                            <div className="grid grid-cols-4 gap-2 overflow-y-auto pr-1 custom-scrollbar">
-                                {mesas.filter(m => m.forma !== 'label').map(m => (
-                                    <button
-                                        key={m.id}
-                                        onClick={() => {
-                                            setSelectedMesaId(m.id);
-                                            setMesa(m);
-                                        }}
-                                        className={`aspect-square flex items-center justify-center rounded-xl font-black text-sm transition-all ${
-                                            selectedMesaId === m.id 
-                                            ? "bg-white text-indigo-600 scale-105 shadow-xl ring-2 ring-indigo-400" 
-                                            : "bg-white/10 text-white hover:bg-white/20 border border-white/5"
-                                        }`}
-                                    >
-                                        {m.numero}
-                                    </button>
-                                ))}
-                            </div>
+                            <input 
+                                type="number"
+                                inputMode="numeric"
+                                placeholder="Ej: 5"
+                                value={mesas.find(m => m.id === selectedMesaId)?.numero || ""}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    const m = mesas.find(m => m.numero === val && m.forma !== 'label');
+                                    if (m) {
+                                        setSelectedMesaId(m.id);
+                                        setMesa(m);
+                                    } else {
+                                        setSelectedMesaId("");
+                                    }
+                                }}
+                                className="w-full bg-white/10 border border-white/20 rounded-2xl py-4 px-6 text-2xl font-black text-white text-center focus:bg-white/20 focus:ring-2 focus:ring-white/30 outline-none transition-all placeholder:text-white/20"
+                            />
                         </div>
 
-                        {/* Comensales Selector */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                                <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Comensales</label>
-                                <span className="text-sm font-black text-white">{comensales}</span>
-                            </div>
-                            <div className="flex items-center justify-between bg-white/5 rounded-2xl p-1 border border-white/10">
+                        {/* Comensales Selector - Now Input */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Cantidad de Comensales</label>
+                            <div className="flex items-center gap-3">
                                 <button 
                                     onClick={() => setComensales(Math.max(1, comensales - 1))}
-                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all shadow-lg"
+                                    className="w-14 h-14 flex items-center justify-center bg-white/10 rounded-2xl text-white active:scale-90 transition-all border border-white/10"
                                 >
-                                    <Minus className="w-5 h-5" />
+                                    <Minus className="w-6 h-6" />
                                 </button>
-                                <div className="flex items-center gap-1">
-                                    {[1, 2, 3, 4, 5, 6].slice(0, 4).map(n => (
-                                        <button 
-                                            key={n}
-                                            onClick={() => setComensales(n)}
-                                            className={`w-8 h-8 rounded-lg text-[10px] font-black transition-all ${comensales === n ? "bg-white text-indigo-600" : "text-white/40"}`}
-                                        >
-                                            {n}
-                                        </button>
-                                    ))}
-                                </div>
+                                <input 
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={comensales}
+                                    onChange={(e) => setComensales(parseInt(e.target.value) || 1)}
+                                    className="flex-1 bg-white/10 border border-white/20 rounded-2xl py-4 text-2xl font-black text-white text-center focus:bg-white/20 outline-none transition-all"
+                                />
                                 <button 
                                     onClick={() => setComensales(comensales + 1)}
-                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all shadow-lg"
+                                    className="w-14 h-14 flex items-center justify-center bg-white/10 rounded-2xl text-white active:scale-90 transition-all border border-white/10"
                                 >
-                                    <Plus className="w-5 h-5" />
+                                    <Plus className="w-6 h-6" />
                                 </button>
                             </div>
                         </div>
@@ -536,7 +528,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                         {filteredProducts.map(p => {
                         const inCart = carrito.find(i => i.producto_id === p.id);
                         return (
@@ -545,51 +537,51 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                 className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 transition-all flex flex-col"
                             >
                                 <div 
-                                    className="aspect-square bg-slate-100 relative overflow-hidden"
+                                    className="aspect-[4/3] bg-slate-100 relative overflow-hidden"
                                     onClick={() => !inCart && addToCart(p)}
                                 >
                                     {p.imagen_url ? (
                                         <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center">
-                                            <ShoppingBag className="w-8 h-8 text-slate-300" />
+                                            <ShoppingBag className="w-6 h-6 text-slate-300" />
                                         </div>
                                     )}
                                     
                                     {!inCart && (
-                                        <div className="absolute top-2 right-2">
-                                            <div className="bg-white/90 backdrop-blur-sm p-1.5 rounded-full shadow-sm">
-                                                <Plus className="w-4 h-4 text-indigo-600" />
+                                        <div className="absolute top-1.5 right-1.5">
+                                            <div className="bg-white/90 backdrop-blur-sm p-1 rounded-full shadow-sm">
+                                                <Plus className="w-3.5 h-3.5 text-indigo-600" />
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                <div className="p-3 space-y-2 flex-1 flex flex-col">
+                                <div className="p-2.5 space-y-1.5 flex-1 flex flex-col">
                                     <div onClick={() => !inCart && addToCart(p)}>
-                                        <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{p.nombre}</h3>
-                                        <p className="text-indigo-600 font-extrabold text-sm">${p.precio}</p>
+                                        <h3 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{p.nombre}</h3>
+                                        <p className="text-indigo-600 font-black text-xs">${p.precio}</p>
                                     </div>
 
                                     {inCart ? (
                                         <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 mt-auto">
                                             <button 
                                                 onClick={() => updateQuantity(inCart.id, inCart.cantidad - 1)}
-                                                className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 active:bg-slate-100"
+                                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 active:bg-slate-100"
                                             >
-                                                <Minus className="w-4 h-4" />
+                                                <Minus className="w-3.5 h-3.5" />
                                             </button>
-                                            <span className="font-black text-sm text-slate-900">{inCart.cantidad}</span>
+                                            <span className="font-black text-xs text-slate-900">{inCart.cantidad}</span>
                                             <button 
                                                 onClick={() => updateQuantity(inCart.id, inCart.cantidad + 1)}
-                                                className="w-8 h-8 flex items-center justify-center bg-indigo-600 rounded-lg shadow-sm text-white active:bg-indigo-700"
+                                                className="w-7 h-7 flex items-center justify-center bg-indigo-600 rounded-lg shadow-sm text-white active:bg-indigo-700"
                                             >
-                                                <Plus className="w-4 h-4" />
+                                                <Plus className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     ) : (
                                         <button 
                                             onClick={() => addToCart(p)}
-                                            className="w-full py-2 bg-slate-50 text-indigo-600 text-[10px] font-black rounded-lg uppercase tracking-wider mt-auto"
+                                            className="w-full py-1.5 bg-slate-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-wider mt-auto"
                                         >
                                             Agregar
                                         </button>
