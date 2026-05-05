@@ -429,6 +429,10 @@ export default function UsuariosPage() {
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
+                                                <button
+                                                    onClick={() => handleDelete(u.id)}
+                                                    className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all active:scale-90"
+                                                >
                                                     <Trash2 size={18} />
                                                 </button>
                                                 <button
