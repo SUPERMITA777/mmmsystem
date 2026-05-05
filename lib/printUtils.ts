@@ -44,6 +44,19 @@ const DEFAULT_CONFIG: PrintConfig = {
   nombre_local: "MMM Pizza Artesanal",
 };
 
+const recentlyPrinted = new Map<string, number>();
+
+function isDuplicatePrint(key: string): boolean {
+  const now = Date.now();
+  const lastTime = recentlyPrinted.get(key);
+  if (lastTime && (now - lastTime) < 4000) {
+    console.warn(`[Printer] Ignorando impresión duplicada para la clave: ${key}`);
+    return true;
+  }
+  recentlyPrinted.set(key, now);
+  return false;
+}
+
 const BRIDGE_PORTS = [9100, 9101];
 let lastWorkingPort: number | null = null;
 
@@ -137,6 +150,9 @@ function aggregateAdicionales(adicionales: any[]) {
    COMANDAR  – Ticket completo
    ────────────────────────────────────────────────────── */
 export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
+  const printKey = `comanda-${pedido.id}`;
+  if (isDuplicatePrint(printKey)) return;
+
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const tipoLabel =
@@ -311,6 +327,9 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
    COCINA – Ticket para cocina con N° grande y horario
    ────────────────────────────────────────────────────── */
 export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, itemsOverride?: any[]) {
+  const printKey = `cocina-${pedido.id}-${JSON.stringify(itemsOverride || [])}`;
+  if (isDuplicatePrint(printKey)) return;
+
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const tipoLabel =
