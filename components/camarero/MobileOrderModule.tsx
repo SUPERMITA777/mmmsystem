@@ -147,11 +147,10 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         });
     };
 
-    const updateQty = (id: string, delta: number) => {
+    const updateQuantity = (id: string, newQty: number) => {
         setCarrito(prev => prev.map(item => {
             if (item.id === id) {
-                const newQty = Math.max(0, item.cantidad + delta);
-                return { ...item, cantidad: newQty };
+                return { ...item, cantidad: Math.max(0, newQty) };
             }
             return item;
         }).filter(item => item.cantidad > 0));
@@ -506,15 +505,15 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                     <div className="flex-1">
                                         <h4 className="text-sm font-bold text-slate-800">{item.nombre}</h4>
                                         <p className="text-indigo-600 font-bold text-sm">${item.precio}</p>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-white px-2 py-1.5 rounded-xl border border-slate-100 shadow-sm">
-                                        <button onClick={() => updateQty(item.id, -1)} className="p-1 text-slate-400">
-                                            <Minus className="w-4 h-4" />
-                                        </button>
-                                        <span className="text-sm font-black text-slate-800 w-4 text-center">{item.cantidad}</span>
-                                        <button onClick={() => updateQty(item.id, 1)} className="p-1 text-indigo-600">
-                                            <Plus className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-3 bg-white px-2 py-1.5 rounded-xl border border-slate-100 shadow-sm mt-2">
+                                            <button onClick={() => updateQuantity(item.id, item.cantidad - 1)} className="p-1 text-slate-400">
+                                                <Minus className="w-4 h-4" />
+                                            </button>
+                                            <span className="text-sm font-black text-slate-800 w-4 text-center">{item.cantidad}</span>
+                                            <button onClick={() => updateQuantity(item.id, item.cantidad + 1)} className="p-1 text-indigo-600">
+                                                <Plus className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
