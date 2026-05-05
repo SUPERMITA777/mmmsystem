@@ -534,29 +534,30 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         );
                     })}
                 </div>
-            </div>
-
-            {/* Floating Cart Button */}
-            {carrito.length > 0 && !isCartOpen && (
-                <div className="fixed bottom-6 left-4 right-4 z-20">
-                    <button 
-                        onClick={() => setIsCartOpen(true)}
-                        className="w-full bg-indigo-600 text-white py-4 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-between px-6 animate-in slide-in-from-bottom-10"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white/20 px-2 py-1 rounded-lg text-sm font-bold">
-                                {carrito.reduce((acc, i) => acc + i.cantidad, 0)}
-                            </div>
-                            <span className="font-bold text-sm">VER PEDIDO</span>
-                        </div>
-                        <span className="font-extrabold text-lg">${total}</span>
-                    </button>
-                </div>
             )}
+        </div>
 
-            {/* Cart Drawer */}
-            {isCartOpen && (
-                <div className="fixed inset-0 z-30">
+        {/* Floating Cart Button */}
+        {carrito.length > 0 && !isCartOpen && (
+            <div className="fixed bottom-6 left-4 right-4 z-20">
+                <button 
+                    onClick={() => setIsCartOpen(true)}
+                    className="w-full bg-indigo-600 text-white py-4 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-between px-6 animate-in slide-in-from-bottom-10"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white/20 px-2 py-1 rounded-lg text-sm font-bold">
+                            {carrito.reduce((acc, i) => acc + i.cantidad, 0)}
+                        </div>
+                        <span className="font-bold text-sm">VER PEDIDO</span>
+                    </div>
+                    <span className="font-extrabold text-lg">${total}</span>
+                </button>
+            </div>
+        )}
+
+        {/* Cart Drawer */}
+        {isCartOpen && (
+            <div className="fixed inset-0 z-30">
                     <div 
                         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
                         onClick={() => !isSending && setIsCartOpen(false)}
