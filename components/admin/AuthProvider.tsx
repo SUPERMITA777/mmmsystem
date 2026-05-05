@@ -8,6 +8,7 @@ interface AuthUser {
     id: string;
     email: string;
     rol?: string;
+    nombre?: string | null;
     sucursal_id?: string | null;
 }
 

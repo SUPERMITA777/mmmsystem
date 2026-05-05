@@ -43,14 +43,16 @@ export async function GET() {
         // 1. Check public.usuarios first
         const { data: userData } = await supabaseAdmin
             .from('usuarios')
-            .select('rol, sucursal_id')
+            .select('rol, sucursal_id, nombre')
             .eq('id', user.id)
             .maybeSingle();
-
+ 
         let sucursal_id = null;
-        if (userData?.rol) {
-            rol = userData.rol;
+        let nombre = null;
+        if (userData) {
+            rol = userData.rol || rol;
             sucursal_id = userData.sucursal_id;
+            nombre = userData.nombre;
         }
 
         // 2. If still default, check user_roles table as fallback
@@ -75,6 +77,7 @@ export async function GET() {
                 email: user.email,
                 rol,
                 sucursal_id,
+                nombre,
             },
             session,
         });
