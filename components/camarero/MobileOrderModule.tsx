@@ -165,31 +165,46 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         setError(null);
 
         try {
-            const pedidoData = {
+            const pedidoPayload = {
+                id: crypto.randomUUID(),
                 sucursal_id: sucursalId,
                 mesa_id: selectedMesaId,
                 comensales: comensales,
                 camarero_id: user?.id,
+                camarero_nombre: user?.nombre,
                 tipo: "salon",
                 estado: "pendiente",
                 total: total,
-                pedido_items: carrito.map(item => ({
-                    producto_id: item.producto_id,
-                    nombre_producto: item.nombre,
-                    precio_unitario: item.precio,
-                    cantidad: item.cantidad,
-                    notas: item.nota || "",
-                    impresora: item.impresora
-                }))
+                created_at: new Date().toISOString()
             };
 
+            const itemsPayload = carrito.map(item => ({
+                producto_id: item.producto_id,
+                nombre_producto: item.nombre,
+                precio_unitario: item.precio,
+                cantidad: item.cantidad,
+                notas: item.nota || "",
+                impresora: item.impresora
+            }));
+
             // Persist order (Sync to Supabase & Local DB)
-            const result = await persistirPedidoHibrido(pedidoData);
+            // Signature: pedidoPayload, itemsPayload, bridgeIp, sucursalId
+            const result = await persistirPedidoHibrido(
+                pedidoPayload, 
+                itemsPayload, 
+                printConfig?.bridge_ip || "127.0.0.1",
+                sucursalId!
+            );
             
             if (result.success) {
                 // Print command
                 try {
-                    await printCocina(result.pedido, printConfig || {}, carrito);
+                    const pedidoParaImprimir = {
+                        ...pedidoPayload,
+                        pedido_items: itemsPayload,
+                        mesas: { numero: mesa?.numero }
+                    };
+                    await printCocina(pedidoParaImprimir, printConfig || {}, itemsPayload);
                 } catch (printErr) {
                     console.error("Print error:", printErr);
                 }
@@ -202,7 +217,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     setStep("setup"); // Volver al inicio para la siguiente mesa
                 }, 3000);
             } else {
-                throw new Error(result.error);
+                throw new Error("No se pudo guardar el pedido");
             }
         } catch (err: any) {
             console.error("Error sending order:", err);
