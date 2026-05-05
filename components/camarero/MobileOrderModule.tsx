@@ -6,7 +6,7 @@ import { useTenant } from "@/context/TenantContext";
 import { 
     Search, Plus, Minus, Trash2, ShoppingBag, 
     ArrowLeft, Loader2, CheckCircle2, AlertCircle,
-    ChevronRight, Info
+    ChevronRight, Info, UtensilsCrossed
 } from "lucide-react";
 import { useAuth } from "@/components/admin/AuthProvider";
 import { persistirPedidoHibrido } from "@/lib/hybridService";
