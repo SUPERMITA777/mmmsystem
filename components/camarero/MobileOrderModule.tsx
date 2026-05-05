@@ -79,6 +79,8 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 }
             }
 
+            if (!sucursalId) return;
+
             // Fetch Print Config (Bridge IP etc)
             const localConfig = await db.config_sucursal.where("sucursal_id").equals(sucursalId).first();
             if (localConfig) {
