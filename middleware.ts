@@ -50,8 +50,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/mmm/admin', request.url));
     }
 
-    // 3. Protect all /[tenant]/admin routes (except login)
-    const adminMatch = pathname.match(/^\/([^\/]+)\/admin(?!\/login)(.*)/);
+    // 3. Protect all /[tenant]/admin and /[tenant]/camarero routes (except login)
+    const adminMatch = pathname.match(/^\/([^\/]+)\/(admin|camarero)(?!\/login)(.*)/);
 
     if (adminMatch) {
         const urlTenant = adminMatch[1];
@@ -87,8 +87,9 @@ export async function middleware(request: NextRequest) {
                 .single();
 
             if (sucData?.slug && sucData.slug !== urlTenant) {
-                // Redirect to their correct tenant, preserving the sub-path
-                const correctUrl = new URL(`/${sucData.slug}/admin${subPath}`, request.url);
+                // Redirect to their correct tenant, preserving the section (admin/camarero) and sub-path
+                const section = adminMatch[2]; // 'admin' or 'camarero'
+                const correctUrl = new URL(`/${sucData.slug}/${section}${subPath}`, request.url);
                 return NextResponse.redirect(correctUrl);
             }
         }

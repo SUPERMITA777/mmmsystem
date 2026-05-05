@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
-import { Plus, Save, Edit3, Trash2, X, ExternalLink, User } from "lucide-react";
+import { Plus, Save, Edit3, Trash2, X, ExternalLink, User, QrCode } from "lucide-react";
 // @ts-ignore - WidthProvider may not be in the ESM export
 import RGL from "react-grid-layout";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -30,7 +30,7 @@ type Mesa = {
 };
 
 export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean }) {
-    const { sucursalId } = useTenant();
+    const { sucursalId, tenantSlug } = useTenant();
     const [mesas, setMesas] = useState<Mesa[]>([]);
     const [loading, setLoading] = useState(true);
     const [editMode, setEditMode] = useState(false);
@@ -40,6 +40,8 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
     const [activePedidoForMesa, setActivePedidoForMesa] = useState<any>(null);
+    const [qrModalOpen, setQrModalOpen] = useState(false);
+    const [qrMesa, setQrMesa] = useState<Mesa | null>(null);
 
     useEffect(() => {
         if (sucursalId) loadMesas();
@@ -339,6 +341,15 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                             >
                                 <ExternalLink size={16} /> Vista Mozos
                             </button>
+                            <button
+                                onClick={() => {
+                                    setQrMesa(null);
+                                    setQrModalOpen(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors shadow-sm mr-2"
+                            >
+                                <QrCode size={16} /> Acceso Rápido QR
+                            </button>
                             {editMode ? (
                                 <>
                                     <button
@@ -461,6 +472,21 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                             <User size={12} fill={mesa.camarero_color} />
                                         </div>
                                     )}
+
+                                    {/* QR Code Button */}
+                                    {!editMode && (
+                                        <button 
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                setQrMesa(mesa);
+                                                setQrModalOpen(true);
+                                            }}
+                                            className="absolute bottom-1 right-1 p-1 bg-white/50 hover:bg-white rounded-md transition-colors text-slate-500 hover:text-indigo-600"
+                                            title="Generar QR para pedidos"
+                                        >
+                                            <QrCode size={12} />
+                                        </button>
+                                    )}
                                 </div>
                                 {editMode && (
                                     <button 
@@ -493,6 +519,50 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                     editPedido={activePedidoForMesa}
                     camareroMode={isCamareroMode}
                 />
+            )}
+
+            {/* QR Modal */}
+            {qrModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setQrModalOpen(false)} />
+                    <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-200">
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black text-slate-900">
+                                {qrMesa ? `QR Mesa ${qrMesa.numero}` : "Acceso Camareros"}
+                            </h3>
+                            <p className="text-slate-500 text-sm">
+                                {qrMesa 
+                                    ? "Escanea este código para abrir el módulo directamente en esta mesa." 
+                                    : "Escanea para iniciar sesión y empezar a tomar pedidos desde tu celular."}
+                            </p>
+                        </div>
+                        
+                        <div className="bg-white p-4 rounded-2xl border-2 border-slate-100 aspect-square flex items-center justify-center mx-auto">
+                            <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+                                    window.location.origin + "/" + tenantSlug + "/camarero/pedir" + (qrMesa ? `?mesa_id=${qrMesa.id}` : "")
+                                )}`} 
+                                alt="QR Code"
+                                className="w-full h-full"
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-3 pt-2">
+                            <button 
+                                onClick={() => window.print()}
+                                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+                            >
+                                Imprimir QR
+                            </button>
+                            <button 
+                                onClick={() => setQrModalOpen(false)}
+                                className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
