@@ -45,10 +45,24 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [printConfig, setPrintConfig] = useState<any>(null);
     
     // Setup State
-    const [step, setStep] = useState<"setup" | "ordering">("setup");
+    const [step, setStep] = useState<"identification" | "setup" | "ordering">("identification");
     const [mesas, setMesas] = useState<any[]>([]);
+    const [camareros, setCamareros] = useState<any[]>([]);
+    const [activeWaiter, setActiveWaiter] = useState<any>(null);
     const [selectedMesaId, setSelectedMesaId] = useState(mesaId || "");
     const [comensales, setComensales] = useState(1);
+
+    useEffect(() => {
+        const savedWaiter = localStorage.getItem("active_waiter");
+        if (savedWaiter) {
+            const waiter = JSON.parse(savedWaiter);
+            setActiveWaiter(waiter);
+            setStep("setup");
+        } else if (user) {
+            setActiveWaiter(user);
+            setStep("setup");
+        }
+    }, [user]);
 
     useEffect(() => {
         if (sucursalId) {
@@ -101,6 +115,15 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 .eq("sucursal_id", sucursalId)
                 .order("nombre");
             setCategorias(catData || []);
+
+            // Fetch Waiters
+            const { data: staffData } = await supabase
+                .from("usuarios")
+                .select("*")
+                .eq("sucursal_id", sucursalId)
+                .eq("rol", "camarero")
+                .order("nombre");
+            setCamareros(staffData || []);
 
             // Fetch Products
             const { data: prodData } = await supabase
@@ -235,20 +258,66 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         );
     }
 
-    if (step === "setup") {
+    if (step === "identification") {
         return (
             <div className="flex flex-col h-full bg-indigo-600 p-6 overflow-hidden">
-                <div className="flex-1 flex flex-col justify-center space-y-8 max-w-md mx-auto w-full">
-                    <div className="space-y-2">
-                        <h1 className="text-4xl font-black text-white italic">HOLA, {user?.nombre?.split(' ')[0] || "MOZO"}! 👋</h1>
-                        <p className="text-indigo-100 font-medium text-lg">Inicia un nuevo pedido en mesa.</p>
+                <div className="flex-1 flex flex-col justify-center space-y-6 max-w-md mx-auto w-full">
+                    <div className="text-center space-y-2">
+                        <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-white/20">
+                            <UtensilsCrossed className="text-white w-8 h-8" />
+                        </div>
+                        <h1 className="text-2xl font-black text-white italic tracking-tighter uppercase">¿Quién eres? 👋</h1>
+                        <p className="text-indigo-100 font-medium text-xs">Selecciona tu nombre para comenzar.</p>
                     </div>
 
-                    <div className="bg-white/10 backdrop-blur-xl rounded-[40px] p-8 border border-white/20 space-y-8 shadow-2xl">
+                    <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
+                        {camareros.map(c => (
+                            <button
+                                key={c.id}
+                                onClick={() => {
+                                    setActiveWaiter(c);
+                                    localStorage.setItem("active_waiter", JSON.stringify(c));
+                                    setStep("setup");
+                                }}
+                                className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-[32px] flex flex-col items-center gap-3 transition-all active:scale-95 shadow-lg"
+                            >
+                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-indigo-600 font-black text-lg shadow-xl">
+                                    {c.nombre.charAt(0)}
+                                </div>
+                                <span className="text-white font-bold text-sm truncate w-full text-center">{c.nombre}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (step === "setup") {
+        return (
+            <div className="flex flex-col h-full bg-indigo-600 p-4 overflow-hidden">
+                <div className="flex-1 flex flex-col justify-center space-y-4 max-w-md mx-auto w-full">
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                            <h1 className="text-xl font-black text-white italic tracking-tight">HOLA, {activeWaiter?.nombre?.split(' ')[0] || "MOZO"}! 👋</h1>
+                            <p className="text-indigo-200 font-medium text-[10px] uppercase tracking-widest">Inicia pedido en mesa</p>
+                        </div>
+                        <button 
+                            onClick={() => {
+                                localStorage.removeItem("active_waiter");
+                                setStep("identification");
+                            }}
+                            className="bg-white/10 px-3 py-1.5 rounded-xl text-white text-[10px] font-bold border border-white/10 active:scale-95"
+                        >
+                            CAMBIAR
+                        </button>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-xl rounded-[32px] p-6 border border-white/10 space-y-6 shadow-2xl">
                         {/* Mesa Selector */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
-                            <div className="grid grid-cols-4 gap-3 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Número de Mesa</label>
+                            <div className="grid grid-cols-5 gap-2 max-h-[30vh] overflow-y-auto pr-1 custom-scrollbar">
                                 {mesas.filter(m => m.forma !== 'label').map(m => (
                                     <button
                                         key={m.id}
@@ -256,9 +325,9 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                             setSelectedMesaId(m.id);
                                             setMesa(m);
                                         }}
-                                        className={`aspect-square flex items-center justify-center rounded-2xl font-black text-lg transition-all ${
+                                        className={`aspect-square flex items-center justify-center rounded-xl font-black text-sm transition-all ${
                                             selectedMesaId === m.id 
-                                            ? "bg-white text-indigo-600 scale-110 shadow-xl shadow-white/20" 
+                                            ? "bg-white text-indigo-600 scale-110 shadow-xl" 
                                             : "bg-white/10 text-white hover:bg-white/20"
                                         }`}
                                     >
@@ -269,21 +338,21 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         </div>
 
                         {/* Comensales Selector */}
-                        <div className="space-y-3">
-                            <label className="text-xs font-black text-indigo-100 uppercase tracking-widest px-1">Cantidad de Comensales</label>
-                            <div className="flex items-center justify-between bg-white/10 rounded-2xl p-2 border border-white/10">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-indigo-100 uppercase tracking-widest px-1">Comensales</label>
+                            <div className="flex items-center justify-between bg-white/5 rounded-2xl p-1.5 border border-white/10">
                                 <button 
                                     onClick={() => setComensales(Math.max(1, comensales - 1))}
-                                    className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-xl text-white hover:bg-white/20 active:scale-90 transition-all"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all"
                                 >
-                                    <Minus className="w-6 h-6" />
+                                    <Minus className="w-5 h-5" />
                                 </button>
-                                <span className="text-3xl font-black text-white">{comensales}</span>
+                                <span className="text-2xl font-black text-white">{comensales}</span>
                                 <button 
                                     onClick={() => setComensales(comensales + 1)}
-                                    className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-xl text-white hover:bg-white/20 active:scale-90 transition-all"
+                                    className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:scale-90 transition-all"
                                 >
-                                    <Plus className="w-6 h-6" />
+                                    <Plus className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
@@ -291,13 +360,13 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         <button 
                             onClick={() => selectedMesaId && setStep("ordering")}
                             disabled={!selectedMesaId}
-                            className={`w-full py-5 rounded-3xl font-black text-lg uppercase tracking-widest transition-all shadow-2xl ${
+                            className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl ${
                                 selectedMesaId 
-                                ? "bg-white text-indigo-600 hover:bg-indigo-50 shadow-white/10 active:scale-95" 
+                                ? "bg-white text-indigo-600 hover:bg-indigo-50 active:scale-95 shadow-white/10" 
                                 : "bg-white/10 text-white/40 cursor-not-allowed"
                             }`}
                         >
-                            Comenzar Pedido
+                            Comenzar
                         </button>
                     </div>
                 </div>
@@ -338,9 +407,9 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     </span>
                 </div>
                 <div className="bg-indigo-50 px-3 py-1.5 rounded-full flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                    <span className="text-xs font-bold text-indigo-700">
-                        MOZO: {user?.nombre || "SISTEMA"}
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-indigo-700 uppercase">
+                        {activeWaiter?.nombre || user?.nombre || "SISTEMA"}
                     </span>
                 </div>
             </div>
