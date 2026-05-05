@@ -40,10 +40,6 @@ export async function middleware(request: NextRequest) {
 
     const { pathname } = request.nextUrl;
 
-    // 1. Handle root redirect to default tenant (mmm)
-    if (pathname === '/') {
-        return NextResponse.rewrite(new URL('/mmm', request.url));
-    }
 
     // 2. Handle /admin legacy root redirect to /mmm/admin
     if (pathname === '/admin') {
