@@ -867,7 +867,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 total,
                 descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
             };
-            printPreCuenta(patchedPedido, printConfig);
+            printPreCuenta(patchedPedido, printConfig, "CIERRE DE MESA");
 
             // 3. Free up the table
             if (mesaId) {

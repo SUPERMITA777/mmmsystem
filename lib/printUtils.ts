@@ -488,7 +488,7 @@ export function printCocinaIncremental(pedido: any, newItems: any[], config: Par
 /* ──────────────────────────────────────────────────────
    PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
    ────────────────────────────────────────────────────── */
-export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
+export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, title: string = "PRE-CUENTA") {
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const mesaNum = pedido.mesas?.numero || pedido.mesa_numero || "—";
@@ -532,7 +532,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}) {
 </head>
 <body>
 
-  <div class="center" style="font-size:24px;font-weight:900;margin-bottom:4px">PRE-CUENTA</div>
+  <div class="center" style="font-size:24px;font-weight:900;margin-bottom:4px">${title}</div>
   <div class="center" style="font-size:20px;font-weight:bold;margin-bottom:2px">Mesa ${mesaNum}</div>
   <div class="center" style="font-size:${c.fuente_footer}px;color:#333">${fechaLarga}</div>
   <div class="center" style="font-size:${c.fuente_footer}px;color:#333">Pedido a las ${horaCreado} hs.</div>

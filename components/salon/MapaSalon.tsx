@@ -107,7 +107,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
 
                 const actualState = pedido ? "ocupada" : m.estado;
                 const color = pedido?.camarero_id ? (camareroColors[pedido.camarero_id] || undefined) : undefined;
-                const isPrecuenta = pedido?.notas_internas?.includes("PRECUENTA");
+                const isPrecuenta = pedido?.notas_internas?.toUpperCase().includes("PRECUENTA");
                 
                 return {
                     ...m,
@@ -467,8 +467,15 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                 style={customStyle}
                                 >
                                     {mesa.is_precuenta && (
-                                        <div className="absolute inset-0 bg-yellow-400/30 animate-pulse rounded-[inherit] z-0" />
+                                        <div className="absolute inset-0 bg-yellow-400 animate-[blink_1s_infinite] rounded-[inherit] z-0" />
                                     )}
+                                    <style jsx>{`
+                                        @keyframes blink {
+                                            0% { opacity: 0.2; }
+                                            50% { opacity: 0.8; }
+                                            100% { opacity: 0.2; }
+                                        }
+                                    `}</style>
                                     <span className="font-black text-xl z-10">{mesa.numero}</span>
                                     <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70 flex items-center gap-1 mt-1 z-10">
                                         <Users size={10} /> {mesa.capacidad}
