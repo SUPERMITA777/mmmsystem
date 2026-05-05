@@ -390,74 +390,89 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
 
     return (
         <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
-            {/* Header */}
-            <div className="bg-white px-4 py-3 shadow-sm flex items-center justify-between sticky top-0 z-20">
-                <button 
-                    onClick={() => setStep("setup")}
-                    className="p-2 -ml-2 text-slate-400 hover:text-slate-600"
-                >
-                    <ArrowLeft className="w-6 h-6" />
-                </button>
-                <div className="flex flex-col">
-                    <h1 className="text-lg font-bold text-slate-900">
-                        Mesa {mesa?.numero || "..."}
-                    </h1>
-                    <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">
-                        {mesa?.nombre || "Carga de Pedido"}
-                    </span>
-                </div>
-                <div className="bg-indigo-50 px-3 py-1.5 rounded-full flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-indigo-700 uppercase">
-                        {activeWaiter?.nombre || user?.nombre || "SISTEMA"}
-                    </span>
-                </div>
-            </div>
-
-            {/* Search and Categories */}
-            <div className="bg-white border-b border-slate-100 px-4 py-3 space-y-3 sticky top-[65px] z-10">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input 
-                        type="text"
-                        placeholder="Buscar productos..."
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
-                    />
-                </div>
-                
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {/* Consolidated Sticky Top Section */}
+            <div className="sticky top-0 z-20 bg-white shadow-md">
+                {/* Header */}
+                <div className="px-4 py-3 flex items-center justify-between border-b border-slate-50">
                     <button 
-                        onClick={() => setCatSeleccionada("todos")}
-                        className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                            catSeleccionada === "todos" 
-                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 scale-105" 
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
+                        onClick={() => setStep("setup")}
+                        className="p-2 -ml-2 text-slate-400 hover:text-slate-600"
                     >
-                        TODOS
+                        <ArrowLeft className="w-6 h-6" />
                     </button>
-                    {categorias.map(cat => (
+                    <div className="flex flex-col items-center">
+                        <h1 className="text-lg font-black text-slate-900 tracking-tight">
+                            Mesa {mesa?.numero || "..."}
+                        </h1>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                            {mesa?.nombre || "Carga de Pedido"}
+                        </span>
+                    </div>
+                    <div className="bg-indigo-50 px-3 py-1.5 rounded-full flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-indigo-700 uppercase">
+                            {activeWaiter?.nombre || user?.nombre || "SISTEMA"}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Search and Categories */}
+                <div className="px-4 py-3 space-y-3">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input 
+                            type="text"
+                            placeholder="Buscar productos..."
+                            value={busqueda}
+                            onChange={(e) => setBusqueda(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+                        />
+                    </div>
+                    
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         <button 
-                            key={cat.id}
-                            onClick={() => setCatSeleccionada(cat.id)}
-                            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                                catSeleccionada === cat.id 
-                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100 scale-105" 
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            onClick={() => setCatSeleccionada("todos")}
+                            className={`px-4 py-2 rounded-full text-[10px] font-black whitespace-nowrap transition-all ${
+                                catSeleccionada === "todos" 
+                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" 
+                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                             }`}
                         >
-                            {cat.nombre.toUpperCase()}
+                            TODOS
                         </button>
-                    ))}
+                        {categorias.map(cat => (
+                            <button 
+                                key={cat.id}
+                                onClick={() => setCatSeleccionada(cat.id)}
+                                className={`px-4 py-2 rounded-full text-[10px] font-black whitespace-nowrap transition-all ${
+                                    catSeleccionada === cat.id 
+                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-100" 
+                                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                }`}
+                            >
+                                {cat.nombre.toUpperCase()}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
             {/* Product Grid */}
             <div className="flex-1 overflow-y-auto p-4 pb-24">
-                <div className="grid grid-cols-2 gap-4">
-                    {filteredProducts.map(p => {
+                {filteredProducts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
+                        <ShoppingBag className="w-12 h-12 opacity-20" />
+                        <p className="text-sm font-medium">No se encontraron productos</p>
+                        <button 
+                            onClick={() => { setBusqueda(""); setCatSeleccionada("todos"); }}
+                            className="text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full"
+                        >
+                            VER TODOS
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                        {filteredProducts.map(p => {
                         const inCart = carrito.find(i => i.producto_id === p.id);
                         return (
                             <div 
