@@ -35,25 +35,30 @@ function readConfig() {
 
 // Verification function for SuperAdmin writing operations
 async function verifySuperAdmin(request: Request) {
-    let token: string | null = null;
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-        token = authHeader.slice(7);
+    try {
+        let token: string | null = null;
+        const authHeader = request.headers.get("Authorization");
+        if (authHeader?.startsWith("Bearer ")) {
+            token = authHeader.slice(7);
+        }
+
+        if (!token) return null;
+
+        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+        if (userError || !user) return null;
+
+        const { data: roleData } = await supabaseAdmin
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .single();
+
+        if (roleData?.role !== "superadmin") return null;
+        return user;
+    } catch (e) {
+        console.error("verifySuperAdmin error:", e);
+        return null;
     }
-
-    if (!token) return null;
-
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    if (userError || !user) return null;
-
-    const { data: roleData } = await supabaseAdmin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-
-    if (roleData?.role !== "superadmin") return null;
-    return user;
 }
 
 export async function GET() {

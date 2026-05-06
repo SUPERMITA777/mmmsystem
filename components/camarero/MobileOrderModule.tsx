@@ -53,13 +53,15 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [comensales, setComensales] = useState(1);
 
     useEffect(() => {
+        if (!sucursalId) return;
+
         // 1. Check URL for waiter_id (Auto-login via QR)
         const params = new URLSearchParams(window.location.search);
         const waiterIdParam = params.get("waiter_id");
         
         if (waiterIdParam && camareros.length > 0) {
             const found = camareros.find(c => c.id === waiterIdParam);
-            if (found) {
+            if (found && found.sucursal_id === sucursalId) {
                 setActiveWaiter(found);
                 localStorage.setItem("active_waiter", JSON.stringify(found));
                 setStep("setup");
@@ -70,13 +72,26 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         const savedWaiter = localStorage.getItem("active_waiter");
         if (savedWaiter) {
             const waiter = JSON.parse(savedWaiter);
-            setActiveWaiter(waiter);
-            setStep("setup");
+            if (waiter.sucursal_id === sucursalId) {
+                setActiveWaiter(waiter);
+                setStep("setup");
+            } else {
+                localStorage.removeItem("active_waiter");
+                setActiveWaiter(null);
+                setStep("identification");
+            }
         } else if (user) {
-            setActiveWaiter(user);
-            setStep("setup");
+            if (user.sucursal_id === sucursalId) {
+                setActiveWaiter(user);
+                setStep("setup");
+            } else {
+                setActiveWaiter(null);
+                setStep("identification");
+            }
+        } else {
+            setStep("identification");
         }
-    }, [user, camareros]);
+    }, [user, camareros, sucursalId]);
 
     useEffect(() => {
         if (sucursalId) {
@@ -267,31 +282,42 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         setIsSending(true);
         setError(null);
 
+        const localId = crypto.randomUUID();
+
         try {
             const pedidoPayload = {
-                id: crypto.randomUUID(),
+                id: localId,
                 sucursal_id: sucursalId,
                 mesa_id: selectedMesaId,
                 comensales: comensales,
-                camarero_id: user?.id,
-                camarero_nombre: user?.nombre,
+                camarero_id: activeWaiter?.id || user?.id,
+                camarero_nombre: activeWaiter?.nombre || user?.nombre || "Mozo",
                 tipo: "salon",
                 estado: "pendiente",
                 total: total,
                 created_at: new Date().toISOString()
             };
 
-            const itemsPayload = carrito.map(item => ({
-                producto_id: item.producto_id,
-                nombre_producto: item.nombre,
-                precio_unitario: item.precio,
-                cantidad: item.cantidad,
-                notas: item.nota || "",
-                impresora: item.impresora
-            }));
+            const itemsPayload = carrito.map(item => {
+                const fullProd = productos.find(p => p.id === item.producto_id);
+                const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
+                return {
+                    producto_id: item.producto_id,
+                    nombre_producto: item.nombre,
+                    precio_unitario: item.precio,
+                    cantidad: item.cantidad,
+                    notas: item.nota || "",
+                    impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
+                    categoria_id: fullProd?.categoria_id || "",
+                    categoria_nombre: catOfProd?.nombre || "",
+                    productos: fullProd ? {
+                        ...fullProd,
+                        categorias: catOfProd ? { nombre: catOfProd.nombre } : null
+                    } : null
+                };
+            });
 
             // Persist order (Sync to Supabase & Local DB)
-            // Signature: pedidoPayload, itemsPayload, bridgeIp, sucursalId
             const result = await persistirPedidoHibrido(
                 pedidoPayload, 
                 itemsPayload, 
@@ -300,14 +326,37 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             );
             
             if (result.success) {
-                // Print command
+                // Determine order number for printing
+                let finalPedido: any = {
+                    ...pedidoPayload,
+                    pedido_items: itemsPayload,
+                    mesas: { numero: mesa?.numero }
+                };
+
+                if (result.source === "supabase") {
+                    try {
+                        const { data: remotePedido } = await supabase
+                            .from("pedidos")
+                            .select("numero_pedido, created_at")
+                            .eq("id", localId)
+                            .single();
+                        
+                        if (remotePedido) {
+                            finalPedido.numero_pedido = remotePedido.numero_pedido;
+                            finalPedido.created_at = remotePedido.created_at;
+                        }
+                    } catch (fetchErr) {
+                        console.warn("[MobileOrder] Error fetching remote order details for printing:", fetchErr);
+                    }
+                }
+
+                if (!finalPedido.numero_pedido) {
+                    finalPedido.numero_pedido = localId.substring(0, 8).toUpperCase();
+                }
+
+                // Print command automatically to corresponding printers
                 try {
-                    const pedidoParaImprimir = {
-                        ...pedidoPayload,
-                        pedido_items: itemsPayload,
-                        mesas: { numero: mesa?.numero }
-                    };
-                    await printCocina(pedidoParaImprimir, printConfig || {}, itemsPayload);
+                    await printCocina(finalPedido, printConfig || {}, itemsPayload);
                 } catch (printErr) {
                     console.error("Print error:", printErr);
                 }
