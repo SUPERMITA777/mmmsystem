@@ -19,7 +19,7 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
             try {
                 const { data, error } = await supabase
                     .from("pedidos")
-                    .select("*, pedido_items(*, productos(*, categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
+                    .select("*, pedido_items(*, productos(id, nombre, categoria_id, impresora, categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
                     .eq("sucursal_id", sucursalId)
                     .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
                     .order("created_at", { ascending: false });

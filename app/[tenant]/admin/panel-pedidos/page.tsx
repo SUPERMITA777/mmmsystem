@@ -314,6 +314,7 @@ export default function PanelPedidosPage() {
   async function handleConfirmOrder(minutes: number) {
     if (!confirmTimePedido) return;
     const pedido = confirmTimePedido;
+    setConfirmTimePedido(null); // Clear immediately to prevent double-click / duplicate runs!
 
     await supabase.from("pedidos").update({
       estado: "preparando",
@@ -332,10 +333,8 @@ export default function PanelPedidosPage() {
       descontarStockDePedido(pedido.id, sucursalId);
     }
 
-    setConfirmTimePedido(null);
     fetchPedidos();
   }
-
   const filtrados = (hybridPedidos || []).filter(p => {
     if (filtro !== "todos" && p.tipo !== filtro) return false;
     if (busqueda && !p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase()) &&
