@@ -800,7 +800,7 @@ export default function SuperAdminPage() {
                                     <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
                                 ) : (
                                     <div className="flex-1 w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                             <AreaChart data={dataByDate}>
                                                 <defs>
                                                     <linearGradient id="colorVisits" x1="0" y1="0" x2="0" y2="1">
@@ -831,7 +831,7 @@ export default function SuperAdminPage() {
                                     <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-[#00B2FF]" /></div>
                                 ) : (
                                     <div className="flex-1 w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                             <BarChart data={dataByTenant} layout="vertical">
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" horizontal={false} />
                                                 <XAxis type="number" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false} />
@@ -866,7 +866,7 @@ export default function SuperAdminPage() {
                             
                             <div className="h-[300px] w-full">
                                 {metricsData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                         <BarChart data={dataByHour} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                             <defs>
                                                 <linearGradient id="colorHora" x1="0" y1="0" x2="0" y2="1">
