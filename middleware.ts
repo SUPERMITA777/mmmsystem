@@ -58,43 +58,46 @@ export async function middleware(request: NextRequest) {
 
         const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user) {
+        // Only enforce login for admin section
+        if (section === 'admin' && !user) {
             const loginUrl = new URL(`/${urlTenant}/admin/login`, request.url);
             return NextResponse.redirect(loginUrl);
         }
 
-        // 1. Look up user role and sucursal
-        const { data: userData } = await supabaseAdmin
-            .from('usuarios')
-            .select('rol, sucursal_id')
-            .eq('id', user.id)
-            .maybeSingle();
+        if (user) {
+            // 1. Look up user role and sucursal
+            const { data: userData } = await supabaseAdmin
+                .from('usuarios')
+                .select('rol, sucursal_id')
+                .eq('id', user.id)
+                .maybeSingle();
 
-        const userRol = userData?.rol;
+            const userRol = userData?.rol;
 
-        // 2. Role Authorization: 'camarero' cannot access '/admin'
-        if (section === 'admin' && userRol === 'camarero') {
-            const waiterUrl = new URL(`/${urlTenant}/camarero/pedir`, request.url);
-            return NextResponse.redirect(waiterUrl);
-        }
+            // 2. Role Authorization: 'camarero' cannot access '/admin'
+            if (section === 'admin' && userRol === 'camarero') {
+                const waiterUrl = new URL(`/${urlTenant}/camarero/pedir`, request.url);
+                return NextResponse.redirect(waiterUrl);
+            }
 
-        // 3. Super admins bypass tenant enforcement
-        if (userRol === 'super_admin') {
-            return response;
-        }
+            // 3. Super admins bypass tenant enforcement
+            if (userRol === 'super_admin') {
+                return response;
+            }
 
-        // 4. Tenant Enforcement
-        if (userData?.sucursal_id) {
-            const { data: sucData } = await supabaseAdmin
-                .from('sucursales')
-                .select('slug')
-                .eq('id', userData.sucursal_id)
-                .single();
+            // 4. Tenant Enforcement (only on admin section to allow cross-tenant QR scanning for waiters)
+            if (section === 'admin' && userData?.sucursal_id) {
+                const { data: sucData } = await supabaseAdmin
+                    .from('sucursales')
+                    .select('slug')
+                    .eq('id', userData.sucursal_id)
+                    .single();
 
-            if (sucData?.slug && sucData.slug !== urlTenant) {
-                // Redirect to their correct tenant, preserving the section (admin/camarero) and sub-path
-                const correctUrl = new URL(`/${sucData.slug}/${section}${subPath}`, request.url);
-                return NextResponse.redirect(correctUrl);
+                if (sucData?.slug && sucData.slug !== urlTenant) {
+                    // Redirect to their correct tenant, preserving the section (admin/camarero) and sub-path
+                    const correctUrl = new URL(`/${sucData.slug}/${section}${subPath}`, request.url);
+                    return NextResponse.redirect(correctUrl);
+                }
             }
         }
     }
