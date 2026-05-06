@@ -22,6 +22,7 @@ export type PrintConfig = {
   promoQrUrl?: string; // URL para el código QR de la promo
   nombre_local?: string; // Nombre del local configurado en la web
   bridge_ip?: string;
+  bridge_enabled?: boolean;
 };
 
 const DEFAULT_CONFIG: PrintConfig = {
@@ -42,6 +43,7 @@ const DEFAULT_CONFIG: PrintConfig = {
   boldMap: {},
   impresoras: {},
   nombre_local: "MMM Pizza Artesanal",
+  bridge_enabled: true,
 };
 
 const recentlyPrinted = new Map<string, number>();
@@ -64,9 +66,9 @@ function bw(config: PrintConfig, key: string): string {
   return config.boldMap?.[key] ? 'font-weight:bold;' : '';
 }
 
-async function doPrint(html: string, printerName?: string, bridgeIp: string = '127.0.0.1', printerIp?: string) {
-  // 1. Try to send to Bridge if printerName or printerIp is provided
-  if (printerName || printerIp) {
+async function doPrint(html: string, printerName?: string, bridgeIp: string = '127.0.0.1', printerIp?: string, bridgeEnabled: boolean = true) {
+  // 1. Try to send to Bridge if printerName or printerIp is provided and bridge is enabled
+  if (bridgeEnabled && (printerName || printerIp)) {
     let sent = false;
     
     // Probar primero el último puerto que funcionó para ganar velocidad
@@ -320,7 +322,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
   const printerName = c.impresoras?.[pKey]?.printerName;
   const printerIp = c.impresoras?.[pKey]?.ip;
-  doPrint(html, printerName, c.bridge_ip, printerIp);
+  doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
 }
 
 /* ──────────────────────────────────────────────────────
@@ -331,6 +333,11 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   if (isDuplicatePrint(printKey)) return;
 
   const c = { ...DEFAULT_CONFIG, ...config };
+
+  if (c.bridge_enabled === false) {
+    console.log(`[Printer] Impresión en cocina anulada porque el puente de impresión está desactivado.`);
+    return;
+  }
 
   const tipoLabel =
     pedido.tipo === "delivery" ? "DELIVERY"
@@ -530,7 +537,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-    doPrint(html, printerName, c.bridge_ip, printerIp);
+    doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
   });
 }
 
@@ -637,7 +644,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
   if (!printerName && !printerIp) {
       alert("No hay una impresora asignada a FACTURACIÓN en Ajustes > Impresoras. Se abrirá la ventana normal de impresión.");
   }
-  doPrint(html, printerName, c.bridge_ip, printerIp);
+  doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
 }
 
 /* Alias legacy */

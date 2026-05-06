@@ -26,6 +26,7 @@ export function ImpresorasTab() {
     const [testingId, setTestingId] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<Record<string, "ok" | "error" | null>>({});
     const [allCategorias, setAllCategorias] = useState<any[]>([]);
+    const [bridgeEnabled, setBridgeEnabled] = useState<boolean>(true);
     const { sucursalId } = useTenant();
 
     /* ── Detectar el puente ── */
@@ -77,6 +78,8 @@ export function ImpresorasTab() {
                 .maybeSingle();
 
             const dbConfig = data?.panel_settings?.impresoras || {};
+            const dbBridgeEnabled = data?.panel_settings?.bridge_enabled ?? true;
+            setBridgeEnabled(dbBridgeEnabled);
             
             // Cargar categorías disponibles
             const { data: cats } = await supabase
@@ -150,7 +153,8 @@ export function ImpresorasTab() {
             if (currentCfg) {
                 const newSettings = { 
                     ...(currentCfg.panel_settings || {}), 
-                    impresoras: config 
+                    impresoras: config,
+                    bridge_enabled: bridgeEnabled
                 };
                 await supabase
                     .from("config_sucursal")
@@ -266,6 +270,30 @@ export function ImpresorasTab() {
                     <p className="text-sm text-slate-500">Buscando Puente de Impresión...</p>
                 </div>
             )}
+
+            {/* ── Switch para Puente de Impresión y Cocinas ── */}
+            <div className="bg-gradient-to-r from-purple-50/50 via-indigo-50/30 to-white border border-purple-100/80 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-purple-100/80 border border-purple-200/50 rounded-2xl flex items-center justify-center text-purple-700 shrink-0 shadow-sm">
+                        <Wifi size={24} />
+                    </div>
+                    <div>
+                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-wide italic">Puente de Impresión y Cocinas</h4>
+                        <p className="text-xs font-bold text-gray-500 max-w-lg mt-1">
+                            Activado: Se habilita la impresión automática silenciosa en comanda y cocina a través del puente de red.<br />
+                            Desactivado: Se anula el puente y la cocina; la comanda se imprime de forma local usando el diálogo nativo del navegador.
+                        </p>
+                    </div>
+                </div>
+                <button
+                    onClick={() => setBridgeEnabled(!bridgeEnabled)}
+                    className="relative inline-flex items-center cursor-pointer shrink-0 outline-none select-none active:scale-95 transition-all duration-300"
+                >
+                    <div className={`w-16 h-8 rounded-full transition-all duration-500 shadow-inner flex items-center ${bridgeEnabled ? "bg-[#7B1FA2] shadow-[#6A1B9A]/30" : "bg-slate-200 shadow-slate-300"}`}>
+                        <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all duration-500 transform ${bridgeEnabled ? "translate-x-9" : "translate-x-1"}`} />
+                    </div>
+                </button>
+            </div>
 
             {/* ── Configuración de Impresoras ── */}
             <div className="bg-white rounded-xl border border-slate-200 p-6">

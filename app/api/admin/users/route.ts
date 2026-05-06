@@ -52,6 +52,10 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "sucursal_id es requerido" }, { status: 400 });
         }
 
+        if (rol === 'super_admin' || rol === 'superadmin') {
+            return NextResponse.json({ error: "No tienes permisos para crear usuarios con rango SUPERADMIN" }, { status: 403 });
+        }
+
         // 1. Create user in Supabase Auth
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
@@ -96,6 +100,10 @@ export async function PATCH(req: Request) {
         const { id, email, password, nombre, rol, activo, pin, color } = await req.json();
 
         if (!id) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+        if (rol === 'super_admin' || rol === 'superadmin') {
+            return NextResponse.json({ error: "No tienes permisos para asignar rango SUPERADMIN" }, { status: 403 });
+        }
 
         const updateData: any = {};
         if (email) updateData.email = email;

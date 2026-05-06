@@ -423,18 +423,22 @@ export default function UsuariosPage() {
                                         </td>
                                         <td className="px-8 py-5">
                                             <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => openModal(u)}
-                                                    className="p-3 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-2xl transition-all active:scale-90"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(u.id)}
-                                                    className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all active:scale-90"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+                                                {u.rol !== "super_admin" && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => openModal(u)}
+                                                            className="p-3 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-2xl transition-all active:scale-90"
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(u.id)}
+                                                            className="p-3 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all active:scale-90"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </>
+                                                )}
                                                 <button
                                                     onClick={() => setQrModalUser(u)}
                                                     className="p-3 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all active:scale-90"
@@ -609,7 +613,7 @@ export default function UsuariosPage() {
                                                 onChange={e => setForm({ ...form, rol: e.target.value })}
                                                 className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full appearance-none pr-8"
                                             >
-                                                {ROLES_LIST.map(r => (
+                                                {ROLES_LIST.filter(r => r !== "super_admin").map(r => (
                                                     <option key={r} value={r}>{ROL_LABELS[r] || r}</option>
                                                 ))}
                                             </select>
