@@ -416,13 +416,34 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
     });
   });
 
-  // Imprimir un ticket por cada impresora que tenga ítems
+  // Group by physical printer to prevent duplicate tickets on the same hardware!
+  const physicalPrinters: Record<string, { printerName?: string; printerIp?: string; items: any[], pKeys: string[] }> = {};
+
   Object.entries(itemsByPrinter).forEach(([pKey, items]) => {
     const pConf = c.impresoras?.[pKey] || c.impresoras?.[pKey.replace(" ", "")];
     const printerName = pConf?.printerName;
     const printerIp = pConf?.ip;
     if (!printerName && !printerIp) return;
 
+    // Unique destination key representing the hardware printer
+    const destKey = printerIp ? `ip:${printerIp}` : `name:${printerName}`;
+
+    if (!physicalPrinters[destKey]) {
+      physicalPrinters[destKey] = {
+        printerName,
+        printerIp,
+        items: [],
+        pKeys: []
+      };
+    }
+    physicalPrinters[destKey].items.push(...items);
+    if (!physicalPrinters[destKey].pKeys.includes(pKey)) {
+      physicalPrinters[destKey].pKeys.push(pKey);
+    }
+  });
+
+  // Imprimir un ticket por cada impresora física que tenga ítems
+  Object.values(physicalPrinters).forEach(({ printerName, printerIp, items, pKeys }) => {
     const itemsHtml = items.map(item => {
       const aggregated = aggregateAdicionales(item.adicionales ?? []);
       const ads = aggregated.map((a: any) =>
@@ -441,6 +462,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
       ? `MESA ${mesaNum}` 
       : `N° ${numCorto}`;
 
+    const printHeaderLabel = pKeys.join(" + ").toUpperCase();
+
     const html = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
@@ -458,7 +481,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   <div class="center" style="font-weight:900;font-size:38px;letter-spacing:2px;margin-bottom:4px">
     ${mainTitle}
   </div>
-  <div class="center" style="font-weight:bold;font-size:18px;margin-bottom:2px">${tipoLabel}</div>
+  <div class="center" style="font-weight:bold;font-size:18px;margin-bottom:2px">${tipoLabel} [${printHeaderLabel}]</div>
 
   <!-- HORARIO COMANDADO -->
   <div class="center" style="font-size:20px;font-weight:bold;margin:6px 0;padding:4px;border:2px solid #000;border-radius:4px">
