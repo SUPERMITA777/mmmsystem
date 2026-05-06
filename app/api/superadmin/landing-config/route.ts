@@ -66,6 +66,7 @@ export async function GET() {
         const config = readConfig();
         return NextResponse.json(config);
     } catch (e: any) {
+        console.error("GET landing-config error:", e);
         return NextResponse.json({ error: e.message }, { status: 500 });
     }
 }
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true, config: body });
     } catch (e: any) {
+        console.error("POST landing-config error:", e);
         return NextResponse.json({ error: e.message }, { status: 500 });
     }
 }
