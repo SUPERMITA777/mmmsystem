@@ -21,6 +21,8 @@ interface PanelSettings {
     promo_qr_text?: string;
     promo_qr_image_url?: string;
     bridge_ip?: string;
+    imprimir_al_recibir?: boolean;
+    imprimir_al_confirmar?: boolean;
 }
 
 interface OrderPanelSettingsModalProps {
@@ -227,15 +229,24 @@ export default function OrderPanelSettingsModal({
                         <p className="text-xs text-blue-500 bg-blue-50 p-3 rounded-lg border border-blue-100 italic">
                             Consulta el <span className="underline font-bold cursor-pointer">tutorial de impresión automática</span> para eliminar la ventana de confirmación.
                         </p>
-                        {/* Opciones de comanda mockeadas por ahora */}
                         <div className="space-y-3">
-                            <label className="flex items-center gap-3 opacity-50">
-                                <input type="checkbox" disabled className="w-5 h-5 rounded border-gray-300" />
-                                <span className="text-sm text-gray-600">Imprimir al recibir el pedido.</span>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imprimir_al_recibir ?? true}
+                                    onChange={e => setSettings({ ...settings, imprimir_al_recibir: e.target.checked })}
+                                    className="w-5 h-5 rounded border-gray-300 text-[#7B1FA2] focus:ring-[#7B1FA2]"
+                                />
+                                <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Imprimir automáticamente en cocina al recibir el pedido (QR/Camareros).</span>
                             </label>
-                            <label className="flex items-center gap-3 opacity-50">
-                                <input type="checkbox" disabled className="w-5 h-5 rounded border-gray-300" />
-                                <span className="text-sm text-gray-600">Imprimir al confirmar el pedido.</span>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imprimir_al_confirmar ?? false}
+                                    onChange={e => setSettings({ ...settings, imprimir_al_confirmar: e.target.checked })}
+                                    className="w-5 h-5 rounded border-gray-300 text-[#7B1FA2] focus:ring-[#7B1FA2]"
+                                />
+                                <span className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors">Imprimir al confirmar el pedido.</span>
                             </label>
                         </div>
                     </section>

@@ -712,3 +712,136 @@ export async function doBridgePost(endpoint: string, data: any, bridgeIp: string
     }
     throw new Error("No se pudo contactar con el Bridge");
 }
+
+/* ──────────────────────────────────────────────────────
+   CIERRE DE CAJA / TURNO – Resumen de caja de 80mm
+   ────────────────────────────────────────────────────── */
+export function printCierreTurno(resumen: any, config: Partial<PrintConfig> = {}) {
+  const c = { ...DEFAULT_CONFIG, ...config };
+
+  const formatARS = (n: number) => {
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
+  };
+
+  const fechaAperturaFmt = new Date(resumen.fechaApertura).toLocaleString("es-AR");
+  const fechaCierreFmt = new Date(resumen.fechaCierre).toLocaleString("es-AR");
+
+  const pagosRows = (resumen.pagos || []).map((p: any) => `
+    <tr>
+      <td style="padding: 2px 0;">${p.metodo}</td>
+      <td style="text-align: right; padding: 2px 0; font-weight: bold;">${formatARS(p.total)}</td>
+    </tr>
+  `).join("");
+
+  const descuentosRows = (resumen.descuentos || []).map((d: any) => `
+    <div style="font-size: 11px; margin-bottom: 4px; border-bottom: 1px dotted #ccc; padding-bottom: 3px;">
+      Pedido <b>#${d.numero}</b>: -${formatARS(d.monto)}<br>
+      <span style="color: #444; font-style: italic;">Motivo: ${d.motivo || "No especificado"}</span>
+    </div>
+  `).join("");
+
+  const canceladosRows = (resumen.cancelados || []).map((can: any) => `
+    <div style="font-size: 11px; margin-bottom: 4px; border-bottom: 1px dotted #ccc; padding-bottom: 3px;">
+      Pedido <b>#${can.numero}</b>: ${formatARS(can.monto)}<br>
+      <span style="color: #444; font-style: italic;">Motivo: ${can.motivo || "No especificado"}</span>
+    </div>
+  `).join("");
+
+  const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 12px; width: 72mm; color: #000; line-height: 1.4; margin: 0; padding: 5mm 4mm; }
+  .center { text-align: center; }
+  .sep { border: none; border-top: 1px dashed #555; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { vertical-align: top; }
+  .title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+  .section-title { font-size: 13px; font-weight: bold; text-transform: uppercase; margin-top: 8px; margin-bottom: 4px; border-bottom: 1px solid #000; padding-bottom: 2px; }
+</style>
+</head>
+<body>
+
+  <div class="center title" style="font-size:18px; font-weight: 900;">${c.nombre_local || "MMM Pizza Artesanal"}</div>
+  <div class="center" style="font-size:14px; font-weight: bold; margin-bottom: 6px;">REPORTE CIERRE DE TURNO</div>
+  
+  <hr class="sep">
+
+  <table style="font-size: 11px;">
+    <tr><td><b>CAJERO:</b></td><td style="text-align: right;">${resumen.nombreCajero}</td></tr>
+    <tr><td><b>APERTURA:</b></td><td style="text-align: right;">${fechaAperturaFmt}</td></tr>
+    <tr><td><b>CIERRE:</b></td><td style="text-align: right;">${fechaCierreFmt}</td></tr>
+  </table>
+
+  <div class="section-title">VENTAS POR MODALIDAD</div>
+  <table style="font-size: 11px;">
+    <tr>
+      <td><b>SALÓN:</b> (${resumen.pedidosSalonCount} ped)</td>
+      <td style="text-align: right; font-weight: bold;">${formatARS(resumen.pedidosSalonTotal)}</td>
+    </tr>
+    <tr>
+      <td><b>TAKE AWAY:</b> (${resumen.pedidosTakeAwayCount} ped)</td>
+      <td style="text-align: right; font-weight: bold;">${formatARS(resumen.pedidosTakeAwayTotal)}</td>
+    </tr>
+    <tr>
+      <td><b>DELIVERY:</b> (${resumen.pedidosDeliveryCount} ped)</td>
+      <td style="text-align: right; font-weight: bold;">${formatARS(resumen.pedidosDeliveryTotal)}</td>
+    </tr>
+  </table>
+
+  <div style="font-size: 11px; margin-top: 6px;">
+    <b>COMENSALES SALÓN:</b> <span style="font-size: 13px; font-weight: bold;">${resumen.comensalesSalon}</span>
+  </div>
+
+  <div class="section-title">VENTAS POR MEDIO DE PAGO</div>
+  <table style="font-size: 11px;">
+    ${pagosRows || '<tr><td colspan="2">No se registraron cobros</td></tr>'}
+  </table>
+
+  <div class="section-title">AUDITORÍA DE EFECTIVO</div>
+  <table style="font-size: 11px;">
+    <tr><td>Monto Apertura:</td><td style="text-align: right;">${formatARS(resumen.montoApertura)}</td></tr>
+    <tr><td>Egresos Manuales:</td><td style="text-align: right; color: #a11;">-${formatARS(resumen.totalEgresado)}</td></tr>
+    <tr><td>Efectivo Esperado:</td><td style="text-align: right; font-weight: bold;">${formatARS(resumen.montoEsperado)}</td></tr>
+    <tr><td>Efectivo Caja Real:</td><td style="text-align: right; font-weight: bold;">${formatARS(resumen.montoCierre)}</td></tr>
+    <tr style="font-size: 12px; border-top: 1px dashed #777;">
+      <td><b>Diferencia:</b></td>
+      <td style="text-align: right; font-weight: bold; color: ${resumen.diferencia < 0 ? '#a11' : resumen.diferencia > 0 ? '#173' : '#000'}">
+        ${resumen.diferencia > 0 ? '+' : ''}${formatARS(resumen.diferencia)}
+      </td>
+    </tr>
+  </table>
+
+  <div style="font-size: 12px; font-weight: bold; margin-top: 8px; border-top: 1px solid #000; padding-top: 4px; display: flex; justify-content: space-between;">
+    <span>TOTAL GENERAL VENTAS:</span>
+    <span>${formatARS(resumen.totalGeneral)}</span>
+  </div>
+
+  ${resumen.observaciones ? `
+    <div class="section-title">OBSERVACIONES</div>
+    <div style="font-size: 11px; font-style: italic; white-space: pre-wrap; background: #eee; padding: 4px; border-radius: 4px;">${resumen.observaciones}</div>
+  ` : ""}
+
+  ${resumen.descuentos && resumen.descuentos.length > 0 ? `
+    <div class="section-title">DESCUENTOS APLICADOS</div>
+    ${descuentosRows}
+  ` : ""}
+
+  ${resumen.cancelados && resumen.cancelados.length > 0 ? `
+    <div class="section-title">PEDIDOS CANCELADOS</div>
+    ${canceladosRows}
+  ` : ""}
+
+  <hr class="sep" style="margin-top: 12px;">
+  <div class="center" style="font-size: 10px; font-style: italic;">Reporte de turno generado por sistema.</div>
+
+</body></html>`;
+
+  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const printerName = c.impresoras?.[pKey]?.printerName;
+  const printerIp = c.impresoras?.[pKey]?.ip;
+
+  doPrint(html, printerName, c.bridge_ip, printerIp);
+}

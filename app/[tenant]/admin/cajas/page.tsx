@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Plus, Trash2, Edit2, Clock, ArrowUpRight, ArrowDownRight, User, Wallet, Calculator, CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import { formatToArgentinaDateTime } from "@/lib/dateUtils";
+import { printCierreTurno } from "@/lib/printUtils";
 
 type Caja = {
     id: string;
@@ -145,11 +146,115 @@ export default function CajasPage() {
     }
 
     async function handleConfirmarCierre() {
-        if (!caja || !cierreForm.montoReal) return;
+        if (!caja || !cierreForm.montoReal || !sucursalId) return;
         
         const esperado = caja.monto_apertura + totalManual + totalVentasEfectivo;
         const real = Number(cierreForm.montoReal);
         const diferencia = real - esperado;
+
+        try {
+            // 1. Obtener pedidos del turno para las estadísticas del reporte
+            const { data: pedidosTurno } = await supabase
+                .from("pedidos")
+                .select("total, tipo, comensales, metodo_pago_nombre, descuento, notas_internas, numero_pedido, estado, notas")
+                .eq("sucursal_id", sucursalId)
+                .gte("created_at", caja.fecha_apertura);
+
+            const safePedidos = pedidosTurno || [];
+
+            // Ventas Salon
+            const pedidosSalon = safePedidos.filter(p => p.estado === 'entregado' && (p.tipo === 'salon' || p.tipo === 'mesa'));
+            const salonCount = pedidosSalon.length;
+            const salonTotal = pedidosSalon.reduce((sum, p) => sum + Number(p.total || 0), 0);
+
+            // Ventas Take Away
+            const pedidosTakeAway = safePedidos.filter(p => p.estado === 'entregado' && p.tipo === 'takeaway');
+            const takeawayCount = pedidosTakeAway.length;
+            const takeawayTotal = pedidosTakeAway.reduce((sum, p) => sum + Number(p.total || 0), 0);
+
+            // Ventas Delivery
+            const pedidosDelivery = safePedidos.filter(p => p.estado === 'entregado' && p.tipo === 'delivery');
+            const deliveryCount = pedidosDelivery.length;
+            const deliveryTotal = pedidosDelivery.reduce((sum, p) => sum + Number(p.total || 0), 0);
+
+            // Comensales Salon
+            const comensalesSalonCount = pedidosSalon.reduce((sum, p) => sum + Number(p.comensales || 0), 0);
+
+            // Medios de pago
+            const pagosMap: Record<string, number> = {};
+            safePedidos.filter(p => p.estado === 'entregado').forEach(p => {
+                const metodo = p.metodo_pago_nombre || "Efectivo";
+                pagosMap[metodo] = (pagosMap[metodo] || 0) + Number(p.total || 0);
+            });
+            const pagosList = Object.entries(pagosMap).map(([metodo, total]) => ({ metodo, total }));
+
+            // Egresos manuales
+            const manualOutflows = (transacciones || [])
+                .filter(t => t.tipo === "egreso")
+                .reduce((sum, t) => sum + Number(t.monto || 0), 0);
+
+            // Total General
+            const grandTotal = safePedidos.filter(p => p.estado === 'entregado').reduce((sum, p) => sum + Number(p.total || 0), 0);
+
+            // Descuentos
+            const descuentosList = safePedidos
+                .filter(p => p.estado === 'entregado' && Number(p.descuento || 0) > 0)
+                .map(p => ({
+                    numero: p.numero_pedido?.split("-").pop() ?? p.numero_pedido,
+                    monto: Number(p.descuento),
+                    motivo: p.notas_internas || "Descuento en pedido"
+                }));
+
+            // Cancelados
+            const canceladosList = safePedidos
+                .filter(p => p.estado === 'cancelado')
+                .map(p => ({
+                    numero: p.numero_pedido?.split("-").pop() ?? p.numero_pedido,
+                    monto: Number(p.total || 0),
+                    motivo: p.notas || "Pedido anulado/cancelado"
+                }));
+
+            const { data: configImpresion } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: configSuc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+            const { data: sucursalInfo } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
+
+            const printConfig = {
+                ...configImpresion,
+                boldMap: configSuc?.panel_settings?.print_bold || {},
+                fuente_adicionales: configSuc?.panel_settings?.fuente_adicionales,
+                impresoras: configSuc?.panel_settings?.impresoras || {},
+                bridge_ip: configSuc?.panel_settings?.bridge_ip || "127.0.0.1",
+                nombre_local: sucursalInfo?.nombre || "MMM Pizza Artesanal"
+            };
+
+            const resumenData = {
+                nombreCajero: caja.cajero_nombre || "Cajero",
+                fechaApertura: caja.fecha_apertura,
+                fechaCierre: new Date().toISOString(),
+                pedidosSalonCount: salonCount,
+                pedidosSalonTotal: salonTotal,
+                pedidosTakeAwayCount: takeawayCount,
+                pedidosTakeAwayTotal: takeawayTotal,
+                pedidosDeliveryCount: deliveryCount,
+                pedidosDeliveryTotal: deliveryTotal,
+                comensalesSalon: comensalesSalonCount,
+                pagos: pagosList,
+                totalEgresado: manualOutflows,
+                totalGeneral: grandTotal,
+                montoApertura: caja.monto_apertura,
+                montoEsperado: esperado,
+                montoCierre: real,
+                diferencia: diferencia,
+                observaciones: cierreForm.notas,
+                descuentos: descuentosList,
+                cancelados: canceladosList
+            };
+
+            // Imprimir reporte de cierre de turno
+            printCierreTurno(resumenData, printConfig);
+        } catch (printErr) {
+            console.error("Error al generar o imprimir reporte de cierre de turno:", printErr);
+        }
 
         const { error } = await supabase.from("cajas").update({
             estado: "cerrada",

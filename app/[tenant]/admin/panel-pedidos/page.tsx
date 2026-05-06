@@ -158,6 +158,39 @@ export default function PanelPedidosPage() {
     };
   }, [sucursalId]);
 
+  const autoPrintedIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    if (!hybridPedidos || hybridPedidos.length === 0 || !printConfig) return;
+
+    if (isFirstLoadRef.current) {
+      // Inicializar con los pedidos existentes para evitar reimprimir todo al cargar la página
+      hybridPedidos.forEach(p => autoPrintedIdsRef.current.add(p.id));
+      isFirstLoadRef.current = false;
+      console.log("[AutoPrint] Inicializado listado de pedidos impresos con", autoPrintedIdsRef.current.size, "pedidos.");
+      return;
+    }
+
+    const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
+    if (!autoPrintEnabled) return;
+
+    hybridPedidos.forEach((pedido) => {
+      // Imprimir cocina para pedidos nuevos que entren en 'pendiente' o 'confirmado'
+      if (["pendiente", "confirmado"].includes(pedido.estado)) {
+        if (!autoPrintedIdsRef.current.has(pedido.id)) {
+          autoPrintedIdsRef.current.add(pedido.id);
+          console.log("[AutoPrint] Detectado nuevo pedido. Imprimiendo automáticamente en cocina:", pedido.numero_pedido);
+          try {
+            printCocina(pedido, printConfig);
+          } catch (err) {
+            console.error("[AutoPrint] Error al imprimir cocina automáticamente:", err);
+          }
+        }
+      }
+    });
+  }, [hybridPedidos, printConfig, sucursalConfig]);
+
   // When selectedPedido changes, reset to detalle tab
   useEffect(() => {
     if (selectedPedido) setModalTab("detalle");
