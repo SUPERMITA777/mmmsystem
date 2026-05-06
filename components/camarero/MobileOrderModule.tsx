@@ -64,22 +64,39 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             if (found && found.sucursal_id === sucursalId) {
                 setActiveWaiter(found);
                 localStorage.setItem("active_waiter", JSON.stringify(found));
+                localStorage.setItem("active_waiter_timestamp", Date.now().toString());
                 setStep("setup");
                 return;
             }
         }
 
         const savedWaiter = localStorage.getItem("active_waiter");
-        if (savedWaiter) {
+        const savedTimestamp = localStorage.getItem("active_waiter_timestamp");
+        let isExpired = false;
+
+        if (savedTimestamp) {
+            const parsedTime = parseInt(savedTimestamp, 10);
+            if (!isNaN(parsedTime) && Date.now() - parsedTime > 24 * 60 * 60 * 1000) {
+                isExpired = true;
+            }
+        }
+
+        if (savedWaiter && !isExpired) {
             const waiter = JSON.parse(savedWaiter);
             if (waiter.sucursal_id === sucursalId) {
                 setActiveWaiter(waiter);
                 setStep("setup");
             } else {
                 localStorage.removeItem("active_waiter");
+                localStorage.removeItem("active_waiter_timestamp");
                 setActiveWaiter(null);
                 setStep("identification");
             }
+        } else if (isExpired) {
+            localStorage.removeItem("active_waiter");
+            localStorage.removeItem("active_waiter_timestamp");
+            setActiveWaiter(null);
+            setStep("identification");
         } else if (user) {
             if (user.sucursal_id === sucursalId) {
                 setActiveWaiter(user);
@@ -407,6 +424,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                 onClick={() => {
                                     setActiveWaiter(c);
                                     localStorage.setItem("active_waiter", JSON.stringify(c));
+                                    localStorage.setItem("active_waiter_timestamp", Date.now().toString());
                                     setStep("setup");
                                 }}
                                 className="bg-white/10 hover:bg-white/20 border border-white/10 p-4 rounded-[32px] flex flex-col items-center gap-3 transition-all active:scale-95 shadow-lg"
@@ -442,6 +460,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         <button 
                             onClick={() => {
                                 localStorage.removeItem("active_waiter");
+                                localStorage.removeItem("active_waiter_timestamp");
                                 setStep("identification");
                             }}
                             className="bg-white/10 px-3 py-1.5 rounded-xl text-white text-[9px] font-black border border-white/10 active:scale-95 uppercase"
