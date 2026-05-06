@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import "../globals.css";
 
 export const metadata: Metadata = {
   title: "MMM SUPERADMIN",
@@ -12,10 +11,8 @@ export default function SuperAdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="min-h-screen bg-[#060e20] text-slate-100 font-sans selection:bg-cyan-500/30">
-        {children}
-      </body>
-    </html>
+    <div className="min-h-screen bg-[#060e20] text-slate-100 font-sans selection:bg-cyan-500/30">
+      {children}
+    </div>
   );
 }
