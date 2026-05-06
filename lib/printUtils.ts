@@ -443,7 +443,22 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   });
 
   // Imprimir un ticket por cada impresora física que tenga ítems
+  const facturacionKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const facturacionConf = c.impresoras?.[facturacionKey];
+  const facturacionPrinterName = facturacionConf?.printerName;
+  const facturacionPrinterIp = facturacionConf?.ip;
+
   Object.values(physicalPrinters).forEach(({ printerName, printerIp, items, pKeys }) => {
+    if (pedido.tipo === "delivery" || pedido.tipo === "takeaway") {
+      const isSameAsFacturacion = 
+        (printerIp && printerIp === facturacionPrinterIp) ||
+        (printerName && printerName === facturacionPrinterName);
+      if (isSameAsFacturacion) {
+        console.log(`[Printer] Saltando ticket de cocina en hardware compartido de FACTURACION para el pedido ${pedido.tipo}: ${printerName || printerIp}`);
+        return;
+      }
+    }
+
     const itemsHtml = items.map(item => {
       const aggregated = aggregateAdicionales(item.adicionales ?? []);
       const ads = aggregated.map((a: any) =>
