@@ -26,7 +26,7 @@ interface CartItem {
 
 export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const { sucursalId } = useTenant();
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     
     // Data State
     const [productos, setProductos] = useState<any[]>([]);
@@ -436,6 +436,19 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* Botón de deslogueo abajo de todo */}
+                <div className="mt-auto pt-4 max-w-md mx-auto w-full">
+                    <button
+                        onClick={async () => {
+                            await logout();
+                        }}
+                        className="w-full py-3.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-white rounded-[20px] text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg"
+                    >
+                        <LogOut className="w-4 h-4 text-red-200" />
+                        <span>Cerrar Sesión</span>
+                    </button>
                 </div>
             </div>
         );
