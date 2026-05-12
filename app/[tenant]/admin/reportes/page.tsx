@@ -78,7 +78,7 @@ export default function ReportesPage() {
             // 1. Obtener pedidos del turno para las estadísticas del reporte
             const { data: pedidosTurno } = await supabase
                 .from("pedidos")
-                .select("total, tipo, comensales, metodo_pago_nombre, descuento, notas_internas, numero_pedido, estado, notas")
+                .select("total, tipo, comensales, metodo_pago_nombre, metodos_pago(nombre), descuento, notas_internas, numero_pedido, estado, notas")
                 .eq("sucursal_id", sucursalId)
                 .gte("created_at", caja.fecha_apertura)
                 .lte("created_at", caja.fecha_cierre || new Date().toISOString());
@@ -106,7 +106,7 @@ export default function ReportesPage() {
             // Medios de pago
             const pagosMap: Record<string, number> = {};
             safePedidos.filter(p => p.estado === 'entregado').forEach(p => {
-                const metodo = p.metodo_pago_nombre || "Efectivo";
+                const metodo = p.metodo_pago_nombre || (p.metodos_pago as any)?.nombre || "Efectivo";
                 pagosMap[metodo] = (pagosMap[metodo] || 0) + Number(p.total || 0);
             });
             const pagosList = Object.entries(pagosMap).map(([metodo, total]) => ({ metodo, total }));
@@ -254,7 +254,7 @@ export default function ReportesPage() {
 
     // Group by Payment Method
     const metodosDist = pedidos.reduce((acc: any, p) => {
-        const key = p.metodo_pago_nombre || "Otro";
+        const key = p.metodo_pago_nombre || (p.metodos_pago as any)?.nombre || "Efectivo";
         if (!acc[key]) acc[key] = { label: key, value: 0, count: 0, propina: 0, envio: 0 };
         acc[key].value += Number(p.total || 0);
         acc[key].count += 1;

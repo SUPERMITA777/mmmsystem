@@ -108,17 +108,19 @@ export default function CajasPage() {
             );
             setTotalManual(manualTotal);
 
-            // Fetch cash sales since opening
-            // Note: This logic assumes orders with metodo_pago 'efectivo' are counted
-            const { data: ventasEfvo } = await supabase
+            // Fetch sales since opening and accurately sum cash amounts
+            const { data: ventasTurno } = await supabase
                 .from("pedidos")
-                .select("total")
+                .select("total, metodo_pago_nombre, metodos_pago(nombre)")
                 .eq("sucursal_id", sucursalId)
                 .eq("estado", "entregado")
-                .ilike("metodo_pago_nombre", "%efectivo%")
                 .gte("created_at", cajaData.fecha_apertura);
             
-            const vTotal = (ventasEfvo || []).reduce((sum, p) => sum + Number(p.total), 0);
+            const vTotal = (ventasTurno || []).reduce((sum, p: any) => {
+                const nombre = p.metodo_pago_nombre || p.metodos_pago?.nombre || "Efectivo";
+                const isEfectivo = nombre.toLowerCase().includes("efectivo");
+                return isEfectivo ? sum + Number(p.total || 0) : sum;
+            }, 0);
             setTotalVentasEfectivo(vTotal);
         }
         setLoading(false);
@@ -156,7 +158,7 @@ export default function CajasPage() {
             // 1. Obtener pedidos del turno para las estadísticas del reporte
             const { data: pedidosTurno } = await supabase
                 .from("pedidos")
-                .select("total, tipo, comensales, metodo_pago_nombre, descuento, notas_internas, numero_pedido, estado, notas")
+                .select("total, tipo, comensales, metodo_pago_nombre, metodos_pago(nombre), descuento, notas_internas, numero_pedido, estado, notas")
                 .eq("sucursal_id", sucursalId)
                 .gte("created_at", caja.fecha_apertura);
 
@@ -183,7 +185,7 @@ export default function CajasPage() {
             // Medios de pago
             const pagosMap: Record<string, number> = {};
             safePedidos.filter(p => p.estado === 'entregado').forEach(p => {
-                const metodo = p.metodo_pago_nombre || "Efectivo";
+                const metodo = p.metodo_pago_nombre || (p.metodos_pago as any)?.nombre || "Efectivo";
                 pagosMap[metodo] = (pagosMap[metodo] || 0) + Number(p.total || 0);
             });
             const pagosList = Object.entries(pagosMap).map(([metodo, total]) => ({ metodo, total }));
