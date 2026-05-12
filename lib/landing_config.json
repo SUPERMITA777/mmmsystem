@@ -32,17 +32,34 @@
     {
       "name": "Plan Emprendedor",
       "price": "$15.000 / mes",
-      "features": ["1 Sucursal activa", "Panel de pedidos clásico", "Soporte estándar", "Métricas básicas"]
+      "features": [
+        "1 Sucursal activa",
+        "Panel de pedidos clásico",
+        "Soporte estándar",
+        "Métricas básicas"
+      ]
     },
     {
       "name": "Plan Premium Pro",
       "price": "$29.000 / mes",
-      "features": ["1 Sucursal activa", "Salón interactivo con parpadeo", "Módulo de Camareras QR", "Soporte prioritario", "Métricas detalladas"]
+      "features": [
+        "1 Sucursal activa",
+        "Salón interactivo con parpadeo",
+        "Módulo de Camareras QR",
+        "Soporte prioritario",
+        "Métricas detalladas"
+      ]
     },
     {
       "name": "Plan Enterprise AI",
       "price": "$45.000 / mes",
-      "features": ["Múltiples sucursales", "Agente IA WhatsApp autónomo", "Impresión directa por IP", "Soporte VIP 24/7", "Exportación completa de datos"]
+      "features": [
+        "Múltiples sucursales",
+        "Agente IA WhatsApp autónomo",
+        "Impresión directa por IP",
+        "Soporte VIP 24/7",
+        "Exportación completa de datos"
+      ]
     }
   ]
 }

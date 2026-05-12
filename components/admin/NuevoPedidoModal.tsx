@@ -835,20 +835,40 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             alert("No tenés permisos para cobrar mesas.");
             return;
         }
-        if (!editPedido || !editPedido.id) return;
-        if (!metodoPagoId) {
+        if (isMixto && (!metodoPagoId || !metodoPago2Id || !montoMixto1)) {
+            alert("Por favor completa los dos medios de pago y el monto para el pago mixto.");
+            return;
+        }
+        if (!metodoPagoId && !isMixto) {
             alert("Por favor, seleccioná un método de pago antes de finalizar el pedido.");
             return;
         }
+        if (!editPedido || !editPedido.id) return;
         if (!confirm("¿Deseas cobrar y finalizar este pedido? La mesa quedará libre.")) return;
         setLoading(true);
         try {
+            const mPago = metodosPago.find(m => m.id === metodoPagoId);
+            const mPagoNombre1 = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
+            let metodoPagoNombre = mPagoNombre1;
+
+            let notasPagoMixto = "";
+            if (isMixto && metodoPago2Id && montoMixto1) {
+                const mPago2 = metodosPago.find(m => m.id === metodoPago2Id);
+                const mPagoNombre2 = mPago2 ? mPago2.nombre : "Transferencia";
+                metodoPagoNombre = `Mixto (${mPagoNombre1} / ${mPagoNombre2})`;
+                notasPagoMixto = `Pago mixto: $${montoMixto1} en ${mPagoNombre1}, resto en ${mPagoNombre2}. `;
+            }
+
             // 1. Update order status to 'entregado' (finalized) and save payment method
             const { error: uError } = await supabase
                 .from("pedidos")
                 .update({ 
                     estado: "entregado",
-                    metodo_pago_id: metodoPagoId 
+                    subtotal,
+                    total,
+                    metodo_pago_id: isMixto ? null : (metodoPagoId || null),
+                    metodo_pago_nombre: metodoPagoNombre,
+                    notas: notasPagoMixto + (notaPedido || "")
                 })
                 .eq("id", editPedido.id);
             if (uError) throw uError;
@@ -856,13 +876,12 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             // 2. Print ticket (identical to pre-cuenta)
             const mesaObj = mesas.find(m => m.id === mesaId);
             const camareroObj = camareros.find(c => c.id === camareroId);
-            const mpObj = metodosPago.find(m => m.id === metodoPagoId);
 
             const patchedPedido = {
                 ...editPedido,
                 mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
                 camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
-                metodo_pago_nombre: mpObj ? mpObj.nombre : "Efectivo",
+                metodo_pago_nombre: metodoPagoNombre,
                 subtotal,
                 total,
                 descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
@@ -2095,15 +2114,33 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 <button
                                     disabled={!metodoPagoId && !isMixto}
                                     onClick={async () => {
+                                        if (isMixto && (!metodoPagoId || !metodoPago2Id || !montoMixto1)) {
+                                            alert("Por favor completa los dos medios de pago y el monto para el pago mixto.");
+                                            return;
+                                        }
+                                        
                                         const mesaObj = mesas.find(m => m.id === mesaId);
                                         const camareroObj = camareros.find(c => c.id === camareroId);
-                                        const mpObj = metodosPago.find(m => m.id === metodoPagoId);
+                                        
+                                        const mPago = metodosPago.find(m => m.id === metodoPagoId);
+                                        const mPagoNombre1 = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
+                                        let metodoPagoNombre = mPagoNombre1;
+                                        let notasPagoMixto = "";
+
+                                        if (isMixto && metodoPago2Id && montoMixto1) {
+                                            const mPago2 = metodosPago.find(m => m.id === metodoPago2Id);
+                                            const mPagoNombre2 = mPago2 ? mPago2.nombre : "Transferencia";
+                                            metodoPagoNombre = `Mixto (${mPagoNombre1} / ${mPagoNombre2})`;
+                                            notasPagoMixto = `Pago mixto: $${montoMixto1} en ${mPagoNombre1}, resto en ${mPagoNombre2}. `;
+                                        }
 
                                         // Update order in background if editing
                                         if (editPedido?.id) {
                                             await supabase.from("pedidos").update({ 
-                                                metodo_pago_id: isMixto ? null : metodoPagoId,
-                                                notas_internas: (isMixto ? "MIXTO" : "") + " | PRECUENTA" 
+                                                metodo_pago_id: isMixto ? null : (metodoPagoId || null),
+                                                metodo_pago_nombre: metodoPagoNombre,
+                                                notas_internas: (isMixto ? "MIXTO" : "") + " | PRECUENTA",
+                                                notas: notasPagoMixto + (notaPedido || "")
                                             }).eq("id", editPedido.id);
                                         }
 
@@ -2111,7 +2148,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             ...editPedido,
                                             mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
                                             camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
-                                            metodo_pago_nombre: isMixto ? "Mixto" : (mpObj ? mpObj.nombre : "Efectivo"),
+                                            metodo_pago_nombre: metodoPagoNombre,
                                             subtotal,
                                             total,
                                             descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
