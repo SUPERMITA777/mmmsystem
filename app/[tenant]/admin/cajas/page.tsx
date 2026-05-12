@@ -55,6 +55,7 @@ export default function CajasPage() {
     // Stats
     const [totalManual, setTotalManual] = useState(0);
     const [totalVentasEfectivo, setTotalVentasEfectivo] = useState(0);
+    const [resumenMetodos, setResumenMetodos] = useState<{ metodo: string, total: number }[]>([]);
     
     const { sucursalId } = useTenant();
 
@@ -122,6 +123,17 @@ export default function CajasPage() {
                 return isEfectivo ? sum + Number(p.total || 0) : sum;
             }, 0);
             setTotalVentasEfectivo(vTotal);
+
+            // Aggregate all payment methods for on-screen breakdown
+            const summaryMap: Record<string, number> = {};
+            (ventasTurno || []).forEach((p: any) => {
+                const nombre = p.metodo_pago_nombre || p.metodos_pago?.nombre || "Efectivo";
+                summaryMap[nombre] = (summaryMap[nombre] || 0) + Number(p.total || 0);
+            });
+            const summaryArray = Object.entries(summaryMap)
+                .map(([metodo, total]) => ({ metodo, total }))
+                .sort((a, b) => b.total - a.total);
+            setResumenMetodos(summaryArray);
         }
         setLoading(false);
     }
@@ -397,6 +409,33 @@ export default function CajasPage() {
                                 <div className="p-4 bg-purple-50 text-purple-600 rounded-3xl">
                                     <Calculator size={32} />
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Payment Methods Breakdown */}
+                        <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+                            <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+                                <div className="p-2 bg-gray-50 rounded-xl text-gray-500"><Wallet size={20}/></div>
+                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Ventas por Medio de Pago</h4>
+                            </div>
+                            <div className="p-6 bg-gray-50/30 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {resumenMetodos.length === 0 ? (
+                                    <p className="col-span-full text-center py-6 text-gray-400 font-medium text-sm">No se registran cobros aún.</p>
+                                ) : (
+                                    resumenMetodos.map((m, idx) => (
+                                        <div key={idx} className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center justify-between shadow-sm hover:border-purple-200 transition-all duration-300 group">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-3 h-3 rounded-full ${
+                                                    m.metodo.toLowerCase().includes('efectivo') ? 'bg-green-400 shadow-lg shadow-green-100' : 
+                                                    m.metodo.toLowerCase().includes('mixto') ? 'bg-orange-400 shadow-lg shadow-orange-100' : 
+                                                    'bg-blue-500 shadow-lg shadow-blue-100'
+                                                }`} />
+                                                <p className="text-xs font-black text-gray-500 uppercase group-hover:text-gray-900 transition-colors">{m.metodo}</p>
+                                            </div>
+                                            <p className="text-lg font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(m.total)}</p>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
