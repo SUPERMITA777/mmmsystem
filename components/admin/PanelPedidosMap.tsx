@@ -141,6 +141,26 @@ export default function PanelPedidosMap({
         }
     }, [selectedPedidoId, map, validPedidos]);
 
+    useEffect(() => {
+        if (map && window.google?.maps && !selectedPedidoId) {
+            const bounds = new window.google.maps.LatLngBounds();
+            let hasPoints = false;
+            if (storePos) {
+                bounds.extend(storePos);
+                hasPoints = true;
+            }
+            validPedidos.forEach(p => {
+                if (p.cliente_lat && p.cliente_lng) {
+                    bounds.extend({ lat: p.cliente_lat, lng: p.cliente_lng });
+                    hasPoints = true;
+                }
+            });
+            if (hasPoints) {
+                map.fitBounds(bounds);
+            }
+        }
+    }, [map, validPedidos, storePos, selectedPedidoId]);
+
     if (loadError) return <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-500 text-sm">Error al cargar Google Maps: {loadError.message}</div>;
     if (!isLoaded) return <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-sm">Cargando Google Maps...</div>;
 
@@ -197,6 +217,13 @@ export default function PanelPedidosMap({
                         onSelectPedido?.(p.id);
                         setActiveInfoWindow(p.id);
                     }}
+                    onMouseEnter={() => setActiveInfoWindow(p.id)}
+                    onMouseLeave={() => {
+                        if (selectedPedidoId !== p.id) {
+                            setActiveInfoWindow(null);
+                        }
+                    }}
+                    className={p.estado === "listo" ? "animate-pulse transition-all duration-700" : ""}
                     icon={selectedPedidoId === p.id ? {
                         url: "https://maps.google.com/mapfiles/ms/icons/purple-dot.png"
                     } : undefined}
