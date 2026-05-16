@@ -1,0 +1,47 @@
+import fs from 'fs';
+import path from 'path';
+
+const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Zonas</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>#map { height: 800px; width: 100%; }</style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        var map = L.map('map').setView([-34.79, -58.26], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        var mmmCoords = [
+            [-34.84217941515396, -58.27895786320781],
+            [-34.83254567250107, -58.25608398472882],
+            [-34.82676840864041, -58.24539806401347],
+            [-34.820057114654844, -58.24179317509747],
+            [-34.80252766591688, -58.2309971632805],
+            [-34.78504735805515, -58.25560880678702],
+            [-34.78097487468572, -58.27238161338483],
+            [-34.80976892541659, -58.30190233301355],
+            [-34.828582654056895, -58.277590790502565]
+        ];
+        L.polygon(mmmCoords, {color: 'blue'}).addTo(map).bindPopup('MMM');
+
+        var donjuanCoords = [
+            [-34.76792922769135, -58.26742849738448],
+            [-34.76554761695002, -58.249728275296455],
+            [-34.78264041786853, -58.23227603705245],
+            [-34.79363684813534, -58.24904162978864],
+            [-34.799698358792305, -58.26697070926539],
+            [-34.78806049841178, -58.283602794000124],
+            [-34.77783170621476, -58.28197733648937]
+        ];
+        L.polygon(donjuanCoords, {color: 'red'}).addTo(map).bindPopup('Don Juan');
+    </script>
+</body>
+</html>
+`;
+fs.writeFileSync(path.join(process.cwd(), 'scratch', 'map.html'), html);
+console.log('Saved to scratch/map.html');

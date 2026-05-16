@@ -65,31 +65,20 @@ export default function PanelPedidosMap({
     }, []);
 
     useEffect(() => {
+        let isMounted = true;
         async function fetchStoreData() {
             const sId = sucursalId;
-            if (!sId) {
-                // Fallback si no hay tenant context
-                const { data: suc } = await supabase.from("sucursales").select("id").limit(1).single();
-                if (!suc) return;
-                const fallbackId = suc.id;
-                const { data: cfg } = await supabase
-                    .from("config_sucursal")
-                    .select("local_lat, local_lng")
-                    .eq("sucursal_id", fallbackId)
-                    .limit(1)
-                    .maybeSingle();
-                if (cfg?.local_lat && cfg?.local_lng) {
-                    setStorePos({ lat: cfg.local_lat, lng: cfg.local_lng });
-                }
-                fetchZonas(fallbackId);
-                return;
-            }
+            if (!sId) return;
+            
             const { data: cfg } = await supabase
                 .from("config_sucursal")
                 .select("local_lat, local_lng")
                 .eq("sucursal_id", sId)
                 .limit(1)
                 .maybeSingle();
+                
+            if (!isMounted) return;
+            
             if (cfg?.local_lat && cfg?.local_lng) {
                 setStorePos({ lat: cfg.local_lat, lng: cfg.local_lng });
             }
@@ -103,7 +92,10 @@ export default function PanelPedidosMap({
             if (sId) fetchZonas(sId);
         }, 60000);
 
-        return () => clearInterval(interval);
+        return () => {
+            isMounted = false;
+            clearInterval(interval);
+        };
     }, [sucursalId, fetchZonas]);
 
     const validPedidos = useMemo(() =>
