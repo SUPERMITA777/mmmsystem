@@ -41,7 +41,7 @@ export default function PanelPedidosMap({
     pedidos: PedidoMapCoords[];
     selectedPedidoId: string | null;
     onSelectPedido?: (id: string) => void;
-    sucursalId?: string;
+    sucursalId?: string | null;
 }) {
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
