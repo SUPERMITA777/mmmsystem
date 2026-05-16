@@ -631,6 +631,7 @@ export default function PanelPedidosPage() {
           {!sucursalConfig?.panel_settings?.ocultar_mapa_delivery && (
             <div className="hidden lg:block w-1/2 bg-white relative">
               <DynamicMap
+                sucursalId={sucursalId}
                 pedidos={filtrados.filter(p => p.tipo === "delivery" && p.cliente_lat != null)}
                 selectedPedidoId={selectedPedido?.id || null}
                 onSelectPedido={(id) => {

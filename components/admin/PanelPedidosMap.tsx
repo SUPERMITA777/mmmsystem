@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { GoogleMap, useJsApiLoader, InfoWindowF, PolygonF } from "@react-google-maps/api";
 import AdvancedMarker from "@/components/ui/AdvancedMarker";
-import { useTenant } from "@/context/TenantContext";
 
 type PedidoMapCoords = {
     id: string;
@@ -36,11 +35,13 @@ const libraries: ("places" | "drawing" | "geometry" | "visualization" | "marker"
 export default function PanelPedidosMap({
     pedidos,
     selectedPedidoId,
-    onSelectPedido
+    onSelectPedido,
+    sucursalId
 }: {
     pedidos: PedidoMapCoords[];
     selectedPedidoId: string | null;
     onSelectPedido?: (id: string) => void;
+    sucursalId?: string;
 }) {
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
@@ -50,7 +51,6 @@ export default function PanelPedidosMap({
         libraries
     });
 
-    const { sucursalId } = useTenant();
     const [storePos, setStorePos] = useState<{ lat: number; lng: number } | null>(null);
     const [zonas, setZonas] = useState<ZonaData[]>([]);
     const [activeInfoWindow, setActiveInfoWindow] = useState<string | null>(null);
@@ -155,11 +155,22 @@ export default function PanelPedidosMap({
                     hasPoints = true;
                 }
             });
+            
+            // Extender los bounds para incluir todos los polígonos de las zonas
+            zonas.forEach(zona => {
+                if (zona.polygon_coords && zona.polygon_coords.length > 0) {
+                    zona.polygon_coords.forEach(coord => {
+                        bounds.extend(coord);
+                        hasPoints = true;
+                    });
+                }
+            });
+
             if (hasPoints) {
                 map.fitBounds(bounds);
             }
         }
-    }, [map, validPedidos, storePos, selectedPedidoId]);
+    }, [map, validPedidos, storePos, selectedPedidoId, zonas]);
 
     if (loadError) return <div className="w-full h-full bg-red-50 flex items-center justify-center text-red-500 text-sm">Error al cargar Google Maps: {loadError.message}</div>;
     if (!isLoaded) return <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-sm">Cargando Google Maps...</div>;
