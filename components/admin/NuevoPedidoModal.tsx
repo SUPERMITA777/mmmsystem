@@ -677,9 +677,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
             const impresoras = suc?.panel_settings?.impresoras || {};
             const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
+            const bridge_enabled = suc?.panel_settings?.bridge_enabled !== false;
             const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
-            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
-            else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local });
+            if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
+            else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
         } catch {}
     }
 
@@ -879,9 +880,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
             const patchedPedido = {
                 ...editPedido,
+                cliente_nombre: cliente.nombre || editPedido?.cliente_nombre || "Consumidor Final",
                 mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
                 camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
                 metodo_pago_nombre: metodoPagoNombre,
+                pedido_items: carrito.map(item => ({
+                    cantidad: item.cantidad,
+                    nombre_producto: item.nombre,
+                    precio_unitario: item.precioOverride || item.precio,
+                    adicionales: item.adicionales ?? [],
+                    notas: item.nota || ""
+                })),
                 subtotal,
                 total,
                 descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
@@ -2146,9 +2155,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
                                         const patchedPedido = {
                                             ...editPedido,
+                                            cliente_nombre: cliente.nombre || editPedido?.cliente_nombre || "Consumidor Final",
                                             mesas: mesaObj ? { numero: mesaObj.numero || mesaObj.nombre } : editPedido.mesas,
                                             camarero_nombre: camareroObj ? `${camareroObj.nombre} ${camareroObj.apellido || ""}`.trim() : null,
                                             metodo_pago_nombre: metodoPagoNombre,
+                                            pedido_items: carrito.map(item => ({
+                                                cantidad: item.cantidad,
+                                                nombre_producto: item.nombre,
+                                                precio_unitario: item.precioOverride || item.precio,
+                                                adicionales: item.adicionales ?? [],
+                                                notas: item.nota || ""
+                                            })),
                                             subtotal,
                                             total,
                                             descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
