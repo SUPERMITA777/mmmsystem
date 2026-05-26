@@ -365,63 +365,63 @@ export default function ReportesPage() {
     }
 
     return (
-        <section className="p-8 max-w-7xl mx-auto">
+        <section className="p-3 md:p-8 max-w-7xl mx-auto h-[calc(100dvh-115px)] md:h-auto flex flex-col overflow-hidden md:overflow-visible">
             {/* Header / Filters */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm transition-all overflow-x-auto no-scrollbar">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 md:mb-8 shrink-0">
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-gray-200 shadow-sm overflow-x-auto no-scrollbar justify-between md:justify-start w-full md:w-auto">
                     <button
                         onClick={() => setTab("facturacion")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "facturacion" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`flex-1 md:flex-none text-center px-3 py-2 md:px-6 md:py-2 rounded-xl text-[11px] md:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "facturacion" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Facturación
                     </button>
                     <button
                         onClick={() => setTab("ventas")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "ventas" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`flex-1 md:flex-none text-center px-3 py-2 md:px-6 md:py-2 rounded-xl text-[11px] md:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "ventas" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Ventas
                     </button>
                     <button
                         onClick={() => setTab("rentabilidad")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "rentabilidad" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`flex-1 md:flex-none text-center px-3 py-2 md:px-6 md:py-2 rounded-xl text-[11px] md:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "rentabilidad" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Rentabilidad
                     </button>
                     <button
                         onClick={() => setTab("turnos")}
-                        className={`px-6 py-2 rounded-xl text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "turnos" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
+                        className={`flex-1 md:flex-none text-center px-3 py-2 md:px-6 md:py-2 rounded-xl text-[11px] md:text-sm font-black uppercase tracking-wider transition-all whitespace-nowrap ${tab === "turnos" ? "bg-purple-600 text-white shadow-lg shadow-purple-200" : "text-gray-400 hover:text-gray-600"}`}
                     >
                         Turnos
                     </button>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-                        <Calendar size={16} className="text-gray-400" />
+                <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
+                    <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-2 py-1.5 md:px-3 md:py-2 shadow-sm flex-1 md:flex-none">
+                        <Calendar size={14} className="text-gray-400 shrink-0" />
                         <input
                             type="date"
                             value={startDate}
                             onChange={(e) => setStartDate(e.target.value)}
-                            className="text-xs font-bold text-gray-700 outline-none uppercase bg-transparent"
+                            className="text-[10px] md:text-xs font-bold text-gray-700 outline-none uppercase bg-transparent w-full"
                         />
-                        <span className="text-gray-300 mx-1">—</span>
+                        <span className="text-gray-300 mx-0.5">—</span>
                         <input
                             type="date"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            className="text-xs font-bold text-gray-700 outline-none uppercase bg-transparent"
+                            className="text-[10px] md:text-xs font-bold text-gray-700 outline-none uppercase bg-transparent w-full"
                         />
                     </div>
 
                     {/* Quick Filters */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                         <button
                             onClick={() => {
                                 const hoy = getArgentinaDate();
                                 setStartDate(hoy);
                                 setEndDate(hoy);
                             }}
-                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-500 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
+                            className="px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-[9px] md:text-[10px] font-black text-gray-500 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
                         >
                             HOY
                         </button>
@@ -431,426 +431,644 @@ export default function ReportesPage() {
                                 setStartDate(ayer);
                                 setEndDate(ayer);
                             }}
-                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-[10px] font-black text-gray-400 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
+                            className="px-2.5 py-2 bg-white border border-gray-200 rounded-xl text-[9px] md:text-[10px] font-black text-gray-400 uppercase hover:bg-gray-50 transition-all hover:border-purple-200 active:scale-95"
                         >
                             AYER
                         </button>
+                        <button
+                            onClick={exportToCSV}
+                            className="p-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+                        >
+                            <Download size={14} />
+                            <span className="hidden sm:inline text-xs font-black uppercase tracking-widest">Exportar</span>
+                        </button>
                     </div>
-                    <button
-                        onClick={exportToCSV}
-                        className="p-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md active:scale-95 flex items-center gap-2"
-                    >
-                        <Download size={18} />
-                        <span className="hidden sm:inline text-xs font-black uppercase tracking-widest">Exportar</span>
-                    </button>
                 </div>
             </div>
 
             {loading ? (
-                <div className="py-20 flex flex-col items-center gap-4">
+                <div className="py-20 flex flex-col items-center gap-4 flex-1 justify-center">
                     <div className="w-12 h-12 border-4 border-purple-100 border-t-purple-600 rounded-full animate-spin" />
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Analizando datos...</p>
                 </div>
             ) : (
                 <>
                     {tab === "facturacion" && (
-                        <div className="space-y-6">
-                            {/* KPI Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-green-50 text-green-600 rounded-2xl">
-                                            <TrendingUp size={24} />
+                        <>
+                            {/* Desktop View */}
+                            <div className="hidden md:block space-y-6">
+                                {/* KPI Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-green-50 text-green-600 rounded-2xl">
+                                                <TrendingUp size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Facturación Bruta</h3>
                                         </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Facturación Bruta</h3>
+                                        <p className="text-4xl font-black text-gray-900 leading-none">
+                                            $ {new Intl.NumberFormat("es-AR").format(totalFacturado)}
+                                        </p>
                                     </div>
-                                    <p className="text-4xl font-black text-gray-900 leading-none">
-                                        $ {new Intl.NumberFormat("es-AR").format(totalFacturado)}
-                                    </p>
+
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                                                <TrendingUp size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Ticket Promedio</h3>
+                                        </div>
+                                        <p className="text-4xl font-black text-gray-900 leading-none">
+                                            $ {new Intl.NumberFormat("es-AR").format(ticketPromedio)}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+                                                <BarChart3 size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Pedidos Totales</h3>
+                                        </div>
+                                        <p className="text-4xl font-black text-gray-900 leading-none">
+                                            {pedidos.length}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-                                            <TrendingUp size={24} />
-                                        </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Ticket Promedio</h3>
-                                    </div>
-                                    <p className="text-4xl font-black text-gray-900 leading-none">
-                                        $ {new Intl.NumberFormat("es-AR").format(ticketPromedio)}
-                                    </p>
-                                </div>
-
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
-                                            <BarChart3 size={24} />
-                                        </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Pedidos Totales</h3>
-                                    </div>
-                                    <p className="text-4xl font-black text-gray-900 leading-none">
-                                        {pedidos.length}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Charts Row */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Métodos de Pago</h4>
-                                    <div className="flex items-center gap-10">
-                                        <DonutChart
-                                            data={metodosArray.map((m: any) => ({ label: m.label, value: m.value }))}
-                                            colors={COLORS}
-                                        />
-                                        <div className="flex-1 space-y-3">
-                                            {metodosArray.slice(0, 4).map((m: any, i) => (
-                                                <div key={i} className="flex items-center justify-between group">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                                        <span className="text-xs font-bold text-gray-500 uppercase">{m.label}</span>
+                                {/* Charts Row */}
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Métodos de Pago</h4>
+                                        <div className="flex items-center gap-10">
+                                            <DonutChart
+                                                data={metodosArray.map((m: any) => ({ label: m.label, value: m.value }))}
+                                                colors={COLORS}
+                                            />
+                                            <div className="flex-1 space-y-3">
+                                                {metodosArray.slice(0, 4).map((m: any, i) => (
+                                                    <div key={i} className="flex items-center justify-between group">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                                            <span className="text-xs font-bold text-gray-500 uppercase">{m.label}</span>
+                                                        </div>
+                                                        <span className="text-xs font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(m.value)}</span>
                                                     </div>
-                                                    <span className="text-xs font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(m.value)}</span>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Modalidades de Venta</h4>
-                                    <div className="flex items-center gap-10">
-                                        <DonutChart data={modArray} colors={["#f97316", "#9333ea", "#06b6d4"]} />
-                                        <div className="flex-1 space-y-3">
-                                            {modArray.map((m, i) => (
-                                                <div key={i} className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#f97316", "#9333ea", "#06b6d4"][i] }} />
-                                                        <span className="text-xs font-bold text-gray-500 uppercase">{m.label}</span>
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Modalidades de Venta</h4>
+                                        <div className="flex items-center gap-10">
+                                            <DonutChart data={modArray} colors={["#f97316", "#9333ea", "#06b6d4"]} />
+                                            <div className="flex-1 space-y-3">
+                                                {modArray.map((m, i) => (
+                                                    <div key={i} className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#f97316", "#9333ea", "#06b6d4"][i] }} />
+                                                            <span className="text-xs font-bold text-gray-500 uppercase">{m.label}</span>
+                                                        </div>
+                                                        <span className="text-xs font-black text-gray-900">{m.value} pedidos</span>
                                                     </div>
-                                                    <span className="text-xs font-black text-gray-900">{m.value} pedidos</span>
-                                                </div>
-                                            ))}
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Detailed Table */}
-                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
-                                <div className="p-6 border-b border-gray-50 bg-gray-50/30">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Desglose de Facturación</h4>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="bg-white border-b border-gray-50">
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Método</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pedidos</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Ticket Prom..</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Envíos</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Propinas</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {metodosArray.map((m: any, i) => (
-                                                <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                                                    <td className="px-6 py-4 text-xs font-bold text-gray-900 uppercase">{m.label}</td>
-                                                    <td className="px-6 py-4 text-center text-xs font-black text-gray-900">{m.count}</td>
-                                                    <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.count > 0 ? (m.value / m.count).toFixed(0) : 0}</td>
-                                                    <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.envio}</td>
-                                                    <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.propina}</td>
-                                                    <td className="px-6 py-4 text-right text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(m.value)}</td>
+                                {/* Detailed Table */}
+                                <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                    <div className="p-6 border-b border-gray-50 bg-gray-50/30">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Desglose de Facturación</h4>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="bg-white border-b border-gray-50">
+                                                    <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Método</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pedidos</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Ticket Prom..</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Envíos</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Propinas</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Total</th>
                                                 </tr>
-                                            ))}
-                                            <tr className="bg-gray-50/80">
-                                                <td className="px-6 py-5 text-xs font-black text-gray-900 uppercase">Total General</td>
-                                                <td className="px-6 py-5 text-center text-xs font-black text-gray-900">{pedidos.length}</td>
-                                                <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {ticketPromedio.toFixed(0)}</td>
-                                                <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {pedidos.reduce((s, p) => s + Number(p.costo_envio || 0), 0)}</td>
-                                                <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {pedidos.reduce((s, p) => s + Number(p.propina || 0), 0)}</td>
-                                                <td className="px-6 py-5 text-right text-base font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(totalFacturado)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {metodosArray.map((m: any, i) => (
+                                                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                                        <td className="px-6 py-4 text-xs font-bold text-gray-900 uppercase">{m.label}</td>
+                                                        <td className="px-6 py-4 text-center text-xs font-black text-gray-900">{m.count}</td>
+                                                        <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.count > 0 ? (m.value / m.count).toFixed(0) : 0}</td>
+                                                        <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.envio}</td>
+                                                        <td className="px-6 py-4 text-right text-xs font-bold text-gray-600">$ {m.propina}</td>
+                                                        <td className="px-6 py-4 text-right text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(m.value)}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="bg-gray-50/80">
+                                                    <td className="px-6 py-5 text-xs font-black text-gray-900 uppercase">Total General</td>
+                                                    <td className="px-6 py-5 text-center text-xs font-black text-gray-900">{pedidos.length}</td>
+                                                    <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {ticketPromedio.toFixed(0)}</td>
+                                                    <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {pedidos.reduce((s, p) => s + Number(p.costo_envio || 0), 0)}</td>
+                                                    <td className="px-6 py-5 text-right text-xs font-black text-gray-900">$ {pedidos.reduce((s, p) => s + Number(p.propina || 0), 0)}</td>
+                                                    <td className="px-6 py-5 text-right text-base font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(totalFacturado)}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+
+                            {/* Mobile View */}
+                            <div className="flex md:hidden flex-col flex-1 min-h-0 space-y-3">
+                                {/* 3-column tiny KPI grid */}
+                                <div className="grid grid-cols-3 gap-2 shrink-0">
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Bruto</h3>
+                                        <p className="text-[12px] font-black text-gray-900 leading-none">${new Intl.NumberFormat("es-AR").format(totalFacturado)}</p>
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Ticket Prom.</h3>
+                                        <p className="text-[12px] font-black text-gray-900 leading-none">${ticketPromedio.toFixed(0)}</p>
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Pedidos</h3>
+                                        <p className="text-[12px] font-black text-purple-600 leading-none">{pedidos.length}</p>
+                                    </div>
+                                </div>
+
+                                {/* Scrollable Content */}
+                                <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5 pb-2">
+                                    {/* Métodos de Pago List */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 p-3 shadow-sm">
+                                        <h4 className="text-[9px] font-black text-gray-900 uppercase tracking-widest mb-2 pb-1 border-b border-gray-50">Desglose Métodos de Pago</h4>
+                                        <div className="space-y-1.5">
+                                            {metodosArray.map((m: any, i) => (
+                                                <div key={i} className="flex justify-between items-center text-[10px]">
+                                                    <div className="flex items-center gap-1.5 font-bold text-gray-700 uppercase">
+                                                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                                                        {m.label} <span className="text-[8px] text-gray-400 font-medium">({m.count})</span>
+                                                    </div>
+                                                    <div className="font-black text-gray-900">${new Intl.NumberFormat("es-AR").format(m.value)}</div>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between items-center text-[10px] font-black border-t border-purple-100 pt-1.5 mt-2 text-purple-700">
+                                                <div>TOTAL FACTURADO</div>
+                                                <div>${new Intl.NumberFormat("es-AR").format(totalFacturado)}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Modalidades List */}
+                                    <div className="bg-white rounded-2xl border border-gray-100 p-3 shadow-sm">
+                                        <h4 className="text-[9px] font-black text-gray-900 uppercase tracking-widest mb-2 pb-1 border-b border-gray-50">Modalidades de Venta</h4>
+                                        <div className="space-y-1.5">
+                                            {modArray.map((m: any, i) => (
+                                                <div key={i} className="flex justify-between items-center text-[10px]">
+                                                    <div className="flex items-center gap-1.5 font-bold text-gray-700 uppercase">
+                                                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ["#f97316", "#9333ea", "#06b6d4"][i % 3] }} />
+                                                        {m.label}
+                                                    </div>
+                                                    <div className="font-black text-gray-900">{m.value} pedidos</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
                     )}
 
                     {tab === "ventas" && (
-                        <div className="space-y-6">
-                            {/* Ventas Search & Table */}
-                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
-                                <div className="p-6 border-b border-gray-50 flex items-center justify-between flex-wrap gap-4">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Rendimiento por Producto</h4>
-                                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full max-w-xs shadow-inner">
-                                        <Search size={14} className="text-gray-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="FILTRAR PRODUCTO..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="bg-transparent outline-none text-[10px] font-black uppercase text-gray-900 w-full"
-                                        />
+                        <>
+                            {/* Desktop View */}
+                            <div className="hidden md:block space-y-6">
+                                <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                    <div className="p-6 border-b border-gray-50 flex items-center justify-between flex-wrap gap-4">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Rendimiento por Producto</h4>
+                                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full max-w-xs shadow-inner">
+                                            <Search size={14} className="text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="FILTRAR PRODUCTO..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="bg-transparent outline-none text-[10px] font-black uppercase text-gray-900 w-full"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="border-b border-gray-50">
+                                                    <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Producto</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Precio Act.</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Cantidad Vendida</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Recaudación Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {productsArray.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={4} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin resultados</td>
+                                                    </tr>
+                                                ) : productsArray.map((p: any, i) => (
+                                                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-6 py-4">
+                                                            <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className="text-xs font-bold text-gray-600 tracking-tight">$ {new Intl.NumberFormat("es-AR").format(p.precio)}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-black text-gray-900">{p.cant}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <span className="text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(p.total)}</span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-50">
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Producto</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Precio Act.</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Cantidad Vendida</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Recaudación Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {productsArray.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={4} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin resultados</td>
-                                                </tr>
-                                            ) : productsArray.map((p: any, i) => (
-                                                <tr key={i} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="text-xs font-bold text-gray-600 tracking-tight">$ {new Intl.NumberFormat("es-AR").format(p.precio)}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="px-3 py-1 bg-gray-100 rounded-lg text-xs font-black text-gray-900">{p.cant}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <span className="text-sm font-black text-purple-600">$ {new Intl.NumberFormat("es-AR").format(p.total)}</span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                            </div>
+
+                            {/* Mobile View */}
+                            <div className="flex md:hidden flex-col flex-1 min-h-0 space-y-2.5">
+                                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm shrink-0">
+                                    <Search size={12} className="text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="FILTRAR PRODUCTO..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="bg-transparent outline-none text-[9px] font-black uppercase text-gray-900 w-full"
+                                    />
+                                </div>
+
+                                <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5 pb-2">
+                                    {productsArray.length === 0 ? (
+                                        <div className="py-10 text-center text-gray-300 font-bold uppercase tracking-[0.2em] text-[9px]">Sin resultados</div>
+                                    ) : (
+                                        productsArray.map((p: any, i) => (
+                                            <div key={i} className="bg-white rounded-xl border border-gray-100 p-2.5 flex justify-between items-center text-[10px] shadow-sm">
+                                                <div className="flex flex-col">
+                                                    <span className="font-black text-gray-900 uppercase">{p.nombre}</span>
+                                                    <span className="text-gray-400 font-bold mt-0.5">Cant: {p.cant} × ${p.precio}</span>
+                                                </div>
+                                                <div className="text-xs font-black text-purple-600">${new Intl.NumberFormat("es-AR").format(p.total)}</div>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
-                        </div>
+                        </>
                     )}
 
                     {tab === "rentabilidad" && (
-                        <div className="space-y-6">
-                            {/* KPI Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
-                                            <TrendingUp size={24} />
+                        <>
+                            {/* Desktop View */}
+                            <div className="hidden md:block space-y-6">
+                                {/* KPI Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+                                                <TrendingUp size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Utilidad Bruta</h3>
                                         </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Utilidad Bruta</h3>
+                                        <p className="text-4xl font-black text-purple-600 leading-none">
+                                            $ {new Intl.NumberFormat("es-AR").format(totalUtilidadPeriodo)}
+                                        </p>
                                     </div>
-                                    <p className="text-4xl font-black text-purple-600 leading-none">
-                                        $ {new Intl.NumberFormat("es-AR").format(totalUtilidadPeriodo)}
-                                    </p>
-                                </div>
 
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-                                            <PieChartIcon size={24} />
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                                                <PieChartIcon size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Margen Promedio</h3>
                                         </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Margen Promedio</h3>
+                                        <p className="text-4xl font-black text-gray-900 leading-none">
+                                            {margenPromedioPeriodo.toFixed(1)}%
+                                        </p>
                                     </div>
-                                    <p className="text-4xl font-black text-gray-900 leading-none">
-                                        {margenPromedioPeriodo.toFixed(1)}%
-                                    </p>
-                                </div>
 
-                                <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
-                                            <BarChart3 size={24} />
+                                    <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl">
+                                                <BarChart3 size={24} />
+                                            </div>
+                                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Costo Total Invertido</h3>
                                         </div>
-                                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Costo Total Invertido</h3>
-                                    </div>
-                                    <p className="text-4xl font-black text-gray-900 leading-none">
-                                        $ {new Intl.NumberFormat("es-AR").format(totalCostoPeriodo)}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Rentabilidad Search & Table */}
-                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
-                                <div className="p-6 border-b border-gray-50 flex items-center justify-between flex-wrap gap-4">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Análisis de Utilidad por Producto</h4>
-                                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full max-w-xs shadow-inner">
-                                        <Search size={14} className="text-gray-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="FILTRAR PRODUCTO..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="bg-transparent outline-none text-[10px] font-black uppercase text-gray-900 w-full"
-                                        />
+                                        <p className="text-4xl font-black text-gray-900 leading-none">
+                                            $ {new Intl.NumberFormat("es-AR").format(totalCostoPeriodo)}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-50">
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Producto</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Costo Tot.</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Venta Tot.</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Utilidad</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Margen %</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {rentabilidadArray.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={5} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin resultados</td>
-                                                </tr>
-                                            ) : rentabilidadArray.map((p: any, i) => (
-                                                <tr key={i} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        {p.totalCosto > 0 ? (
-                                                            <span className="text-xs font-bold text-gray-500">$ {new Intl.NumberFormat("es-AR").format(p.totalCosto)}</span>
-                                                        ) : (
-                                                            <button 
-                                                                onClick={() => {
-                                                                    setSelectedProductForCosto(p.productInfo || { nombre: p.nombre });
-                                                                    setIsCostoModalOpen(true);
-                                                                }}
-                                                                className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 underline uppercase tracking-tighter"
-                                                                title={!p.productInfo ? "Crear producto en catálogo para asignar costo" : "Asignar costo manual o vincular receta"}
-                                                            >
-                                                                {p.productInfo ? "Asignar Costo" : "Asignar Costo (Crear)"}
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className="text-xs font-bold text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.totalVenta)}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className={`text-xs font-black ${p.utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
-                                                            $ {new Intl.NumberFormat("es-AR").format(p.utilidad)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                                                <div 
-                                                                    className={`h-full rounded-full ${p.margen > 30 ? "bg-green-500" : p.margen > 15 ? "bg-orange-500" : "bg-red-500"}`} 
-                                                                    style={{ width: `${Math.max(0, Math.min(100, p.margen))}%` }} 
-                                                                />
-                                                            </div>
-                                                            <span className="text-xs font-black text-gray-900 w-10">{p.margen.toFixed(1)}%</span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
-                    {tab === "turnos" && (
-                        <div className="space-y-6">
-                            <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
-                                <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Historial de Turnos y Arqueos</h4>
-                                    <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-lg text-[10px] font-black uppercase tracking-widest">{cajas.length} Turnos</span>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-50 bg-gray-50/30">
-                                                <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Cajero / Turno</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Apertura</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Efvo</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Mov. Manuales</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Esperado</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Cierre Real</th>
-                                                <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Diferencia</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {cajas.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin turnos en este periodo</td>
+                                {/* Rentabilidad Search & Table */}
+                                <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                    <div className="p-6 border-b border-gray-50 flex items-center justify-between flex-wrap gap-4">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Análisis de Utilidad por Producto</h4>
+                                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full max-w-xs shadow-inner">
+                                            <Search size={14} className="text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="FILTRAR PRODUCTO..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="bg-transparent outline-none text-[10px] font-black uppercase text-gray-900 w-full"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="border-b border-gray-50">
+                                                    <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Nombre del Producto</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Costo Tot.</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Venta Tot.</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Utilidad</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Margen %</th>
                                                 </tr>
-                                            ) : cajas.map((c: any, i) => {
-                                                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
-                                                const isAbierta = c.estado === 'abierta';
-                                                const ventasEfvo = isAbierta ? 0 : (c.monto_esperado || 0) - c.monto_apertura - manual;
-                                                
-                                                return (
-                                                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {rentabilidadArray.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={5} className="py-20 text-center text-gray-300 font-bold uppercase tracking-[0.3em] text-[10px]">Sin resultados</td>
+                                                    </tr>
+                                                ) : rentabilidadArray.map((p: any, i) => (
+                                                    <tr key={i} className="hover:bg-gray-50 transition-colors">
                                                         <td className="px-6 py-4">
-                                                            <div className="flex flex-col">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xs font-black text-gray-900 uppercase">{c.cajero_nombre || "Anónimo"}</span>
-                                                                    {isAbierta && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
-                                                                </div>
-                                                                <span className="text-[10px] font-bold text-gray-400">
-                                                                    {formatToArgentinaDateTime(c.fecha_apertura)}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center text-xs font-bold text-gray-600">
-                                                            $ {new Intl.NumberFormat("es-AR").format(c.monto_apertura)}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center text-xs font-black text-green-600">
-                                                            {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(ventasEfvo)}`}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center text-xs font-bold text-blue-600">
-                                                            $ {new Intl.NumberFormat("es-AR").format(manual)}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
-                                                            {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(c.monto_esperado || 0)}`}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
-                                                            {isAbierta ? (
-                                                                <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-lg text-[8px] font-black uppercase tracking-tighter border border-green-100">En Curso</span>
-                                                            ) : (
-                                                                `$ ${new Intl.NumberFormat("es-AR").format(c.monto_cierre || 0)}`
-                                                            )}
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            {isAbierta ? (
-                                                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Pendiente</span>
-                                                            ) : (
-                                                                <span className={`text-sm font-black ${c.diferencia === 0 ? "text-gray-400" : (c.diferencia > 0 ? "text-green-600" : "text-red-600")}`}>
-                                                                    $ {new Intl.NumberFormat("es-AR").format(c.diferencia || 0)}
-                                                                </span>
-                                                            )}
+                                                            <span className="text-xs font-black text-gray-900 uppercase tracking-wide">{p.nombre}</span>
                                                         </td>
                                                         <td className="px-6 py-4 text-center">
-                                                            {!isAbierta && (
+                                                            {p.totalCosto > 0 ? (
+                                                                <span className="text-xs font-bold text-gray-500">$ {new Intl.NumberFormat("es-AR").format(p.totalCosto)}</span>
+                                                            ) : (
                                                                 <button
-                                                                    onClick={() => handleImprimirCierre(c)}
-                                                                    disabled={printingCajaId === c.id}
-                                                                    className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95 disabled:bg-purple-300 flex items-center justify-center gap-1.5 mx-auto shadow-sm"
+                                                                    onClick={() => {
+                                                                        setSelectedProductForCosto(p.productInfo);
+                                                                        setIsCostoModalOpen(true);
+                                                                    }}
+                                                                    className="px-3 py-1 bg-purple-50 text-purple-600 rounded-lg text-[9px] font-black uppercase hover:bg-purple-100 transition-all border border-purple-100"
                                                                 >
-                                                                    {printingCajaId === c.id ? (
-                                                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                                    ) : (
-                                                                        <Printer size={12} />
-                                                                    )}
-                                                                    <span>Reimprimir</span>
+                                                                    Asignar Costo
                                                                 </button>
                                                             )}
                                                         </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className="text-xs font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(p.totalVenta)}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-center">
+                                                            <span className="text-xs font-black text-emerald-600">$ {new Intl.NumberFormat("es-AR").format(p.utilidad)}</span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <span className={`text-xs font-black ${p.margen > 30 ? "text-emerald-600 bg-emerald-50 border border-emerald-100" : "text-orange-600 bg-orange-50 border border-orange-100"} px-2.5 py-1 rounded-lg`}>
+                                                                {p.margen.toFixed(1)}%
+                                                            </span>
+                                                        </td>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+
+                            {/* Mobile View */}
+                            <div className="flex md:hidden flex-col flex-1 min-h-0 space-y-2.5">
+                                {/* 3-column tiny KPI grid */}
+                                <div className="grid grid-cols-3 gap-2 shrink-0">
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Utilidad</h3>
+                                        <p className="text-[12px] font-black text-purple-600 leading-none">${new Intl.NumberFormat("es-AR").format(totalUtilidadPeriodo)}</p>
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Margen</h3>
+                                        <p className="text-[12px] font-black text-gray-900 leading-none">{margenPromedioPeriodo.toFixed(1)}%</p>
+                                    </div>
+                                    <div className="bg-white rounded-xl border border-gray-100 p-2 shadow-sm text-center">
+                                        <h3 className="text-[7.5px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Costo</h3>
+                                        <p className="text-[12px] font-black text-gray-900 leading-none">${new Intl.NumberFormat("es-AR").format(totalCostoPeriodo)}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm shrink-0">
+                                    <Search size={12} className="text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="FILTRAR PRODUCTO..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="bg-transparent outline-none text-[9px] font-black uppercase text-gray-900 w-full"
+                                    />
+                                </div>
+
+                                <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5 pb-2">
+                                    {rentabilidadArray.length === 0 ? (
+                                        <div className="py-10 text-center text-gray-300 font-bold uppercase tracking-[0.2em] text-[9px]">Sin resultados</div>
+                                    ) : (
+                                        rentabilidadArray.map((p: any, i) => (
+                                            <div key={i} className="bg-white rounded-xl border border-gray-100 p-2.5 flex justify-between items-center text-[10px] shadow-sm">
+                                                <div className="flex flex-col">
+                                                    <span className="font-black text-gray-900 uppercase truncate max-w-[150px]">{p.nombre}</span>
+                                                    <span className="text-gray-400 font-bold mt-0.5">
+                                                        Venta: ${new Intl.NumberFormat("es-AR").format(p.totalVenta)} | Costo: {p.totalCosto > 0 ? `$${new Intl.NumberFormat("es-AR").format(p.totalCosto)}` : 'S/C'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-black text-purple-600">${new Intl.NumberFormat("es-AR").format(p.utilidad)}</div>
+                                                    <div className="text-[8px] font-bold text-gray-500">{p.margen.toFixed(1)}% margen</div>
+                                                    {p.totalCosto === 0 && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedProductForCosto(p.productInfo);
+                                                                setIsCostoModalOpen(true);
+                                                            }}
+                                                            className="mt-1 px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded text-[8px] font-black uppercase hover:bg-purple-100 transition-colors"
+                                                        >
+                                                            Costo
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {tab === "turnos" && (
+                        <>
+                            {/* Desktop View */}
+                            <div className="hidden md:block space-y-6">
+                                <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm">
+                                    <div className="p-6 border-b border-gray-50 bg-gray-50/30">
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Cierres de Turnos Registrados</h4>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="bg-white border-b border-gray-50">
+                                                    <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Cajero / Operador</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Apertura</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto Inicial</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Efvo.</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Mov. Manuales</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Esperado</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Cierre Real</th>
+                                                    <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Diferencia</th>
+                                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {cajas.map((c: any, i) => {
+                                                    const isAbierta = !c.fecha_cierre;
+                                                    const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                                                    const ventasEfvo = (c.monto_esperado || 0) - c.monto_apertura - manual;
+                                                    return (
+                                                        <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full bg-purple-50 text-[#7b1fa2] flex items-center justify-center font-bold text-xs uppercase">
+                                                                        {c.cajero_nombre?.charAt(0) ?? "C"}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="text-xs font-black text-gray-900 uppercase block leading-tight">{c.cajero_nombre || "Cajero"}</span>
+                                                                        <span className="text-[9px] text-gray-400 font-bold block mt-0.5">{formatToArgentinaDateTime(c.fecha_apertura)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-xs font-bold text-gray-600">
+                                                                $ {new Intl.NumberFormat("es-AR").format(c.monto_apertura)}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-xs font-black text-green-600">
+                                                                {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(ventasEfvo)}`}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-xs font-bold text-blue-600">
+                                                                $ {new Intl.NumberFormat("es-AR").format(manual)}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
+                                                                {isAbierta ? "---" : `$ ${new Intl.NumberFormat("es-AR").format(c.monto_esperado || 0)}`}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center text-xs font-black text-gray-900">
+                                                                {isAbierta ? (
+                                                                    <span className="px-2 py-0.5 bg-green-50 text-green-600 rounded-lg text-[8px] font-black uppercase tracking-tighter border border-green-100">En Curso</span>
+                                                                ) : (
+                                                                    `$ ${new Intl.NumberFormat("es-AR").format(c.monto_cierre || 0)}`
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                {isAbierta ? (
+                                                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Pendiente</span>
+                                                                ) : (
+                                                                    <span className={`text-sm font-black ${c.diferencia === 0 ? "text-gray-400" : (c.diferencia > 0 ? "text-green-600" : "text-red-600")}`}>
+                                                                        $ {new Intl.NumberFormat("es-AR").format(c.diferencia || 0)}
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                {!isAbierta && (
+                                                                    <button
+                                                                        onClick={() => handleImprimirCierre(c)}
+                                                                        disabled={printingCajaId === c.id}
+                                                                        className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95 disabled:bg-purple-300 flex items-center justify-center gap-1.5 mx-auto shadow-sm"
+                                                                    >
+                                                                        {printingCajaId === c.id ? (
+                                                                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                        ) : (
+                                                                            <Printer size={12} />
+                                                                        )}
+                                                                        <span>Reimprimir</span>
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Mobile View */}
+                            <div className="flex md:hidden flex-col flex-1 min-h-0 space-y-2">
+                                <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 pb-2">
+                                    {cajas.length === 0 ? (
+                                        <div className="py-10 text-center text-gray-300 font-bold uppercase tracking-[0.2em] text-[9px]">Sin turnos registrados</div>
+                                    ) : (
+                                        cajas.map((c: any, i) => {
+                                            const isAbierta = !c.fecha_cierre;
+                                            const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                                            const ventasEfvo = (c.monto_esperado || 0) - c.monto_apertura - manual;
+                                            return (
+                                                <div key={i} className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-sm flex flex-col gap-1.5">
+                                                    <div className="flex justify-between items-center">
+                                                        <div>
+                                                            <div className="font-black text-gray-900 uppercase text-[10px] flex items-center gap-1">
+                                                                <User size={10} className="text-gray-400" />
+                                                                {c.cajero_nombre || "Cajero"}
+                                                            </div>
+                                                            <div className="text-[8px] text-gray-400 font-bold">
+                                                                {formatToArgentinaDateTime(c.fecha_apertura)}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            {isAbierta ? (
+                                                                <span className="px-1.5 py-0.5 bg-green-50 text-green-600 rounded text-[8px] font-black uppercase border border-green-100">En Curso</span>
+                                                            ) : (
+                                                                <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[8px] font-black uppercase">Cerrado</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-1 bg-gray-50/50 p-1.5 rounded-lg text-[9px] font-bold text-gray-500 text-center">
+                                                        <div>
+                                                            <span className="block text-[7px] uppercase font-black text-gray-400">Apertura</span>
+                                                            <span className="text-gray-900 font-black">${new Intl.NumberFormat("es-AR").format(c.monto_apertura)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="block text-[7px] uppercase font-black text-gray-400">Ventas</span>
+                                                            <span className="text-green-600 font-black">{isAbierta ? "---" : `$${new Intl.NumberFormat("es-AR").format(ventasEfvo)}`}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="block text-[7px] uppercase font-black text-gray-400">Dif</span>
+                                                            <span className={`font-black ${c.diferencia === 0 ? "text-gray-400" : (c.diferencia > 0 ? "text-green-600" : "text-red-600")}`}>
+                                                                {isAbierta ? "---" : `$${new Intl.NumberFormat("es-AR").format(c.diferencia || 0)}`}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {!isAbierta && (
+                                                        <div className="flex justify-end">
+                                                            <button
+                                                                onClick={() => handleImprimirCierre(c)}
+                                                                disabled={printingCajaId === c.id}
+                                                                className="px-2 py-1 bg-purple-600 text-white rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-purple-700 transition-all active:scale-95 disabled:bg-purple-300 flex items-center gap-1 shadow-sm"
+                                                            >
+                                                                {printingCajaId === c.id ? (
+                                                                    <div className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin" />
+                                                                ) : (
+                                                                    <Printer size={8} />
+                                                                )}
+                                                                <span>Reimprimir</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+                        </>
                     )}
                 </>
             )}
