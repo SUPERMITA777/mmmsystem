@@ -299,7 +299,31 @@ export default function PanelPedidosPage() {
   }, [sucursalConfig]);
 
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
-    await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
+    // Si el nuevo estado es 'entregado', sincronizar subtotal/total desde los items
+    // reales en la BD para evitar discrepancias con el cierre de caja
+    if (nuevoEstado === "entregado") {
+      const { data: itemsActuales } = await supabase
+        .from("pedido_items")
+        .select("precio_unitario, cantidad")
+        .eq("pedido_id", pedido.id);
+
+      // Recalcular subtotal desde items guardados en BD (source of truth)
+      const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
+        return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
+      }, 0);
+      const costoEnvioActual = Number((pedido as any).costo_envio || 0);
+      // Preservar descuentos: total = subtotalDB + costo_envio - descuento
+      const descuentoActual = Number((pedido as any).descuento || 0);
+      const totalDB = subtotalDB + costoEnvioActual - descuentoActual;
+
+      await supabase.from("pedidos").update({
+        estado: nuevoEstado,
+        subtotal: subtotalDB,
+        total: totalDB,
+      }).eq("id", pedido.id);
+    } else {
+      await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
+    }
 
     // Send WhatsApp notification at each transition
     if (nuevoEstado === "preparando") {
@@ -324,7 +348,28 @@ export default function PanelPedidosPage() {
   }
 
   async function cerrarMesa(pedido: Pedido) {
-    await supabase.from("pedidos").update({ estado: "entregado" }).eq("id", pedido.id);
+    // Recalcular subtotal y total desde los items reales en BD
+    // para asegurar que el cierre de caja refleje los precios actuales
+    const { data: itemsActuales } = await supabase
+      .from("pedido_items")
+      .select("precio_unitario, cantidad, adicionales")
+      .eq("pedido_id", pedido.id);
+
+    // Recalcular subtotal desde items guardados en BD (source of truth)
+    const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
+      return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
+    }, 0);
+    const costoEnvioActual = Number((pedido as any).costo_envio || 0);
+    // Preservar descuentos: total = subtotalDB + costo_envio - descuento
+    const descuentoActual = Number((pedido as any).descuento || 0);
+    const totalReal = subtotalDB + costoEnvioActual - descuentoActual;
+
+    await supabase.from("pedidos").update({
+      estado: "entregado",
+      subtotal: subtotalDB,
+      total: totalReal,
+    }).eq("id", pedido.id);
+
     if ((pedido as any).mesa_id) {
       await supabase.from("mesas").update({ estado: "libre" }).eq("id", (pedido as any).mesa_id);
     }

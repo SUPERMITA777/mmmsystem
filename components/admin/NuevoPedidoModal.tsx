@@ -860,7 +860,20 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 notasPagoMixto = `Pago mixto: $${montoMixto1} en ${mPagoNombre1}, resto en ${mPagoNombre2}. `;
             }
 
-            // 1. Update order status to 'entregado' (finalized) and save payment method
+            // 1. Synchronize the cart items in database to reflect any final modifications
+            await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+            const items = carrito.map(item => ({
+                pedido_id: editPedido.id,
+                producto_id: item.producto_id,
+                nombre_producto: item.nombre,
+                cantidad: item.cantidad,
+                precio_unitario: item.precioOverride,
+                notas: item.nota || "",
+                adicionales: item.adicionales || []
+            }));
+            await supabase.from("pedido_items").insert(items);
+
+            // 2. Update order status to 'entregado' (finalized) and save payment method
             const { error: uError } = await supabase
                 .from("pedidos")
                 .update({ 
