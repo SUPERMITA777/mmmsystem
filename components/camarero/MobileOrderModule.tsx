@@ -62,6 +62,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [activeWaiter, setActiveWaiter] = useState<any>(null);
     const [selectedMesaId, setSelectedMesaId] = useState(mesaId || "");
     const [comensales, setComensales] = useState(1);
+    const [activeOrder, setActiveOrder] = useState<any>(null);
 
     useEffect(() => {
         if (!sucursalId) return;
@@ -120,6 +121,61 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             setStep("identification");
         }
     }, [user, camareros, sucursalId]);
+
+    const cargarPedidoActivoMesa = async (mId: string) => {
+        if (!mId || !sucursalId) return;
+        try {
+            const { data: pedido, error: fetchErr } = await supabase
+                .from("pedidos")
+                .select("*, pedido_items(*)")
+                .eq("mesa_id", mId)
+                .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (pedido) {
+                setActiveOrder(pedido);
+                setComensales(pedido.comensales || 1);
+                
+                // Mapear el camarero de la orden activa si existe
+                if (pedido.camarero_id) {
+                    const { data: staffData } = await supabase
+                        .from("usuarios")
+                        .select("*")
+                        .eq("id", pedido.camarero_id)
+                        .maybeSingle();
+                    if (staffData) {
+                        setActiveWaiter(staffData);
+                        localStorage.setItem("active_waiter", JSON.stringify(staffData));
+                    }
+                }
+
+                // Mapear los ítems del pedido ya existentes al carrito con isComandado: true
+                const mappedCart = (pedido.pedido_items || []).map((item: any) => {
+                    return {
+                        id: item.id || crypto.randomUUID(),
+                        producto_id: item.producto_id,
+                        nombre: item.nombre_producto,
+                        precio: item.precio_unitario,
+                        cantidad: item.cantidad,
+                        nota: item.notas || undefined,
+                        adicionales: item.adicionales || [],
+                        impresora: item.impresora || "",
+                        isComandado: true
+                    };
+                });
+                
+                setCarrito(mappedCart);
+                setStep("ordering");
+            } else {
+                setActiveOrder(null);
+                setCarrito([]);
+            }
+        } catch (err) {
+            console.error("Error al cargar pedido activo de la mesa:", err);
+        }
+    };
 
     useEffect(() => {
         if (sucursalId) {
@@ -267,6 +323,10 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 if (uniqueProds.length > 0) {
                     setProductos(uniqueProds);
                 }
+
+                if (mesaId) {
+                    await cargarPedidoActivoMesa(mesaId);
+                }
             }
 
         } catch (err) {
@@ -364,9 +424,24 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         setIsSending(true);
         setError(null);
 
-        const localId = crypto.randomUUID();
+        const localId = activeOrder ? activeOrder.id : crypto.randomUUID();
 
         try {
+            if (activeOrder) {
+                // Borrar items antiguos en Supabase para evitar duplicación al re-insertar el carrito completo
+                if (navigator.onLine) {
+                    try {
+                        await supabase.from("pedido_items").delete().eq("pedido_id", activeOrder.id);
+                    } catch (delErr) {
+                        console.warn("[MobileOrder] Error al borrar items anteriores de la mesa:", delErr);
+                    }
+                }
+                // Limpiar caché local
+                try {
+                    await db.pedidos.delete(activeOrder.id);
+                } catch {}
+            }
+
             const pedidoPayload = {
                 id: localId,
                 sucursal_id: sucursalId,
@@ -375,15 +450,17 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 camarero_id: activeWaiter?.id || user?.id,
                 camarero_nombre: activeWaiter?.nombre || user?.nombre || "Mozo",
                 tipo: "salon",
-                estado: "preparando", // Cambiado a 'preparando' para ponerse directamente EN COCINA
+                estado: "preparando", // Directamente EN COCINA
                 total: total,
-                created_at: new Date().toISOString()
+                created_at: activeOrder ? activeOrder.created_at : new Date().toISOString(),
+                numero_pedido: activeOrder ? activeOrder.numero_pedido : undefined
             };
 
             const itemsPayload = carrito.map(item => {
                 const fullProd = productos.find(p => p.id === item.producto_id);
                 const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
                 return {
+                    id: item.isComandado ? item.id : crypto.randomUUID(),
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     precio_unitario: item.precio,
@@ -444,15 +521,41 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     finalPedido.numero_pedido = localId.substring(0, 8).toUpperCase();
                 }
 
-                // Print command automatically to corresponding printers
+                // Filtrar solo productos nuevos que NO se hayan comandado antes para imprimir incremental a cocina
+                const newItemsOnly = activeOrder ? carrito.filter((item: any) => !item.isComandado) : carrito;
+                
+                const printItemsPayload = newItemsOnly.map(item => {
+                    const fullProd = productos.find(p => p.id === item.producto_id);
+                    const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
+                    return {
+                        producto_id: item.producto_id,
+                        nombre_producto: item.nombre,
+                        precio_unitario: item.precio,
+                        cantidad: item.cantidad,
+                        notas: item.nota || "",
+                        adicionales: item.adicionales ?? [],
+                        impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
+                        categoria_id: fullProd?.categoria_id || "",
+                        categoria_nombre: catOfProd?.nombre || "",
+                        productos: fullProd ? {
+                            ...fullProd,
+                            categorias: catOfProd ? { nombre: catOfProd.nombre } : null
+                        } : null
+                    };
+                });
+
+                // Print command automatically to corresponding printers (only if there are new items)
                 try {
-                    await printCocina(finalPedido, printConfig || {}, itemsPayload);
+                    if (printItemsPayload.length > 0) {
+                        await printCocina(finalPedido, printConfig || {}, printItemsPayload);
+                    }
                 } catch (printErr) {
                     console.error("Print error:", printErr);
                 }
 
                 setOrderSent(true);
                 setCarrito([]);
+                setActiveOrder(null);
                 setTimeout(() => {
                     setOrderSent(false);
                     setIsCartOpen(false);
@@ -608,12 +711,13 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                 inputMode="numeric"
                                 placeholder="Ej: 5"
                                 value={mesas.find(m => m.id === selectedMesaId)?.numero || ""}
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                     const val = parseInt(e.target.value);
                                     const m = mesas.find(m => m.numero === val && m.forma !== 'label');
                                     if (m) {
                                         setSelectedMesaId(m.id);
                                         setMesa(m);
+                                        await cargarPedidoActivoMesa(m.id);
                                     } else {
                                         setSelectedMesaId("");
                                     }
