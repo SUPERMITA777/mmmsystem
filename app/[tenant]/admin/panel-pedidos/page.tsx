@@ -165,11 +165,16 @@ export default function PanelPedidosPage() {
     if (!hybridPedidos || hybridPedidos.length === 0 || !printConfig) return;
 
     if (isFirstLoadRef.current) {
-      // Inicializar con los pedidos existentes para evitar reimprimir todo al cargar la página
-      hybridPedidos.forEach(p => autoPrintedIdsRef.current.add(p.id));
+      // Inicializar con los pedidos existentes para evitar reimprimir todo al cargar la página.
+      // Solo agregamos como "impresos" los pedidos que tengan más de 2 minutos de antigüedad.
+      const dosMinutosAtras = new Date(Date.now() - 2 * 60 * 1000);
+      hybridPedidos.forEach(p => {
+        if (new Date(p.created_at) < dosMinutosAtras) {
+          autoPrintedIdsRef.current.add(p.id);
+        }
+      });
       isFirstLoadRef.current = false;
-      console.log("[AutoPrint] Inicializado listado de pedidos impresos con", autoPrintedIdsRef.current.size, "pedidos.");
-      return;
+      console.log("[AutoPrint] Inicializado listado de pedidos impresos. Viejos ignorados:", autoPrintedIdsRef.current.size);
     }
 
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
