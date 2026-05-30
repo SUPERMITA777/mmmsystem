@@ -374,7 +374,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 camarero_id: activeWaiter?.id || user?.id,
                 camarero_nombre: activeWaiter?.nombre || user?.nombre || "Mozo",
                 tipo: "salon",
-                estado: "pendiente",
+                estado: "preparando", // Cambiado a 'preparando' para ponerse directamente EN COCINA
                 total: total,
                 created_at: new Date().toISOString()
             };
@@ -408,6 +408,13 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             );
             
             if (result.success) {
+                // Actualizar estado de la mesa a 'ocupada'
+                try {
+                    await supabase.from("mesas").update({ estado: "ocupada" }).eq("id", selectedMesaId);
+                } catch (tableErr) {
+                    console.error("[MobileOrder] Error al marcar mesa como ocupada:", tableErr);
+                }
+
                 // Determine order number for printing
                 let finalPedido: any = {
                     ...pedidoPayload,
