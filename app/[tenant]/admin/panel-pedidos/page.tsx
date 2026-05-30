@@ -176,8 +176,8 @@ export default function PanelPedidosPage() {
     if (!autoPrintEnabled) return;
 
     hybridPedidos.forEach((pedido) => {
-      // Imprimir cocina para pedidos nuevos que entren en 'pendiente' o 'confirmado'
-      if (["pendiente", "confirmado"].includes(pedido.estado)) {
+      // Imprimir cocina para pedidos nuevos que entren en 'pendiente', 'confirmado' o 'preparando' (camareros)
+      if (["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
         if (!autoPrintedIdsRef.current.has(pedido.id)) {
           autoPrintedIdsRef.current.add(pedido.id);
           console.log("[AutoPrint] Detectado nuevo pedido. Imprimiendo automáticamente en cocina:", pedido.numero_pedido);
