@@ -152,7 +152,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     }
                 }
                 if (localProds.length > 0) {
-                    setProductos(localProds);
+                    setProductos(localProds.filter((p: any) => p.activo === true));
                 }
                 if (localCats.length > 0) {
                     setCategorias(localCats);
@@ -235,6 +235,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     .from("productos")
                     .select("*")
                     .eq("sucursal_id", sucursalId)
+                    .eq("activo", true)
                     .order("nombre");
 
                 // Fetch Products - Via Category Join (prevents missing sucursal_id rows from being ignored)
@@ -243,7 +244,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     .select("productos(*)")
                     .eq("sucursal_id", sucursalId);
 
-                const prodsFromCats = (catsWithProds || []).flatMap((c: any) => c.productos || []);
+                const prodsFromCats = (catsWithProds || []).flatMap((c: any) => c.productos || []).filter((p: any) => p.activo === true);
 
                 const allProds = [...(prods || [])];
                 prodsFromCats.forEach((p: any) => {
