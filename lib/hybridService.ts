@@ -38,7 +38,20 @@ export async function persistirPedidoHibrido(
             });
             if (pError) throw pError;
 
-            const items = itemsPayload.map(it => ({ ...it, pedido_id: localId }));
+            const items = itemsPayload.map(it => ({
+                id: it.id || crypto.randomUUID(),
+                pedido_id: localId,
+                producto_id: it.producto_id,
+                nombre_producto: it.nombre_producto,
+                variante_id: it.variante_id || null,
+                variante_nombre: it.variante_nombre || null,
+                cantidad: it.cantidad,
+                precio_unitario: it.precio_unitario,
+                descuento: it.descuento || 0,
+                notas: it.notas || "",
+                adicionales: it.adicionales || [],
+                estado: it.estado || "pendiente"
+            }));
             const { error: iError } = await supabase.from("pedido_items").upsert(items);
             if (iError) throw iError;
 
