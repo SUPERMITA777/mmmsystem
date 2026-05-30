@@ -21,6 +21,7 @@ interface CartItem {
     cantidad: number;
     imagen_url?: string;
     nota?: string;
+    adicionales?: any[];
     impresora?: string;
 }
 
@@ -33,6 +34,16 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [categorias, setCategorias] = useState<any[]>([]);
     const [mesa, setMesa] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [gruposAdicionales, setGruposAdicionales] = useState<any[]>([]);
+    const [adicionales, setAdicionales] = useState<any[]>([]);
+    const [productoGrupos, setProductoGrupos] = useState<any[]>([]);
+    
+    // Customization Modal State
+    const [isCustomizing, setIsCustomizing] = useState(false);
+    const [productoCustom, setProductoCustom] = useState<any>(null);
+    const [customAdicionales, setCustomAdicionales] = useState<Record<string, number>>({});
+    const [customNota, setCustomNota] = useState("");
+    const [customQty, setCustomQty] = useState(1);
     
     // UI State
     const [busqueda, setBusqueda] = useState("");
@@ -186,7 +197,19 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     .select("*")
                     .eq("sucursal_id", sucursalId)
                     .order("orden");
-                if (catData) setCategorias(catData);
+                 if (catData) setCategorias(catData);
+ 
+                 // Fetch Grupos Adicionales
+                 const { data: grps } = await supabase.from("grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
+                 if (grps) setGruposAdicionales(grps);
+ 
+                 // Fetch Adicionales
+                 const { data: ads } = await supabase.from("adicionales").select("*").eq("sucursal_id", sucursalId);
+                 if (ads) setAdicionales(ads);
+ 
+                 // Fetch Producto Grupos Adicionales
+                 const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
+                 if (pg) setProductoGrupos(pg);
 
                 // Fetch Waiters (via server API to bypass RLS seamlessly)
                 try {
@@ -261,26 +284,67 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
 
     console.log(`[MobileOrder] Render: Total=${productos.length}, Filtered=${filteredProducts.length}, Cat=${catSeleccionada}`);
 
-    const addToCart = (p: any) => {
-        setCarrito(prev => {
-            const existing = prev.find(item => item.producto_id === p.id && !item.nota);
-            if (existing) {
-                return prev.map(item => 
-                    item.producto_id === p.id && !item.nota 
-                    ? { ...item, cantidad: item.cantidad + 1 } 
-                    : item
-                );
+    const isGroupValid = (grp: any) => {
+        if (!productoCustom) return true;
+        const isAllowed = productoGrupos.some((pg: any) => pg.producto_id === productoCustom.id && pg.grupo_id === grp.id);
+        if (!isAllowed) return true;
+        if (!grp.seleccion_obligatoria && (grp.seleccion_minima || 0) <= 0) return true;
+
+        const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
+        const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
+        const minReq = Math.max(grp.seleccion_obligatoria ? 1 : 0, grp.seleccion_minima || 0);
+        return totalInGroup >= minReq;
+    };
+
+    const isCustomValid = productoCustom ? gruposAdicionales.every(grp => isGroupValid(grp)) : true;
+
+    const handleProductClick = (p: any) => {
+        setProductoCustom(p);
+        setCustomAdicionales({});
+        setCustomNota("");
+        setCustomQty(1);
+        setIsCustomizing(true);
+    };
+
+    const handleAddCustomized = () => {
+        if (!productoCustom) return;
+
+        let extraPrice = 0;
+        const selectedAdsList: any[] = [];
+
+        Object.entries(customAdicionales).forEach(([adId, qty]) => {
+            if (qty <= 0) return;
+            const ad = adicionales.find(a => a.id === adId);
+            if (ad) {
+                extraPrice += (ad.precio_venta || 0) * qty;
+                selectedAdsList.push({
+                    id: ad.id,
+                    nombre: ad.nombre,
+                    precio: ad.precio_venta || 0,
+                    cantidad: qty,
+                    impresora: ad.impresora
+                });
             }
+        });
+
+        const finalPrice = productoCustom.precio + extraPrice;
+
+        setCarrito(prev => {
             return [...prev, {
                 id: crypto.randomUUID(),
-                producto_id: p.id,
-                nombre: p.nombre,
-                precio: p.precio,
-                cantidad: 1,
-                imagen_url: p.imagen_url,
-                impresora: p.impresora
+                producto_id: productoCustom.id,
+                nombre: productoCustom.nombre,
+                precio: finalPrice,
+                cantidad: customQty,
+                imagen_url: productoCustom.imagen_url,
+                nota: customNota || undefined,
+                adicionales: selectedAdsList,
+                impresora: productoCustom.impresora
             }];
         });
+
+        setIsCustomizing(false);
+        setProductoCustom(null);
     };
 
     const updateQuantity = (id: string, newQty: number) => {
@@ -324,6 +388,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     precio_unitario: item.precio,
                     cantidad: item.cantidad,
                     notas: item.nota || "",
+                    adicionales: item.adicionales ?? [],
                     impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
                     categoria_id: fullProd?.categoria_id || "",
                     categoria_nombre: catOfProd?.nombre || "",
@@ -716,97 +781,257 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 ) : (
                     <div className="grid grid-cols-2 gap-3">
                         {filteredProducts.map(p => {
-                        const inCart = carrito.find(i => i.producto_id === p.id);
-                        return (
-                            <div 
-                                key={p.id}
-                                className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 transition-all flex flex-col"
-                            >
+                            const inCart = carrito.find(i => i.producto_id === p.id);
+                            return (
                                 <div 
-                                    className="aspect-[4/3] bg-slate-100 relative overflow-hidden"
-                                    onClick={() => !inCart && addToCart(p)}
+                                    key={p.id}
+                                    className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 transition-all flex flex-col"
                                 >
-                                    {p.imagen_url ? (
-                                        <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center">
-                                            <ShoppingBag className="w-6 h-6 text-slate-300" />
-                                        </div>
-                                    )}
-                                    
-                                    {!inCart && (
-                                        <div className="absolute top-1.5 right-1.5">
-                                            <div className="bg-white/90 backdrop-blur-sm p-1 rounded-full shadow-sm">
-                                                <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                                    <div 
+                                        className="aspect-[4/3] bg-slate-100 relative overflow-hidden cursor-pointer"
+                                        onClick={() => handleProductClick(p)}
+                                    >
+                                        {p.imagen_url ? (
+                                            <img src={p.imagen_url} alt={p.nombre} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <ShoppingBag className="w-6 h-6 text-slate-300" />
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-2.5 space-y-1.5 flex-1 flex flex-col">
-                                    <div onClick={() => !inCart && addToCart(p)}>
-                                        <h3 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{p.nombre}</h3>
-                                        <p className="text-indigo-600 font-black text-xs">${p.precio}</p>
+                                        )}
+                                        
+                                        {!inCart && (
+                                            <div className="absolute top-1.5 right-1.5">
+                                                <div className="bg-white/90 backdrop-blur-sm p-1 rounded-full shadow-sm">
+                                                    <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-
-                                    {inCart ? (
-                                        <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 mt-auto">
-                                            <button 
-                                                onClick={() => updateQuantity(inCart.id, inCart.cantidad - 1)}
-                                                className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 active:bg-slate-100"
-                                            >
-                                                <Minus className="w-3.5 h-3.5" />
-                                            </button>
-                                            <span className="font-black text-xs text-slate-900">{inCart.cantidad}</span>
-                                            <button 
-                                                onClick={() => updateQuantity(inCart.id, inCart.cantidad + 1)}
-                                                className="w-7 h-7 flex items-center justify-center bg-indigo-600 rounded-lg shadow-sm text-white active:bg-indigo-700"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                            </button>
+                                    <div className="p-2.5 space-y-1.5 flex-1 flex flex-col">
+                                        <div className="cursor-pointer" onClick={() => handleProductClick(p)}>
+                                            <h3 className="text-[11px] font-bold text-slate-800 line-clamp-1 leading-tight">{p.nombre}</h3>
+                                            <p className="text-indigo-600 font-black text-xs">${p.precio}</p>
                                         </div>
-                                    ) : (
-                                        <button 
-                                            onClick={() => addToCart(p)}
-                                            className="w-full py-1.5 bg-slate-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-wider mt-auto"
-                                        >
-                                            Agregar
-                                        </button>
-                                    )}
+
+                                        {inCart ? (
+                                            <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 mt-auto">
+                                                <button 
+                                                    onClick={() => updateQuantity(inCart.id, inCart.cantidad - 1)}
+                                                    className="w-7 h-7 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 active:bg-slate-100"
+                                                >
+                                                    <Minus className="w-3.5 h-3.5" />
+                                                </button>
+                                                <span className="font-black text-xs text-slate-900">{inCart.cantidad}</span>
+                                                <button 
+                                                    onClick={() => updateQuantity(inCart.id, inCart.cantidad + 1)}
+                                                    className="w-7 h-7 flex items-center justify-center bg-indigo-600 rounded-lg shadow-sm text-white active:bg-indigo-700"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => handleProductClick(p)}
+                                                className="w-full py-1.5 bg-slate-50 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-wider mt-auto active:scale-95 transition-all"
+                                            >
+                                                Agregar
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Floating Cart Button */}
+            {carrito.length > 0 && !isCartOpen && (
+                <div className="fixed bottom-6 left-4 right-4 z-20">
+                    <button
+                        onClick={() => setIsCartOpen(true)}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl py-4 px-6 flex items-center justify-between shadow-xl active:scale-95 transition-all"
+                    >
+                        <div className="flex items-center gap-2">
+                            <ShoppingBag className="w-5 h-5" />
+                            <span className="font-black text-sm uppercase tracking-wider">{carrito.reduce((sum, item) => sum + item.cantidad, 0)} PRODUCTOS</span>
+                        </div>
+                        <span className="font-black text-lg">${total}</span>
+                    </button>
                 </div>
             )}
-        </div>
 
-        {/* Floating Cart Button */}
-        {carrito.length > 0 && !isCartOpen && (
-            <div className="fixed bottom-6 left-4 right-4 z-20">
-                <button 
-                    onClick={() => setIsCartOpen(true)}
-                    className="w-full bg-indigo-600 text-white py-4 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-between px-6 animate-in slide-in-from-bottom-10"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="bg-white/20 px-2 py-1 rounded-lg text-sm font-bold">
-                            {carrito.reduce((acc, i) => acc + i.cantidad, 0)}
+            {/* Customization Drawer / Modal */}
+            {isCustomizing && productoCustom && (
+                <div className="fixed inset-0 z-40">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        onClick={() => setIsCustomizing(false)}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
+                        
+                        <div className="px-6 pb-3 flex items-center justify-between border-b border-slate-100 shrink-0">
+                            <div className="space-y-0.5 flex-1 mr-4">
+                                <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight line-clamp-1">{productoCustom.nombre}</h2>
+                                <p className="text-indigo-600 font-extrabold text-sm">${productoCustom.precio}</p>
+                            </div>
+                            <button 
+                                onClick={() => setIsCustomizing(false)}
+                                className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 active:scale-95 transition-all"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-slate-500" />
+                            </button>
                         </div>
-                        <span className="font-bold text-sm">VER PEDIDO</span>
-                    </div>
-                    <span className="font-extrabold text-lg">${total}</span>
-                </button>
-            </div>
-        )}
 
-        {/* Cart Drawer */}
-        {isCartOpen && (
-            <div className="fixed inset-0 z-30">
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 pb-28">
+                            {/* Groups of additionals */}
+                            {gruposAdicionales
+                                .filter(grp => productoGrupos.some(pg => pg.producto_id === productoCustom.id && pg.grupo_id === grp.id))
+                                .map(grp => {
+                                    const grpAds = adicionales.filter(a => a.grupo_id === grp.id);
+                                    const totalInGroup = grpAds.reduce((sum, a) => sum + (customAdicionales[a.id] || 0), 0);
+                                    const minReq = Math.max(grp.seleccion_obligatoria ? 1 : 0, grp.seleccion_minima || 0);
+                                    const maxAllowed = grp.seleccion_maxima;
+                                    const isValid = totalInGroup >= minReq;
+
+                                    return (
+                                        <div key={grp.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="space-y-0.5">
+                                                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide">{grp.nombre}</h3>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">
+                                                        {minReq > 0 ? `Selección Mínima: ${minReq}` : "Opcional"} 
+                                                        {maxAllowed ? ` (Máx: ${maxAllowed})` : ""}
+                                                    </p>
+                                                </div>
+                                                <span className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${
+                                                    isValid 
+                                                    ? "bg-green-100 text-green-700" 
+                                                    : "bg-red-100 text-red-700 animate-pulse"
+                                                }`}>
+                                                    {isValid ? "Listo" : "Obligatorio"}
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {grpAds.map(ad => {
+                                                    const qty = customAdicionales[ad.id] || 0;
+                                                    return (
+                                                        <div key={ad.id} className="flex items-center justify-between bg-white px-3 py-2.5 rounded-xl border border-slate-100 shadow-sm">
+                                                            <div className="space-y-0.5 flex-1 pr-2">
+                                                                <span className="text-xs font-bold text-slate-700 block leading-tight">{ad.nombre}</span>
+                                                                {ad.precio_venta > 0 && (
+                                                                    <span className="text-[10px] text-indigo-600 font-extrabold block mt-0.5">+ ${ad.precio_venta}</span>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-3">
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        if (qty > 0) {
+                                                                            setCustomAdicionales(prev => ({
+                                                                                ...prev,
+                                                                                [ad.id]: qty - 1
+                                                                            }));
+                                                                        }
+                                                                    }}
+                                                                    className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${
+                                                                        qty > 0 
+                                                                        ? "bg-slate-100 border-slate-200 text-slate-600 active:bg-slate-200" 
+                                                                        : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                                                    }`}
+                                                                    disabled={qty <= 0}
+                                                                >
+                                                                    <Minus className="w-4 h-4" />
+                                                                </button>
+                                                                <span className="text-xs font-black text-slate-800 w-4 text-center">{qty}</span>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        if (!maxAllowed || totalInGroup < maxAllowed) {
+                                                                            setCustomAdicionales(prev => ({
+                                                                                ...prev,
+                                                                                [ad.id]: qty + 1
+                                                                            }));
+                                                                        }
+                                                                    }}
+                                                                    className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${
+                                                                        (!maxAllowed || totalInGroup < maxAllowed) 
+                                                                        ? "bg-indigo-600 border-indigo-600 text-white active:bg-indigo-700" 
+                                                                        : "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                                                    }`}
+                                                                    disabled={maxAllowed ? totalInGroup >= maxAllowed : false}
+                                                                >
+                                                                    <Plus className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                            {/* Plate comments / Notes */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider px-1">Comentarios / Notas Especiales</label>
+                                <textarea
+                                    placeholder="Ej: Sin sal, bien cocido, sin condimentos, etc..."
+                                    value={customNota}
+                                    onChange={(e) => setCustomNota(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-xs font-medium text-slate-700 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-400 min-h-[80px] resize-none"
+                                />
+                            </div>
+
+                            {/* Product Quantity */}
+                            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                <span className="text-xs font-black text-slate-700 uppercase tracking-wider">Cantidad de Platos</span>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => setCustomQty(Math.max(1, customQty - 1))}
+                                        className="w-10 h-10 flex items-center justify-center bg-white rounded-xl border border-slate-200 text-slate-600 active:bg-slate-100 transition-all shadow-sm"
+                                    >
+                                        <Minus className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-lg font-black text-slate-900 w-6 text-center">{customQty}</span>
+                                    <button 
+                                        onClick={() => setCustomQty(customQty + 1)}
+                                        className="w-10 h-10 flex items-center justify-center bg-indigo-600 rounded-xl text-white active:bg-indigo-700 transition-all shadow-sm shadow-indigo-100"
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Add Button Sticky Footer */}
+                        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-slate-100 rounded-t-[32px] z-10 shadow-[0_-8px_30px_rgb(0,0,0,0.04)]">
+                            <button
+                                onClick={handleAddCustomized}
+                                disabled={!isCustomValid}
+                                className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
+                                    isCustomValid 
+                                    ? "bg-indigo-600 text-white shadow-indigo-200 active:scale-95" 
+                                    : "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
+                                }`}
+                            >
+                                {isCustomValid ? "Agregar al Pedido" : "Falta Selección Obligatoria"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Cart Drawer */}
+            {isCartOpen && (
+                <div className="fixed inset-0 z-30">
                     <div 
                         className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
                         onClick={() => !isSending && setIsCartOpen(false)}
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] max-h-[85vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-full duration-300">
-                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-4" />
+                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-4 shrink-0" />
                         
                         <div className="px-6 flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold text-slate-900">Tu Pedido</h2>
