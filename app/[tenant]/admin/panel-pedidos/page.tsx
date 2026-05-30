@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink, QrCode } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
-import { printComanda, printCocina, printCocinaIncremental, printPreCuenta, printPromoQrWeb } from "@/lib/printUtils";
+import { printComanda, printCocina, printCocinaIncremental, printPreCuenta, printPromoQrWeb, printFacturaFiscal } from "@/lib/printUtils";
 import NuevoPedidoModal from "@/components/admin/NuevoPedidoModal";
 import OrderPanelSettingsModal from "@/components/admin/OrderPanelSettingsModal";
 import { useTenant } from "@/context/TenantContext";
@@ -220,8 +220,9 @@ export default function PanelPedidosPage() {
     const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
     const bridge_enabled = suc?.panel_settings?.bridge_enabled !== false;
     const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
-    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
-    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
+    const fiscal = suc?.panel_settings?.fiscal || {};
+    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
   }
 
   async function fetchSucursalConfig() {
@@ -945,6 +946,9 @@ export default function PanelPedidosPage() {
                           if (confirm(`¿Cerrar mesa y marcar pedido como entregado?`)) cerrarMesa(selectedPedido);
                         }} className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cerrar Mesa</button>
                       </>
+                    )}
+                    {printConfig.fiscal?.habilitado && (
+                      <button onClick={() => printFacturaFiscal(selectedPedido, printConfig)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-100 mt-1">🖨️ Factura Fiscal</button>
                     )}
                   </div>
                 </div>

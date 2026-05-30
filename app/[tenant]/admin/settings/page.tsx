@@ -17,6 +17,7 @@ import { PanelTab } from "@/components/settings/PanelTab";
 import { DatabaseTab } from "@/components/settings/DatabaseTab";
 import { WebConfigTab } from "@/components/settings/WebConfigTab";
 import { InstallPwaButton } from "@/components/settings/InstallPwaButton";
+import { FiscalTab } from "@/components/settings/FiscalTab";
 
 const TABS = [
   { id: "panel", label: "Panel" },
@@ -32,6 +33,7 @@ const TABS = [
   { id: "impresoras", label: "Impresoras" },
   { id: "localidades", label: "Localidades" },
   { id: "database", label: "Base de datos" },
+  { id: "fiscal", label: "💼 Fiscal" },
 ];
 
 export default function SettingsPage() {
@@ -118,6 +120,10 @@ export default function SettingsPage() {
 
           <TabPanel id="database" activeId={activeTab}>
             <DatabaseTab />
+          </TabPanel>
+
+          <TabPanel id="fiscal" activeId={activeTab}>
+            <FiscalTab />
           </TabPanel>
         </div>
       </div>
