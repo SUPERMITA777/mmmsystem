@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/admin/AuthProvider";
 import { persistirPedidoHibrido } from "@/lib/hybridService";
-import { printCocina } from "@/lib/printUtils";
+import { printCocina, printPreCuenta } from "@/lib/printUtils";
 import { db } from "@/lib/db";
 
 interface CartItem {
@@ -396,6 +396,50 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
         }
     };
 
+    const handlePrecuentaFlow = async () => {
+        if (!selectedMesaId || !sucursalId) return;
+        setIsSending(true);
+        setError(null);
+        try {
+            const { data: pedido, error: fetchErr } = await supabase
+                .from("pedidos")
+                .select("*, pedido_items(*)")
+                .eq("mesa_id", selectedMesaId)
+                .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (fetchErr) throw fetchErr;
+
+            if (!pedido) {
+                alert("No hay un pedido activo para esta mesa.");
+                return;
+            }
+
+            const { error: updateErr } = await supabase
+                .from("pedidos")
+                .update({ notas_internas: "MIXTO | PRECUENTA" })
+                .eq("id", pedido.id);
+
+            if (updateErr) throw updateErr;
+
+            const selectedMesa = mesas.find(m => m.id === selectedMesaId);
+            const formattedPedido = {
+                ...pedido,
+                mesas: { numero: selectedMesa?.numero || "—" }
+            };
+
+            await printPreCuenta(formattedPedido, printConfig || {});
+            alert(`Pre-cuenta de la Mesa ${selectedMesa?.numero} solicitada correctamente.`);
+        } catch (err: any) {
+            console.error("Precuenta error:", err);
+            alert(err.message || "Error al solicitar la pre-cuenta.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-500">
@@ -541,6 +585,18 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                             }`}
                         >
                             Abrir Pedido
+                        </button>
+                        
+                        <button 
+                            onClick={handlePrecuentaFlow}
+                            disabled={!selectedMesaId || isSending}
+                            className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-md mt-2 ${
+                                selectedMesaId 
+                                ? "bg-amber-500 text-white hover:bg-amber-600 active:scale-95 shadow-amber-200" 
+                                : "bg-white/10 text-white/40 cursor-not-allowed"
+                            }`}
+                        >
+                            {isSending ? "Solicitando..." : "🖨️ Imprimir Pre-cuenta"}
                         </button>
                     </div>
                 </div>

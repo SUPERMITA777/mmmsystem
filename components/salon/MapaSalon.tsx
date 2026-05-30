@@ -43,6 +43,8 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
     const [activePedidoForMesa, setActivePedidoForMesa] = useState<any>(null);
     const [qrModalOpen, setQrModalOpen] = useState(false);
     const [qrMesa, setQrMesa] = useState<Mesa | null>(null);
+    const [staff, setStaff] = useState<any[]>([]);
+    const [selectedWaiterId, setSelectedWaiterId] = useState("");
 
     useEffect(() => {
         if (sucursalId) loadMesas();
@@ -85,6 +87,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 const staffRes = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
                 if (staffRes.ok) {
                     const staffData = await staffRes.json();
+                    setStaff(staffData || []);
                     camareroColors = (staffData || []).reduce((acc: Record<string, string>, c: any) => {
                         if (c.color) acc[c.id] = c.color;
                         return acc;
@@ -342,7 +345,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                                 onClick={() => window.open(`${window.location.pathname.replace('/admin/salon', '/camarero/salon')}`, '_blank')}
                                 className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors shadow-sm mr-2"
                             >
-                                <ExternalLink size={16} /> Vista Mozos
+                                <ExternalLink size={16} /> Vista Móvil
                             </button>
                             <button
                                 onClick={() => {
@@ -535,48 +538,68 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             )}
 
             {/* QR Modal */}
-            {qrModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setQrModalOpen(false)} />
-                    <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-200">
-                        <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-slate-900">
-                                {qrMesa ? `QR Mesa ${qrMesa.numero}` : "Acceso Camareros"}
-                            </h3>
-                            <p className="text-slate-500 text-sm">
-                                {qrMesa 
-                                    ? "Escanea este código para abrir el módulo directamente en esta mesa." 
-                                    : "Escanea para iniciar sesión y empezar a tomar pedidos desde tu celular."}
-                            </p>
-                        </div>
-                        
-                        <div className="bg-white p-4 rounded-2xl border-2 border-slate-100 aspect-square flex items-center justify-center mx-auto">
-                            <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-                                    window.location.origin + "/" + tenantSlug + "/camarero/pedir" + (qrMesa ? `?mesa_id=${qrMesa.id}` : "")
-                                )}`} 
-                                alt="QR Code"
-                                className="w-full h-full"
-                            />
-                        </div>
+            {qrModalOpen && (() => {
+                const qrUrl = window.location.origin + "/" + tenantSlug + "/camarero/pedir" + 
+                              (selectedWaiterId ? `?waiter_id=${selectedWaiterId}` : "") + 
+                              (qrMesa ? (selectedWaiterId ? `&mesa_id=${qrMesa.id}` : `?mesa_id=${qrMesa.id}`) : "");
+                return (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setQrModalOpen(false); setSelectedWaiterId(""); }} />
+                        <div className="relative bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-black text-slate-900">
+                                    {qrMesa ? `QR Mesa ${qrMesa.numero}` : "Acceso Camareros"}
+                                </h3>
+                                <p className="text-slate-500 text-xs">
+                                    {qrMesa 
+                                        ? "Escanea este código para abrir el módulo directamente en esta mesa." 
+                                        : "Escanea para iniciar sesión y empezar a tomar pedidos desde tu celular."}
+                                </p>
+                            </div>
+                            
+                            {/* Camarero Selector for QR code auto-login */}
+                            {!qrMesa && (
+                                <div className="space-y-1.5 text-left bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-0.5 block">Configurar Auto-Login</label>
+                                    <select 
+                                        value={selectedWaiterId}
+                                        onChange={(e) => setSelectedWaiterId(e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none text-xs bg-white font-bold text-slate-700"
+                                    >
+                                        <option value="">Acceso General (Selección manual en móvil)</option>
+                                        {staff.map(s => (
+                                            <option key={s.id} value={s.id}>{s.nombre} {s.apellido || ""}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
-                        <div className="flex flex-col gap-3 pt-2">
-                            <button 
-                                onClick={() => window.print()}
-                                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-                            >
-                                Imprimir QR
-                            </button>
-                            <button 
-                                onClick={() => setQrModalOpen(false)}
-                                className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
-                            >
-                                Cerrar
-                            </button>
+                            <div className="bg-white p-4 rounded-2xl border-2 border-slate-100 aspect-square flex items-center justify-center mx-auto shadow-sm">
+                                <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrUrl)}`} 
+                                    alt="QR Code"
+                                    className="w-full h-full"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-2 pt-1">
+                                <button 
+                                    onClick={() => window.print()}
+                                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+                                >
+                                    Imprimir QR
+                                </button>
+                                <button 
+                                    onClick={() => { setQrModalOpen(false); setSelectedWaiterId(""); }}
+                                    className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 }
