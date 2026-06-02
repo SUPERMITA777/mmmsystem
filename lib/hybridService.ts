@@ -43,8 +43,6 @@ export async function persistirPedidoHibrido(
                 pedido_id: localId,
                 producto_id: it.producto_id,
                 nombre_producto: it.nombre_producto,
-                variante_id: it.variante_id || null,
-                variante_nombre: it.variante_nombre || null,
                 cantidad: it.cantidad,
                 precio_unitario: it.precio_unitario,
                 descuento: it.descuento || 0,
