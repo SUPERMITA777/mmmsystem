@@ -159,6 +159,7 @@ export default function PanelPedidosPage() {
   }, [sucursalId]);
 
   const autoPrintedIdsRef = useRef<Set<string>>(new Set());
+  const autoPrintedItemIdsRef = useRef<Set<string>>(new Set());
   const isFirstLoadRef = useRef<boolean>(true);
 
   useEffect(() => {
@@ -171,6 +172,8 @@ export default function PanelPedidosPage() {
       hybridPedidos.forEach(p => {
         if (new Date(p.created_at) < dosMinutosAtras) {
           autoPrintedIdsRef.current.add(p.id);
+          const items = p.pedido_items || [];
+          items.forEach((it: any) => autoPrintedItemIdsRef.current.add(it.id));
         }
       });
       isFirstLoadRef.current = false;
@@ -181,13 +184,21 @@ export default function PanelPedidosPage() {
     if (!autoPrintEnabled) return;
 
     hybridPedidos.forEach((pedido) => {
-      // Imprimir cocina para pedidos nuevos que entren en 'pendiente', 'confirmado' o 'preparando' (camareros)
+      // Imprimir cocina para pedidos nuevos o modificados en 'pendiente', 'confirmado' o 'preparando'
       if (["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
-        if (!autoPrintedIdsRef.current.has(pedido.id)) {
+        const allItems = pedido.pedido_items || [];
+        if (allItems.length === 0) return;
+
+        const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
+        if (newItemsToPrint.length > 0) {
+          console.log(`[AutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
+          
+          // Registrar estos ítems como impresos para evitar reimpresiones
+          newItemsToPrint.forEach((item: any) => autoPrintedItemIdsRef.current.add(item.id));
           autoPrintedIdsRef.current.add(pedido.id);
-          console.log("[AutoPrint] Detectado nuevo pedido. Imprimiendo automáticamente en cocina:", pedido.numero_pedido);
+
           try {
-            printCocina(pedido, printConfig);
+            printCocina(pedido, printConfig, newItemsToPrint);
           } catch (err) {
             console.error("[AutoPrint] Error al imprimir cocina automáticamente:", err);
           }

@@ -50,6 +50,11 @@ function PublicMenuContent() {
   const [descuentos, setDescuentos] = useState<any[]>([]);
   const [metodosPago, setMetodosPago] = useState<any[]>([]);
 
+  // QR table ordering states
+  const [mesa, setMesa] = useState<any>(null);
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [activeOrderItems, setActiveOrderItems] = useState<any[]>([]);
+
   const [webConfig, setWebConfig] = useState({
     primario: "#f97316",
     secundario: "#1a1a2e",
@@ -81,6 +86,61 @@ function PublicMenuContent() {
       setCartOpen(true);
     }
   }, []);
+
+  const fetchActiveOrder = async (mesaId: string) => {
+    try {
+      const { data: mesaData } = await supabase
+        .from("mesas")
+        .select("*")
+        .eq("id", mesaId)
+        .maybeSingle();
+
+      if (mesaData) {
+        setMesa(mesaData);
+        const { data: orderData } = await supabase
+          .from("pedidos")
+          .select("*, pedido_items(*)")
+          .eq("mesa_id", mesaId)
+          .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (orderData) {
+          setActiveOrder(orderData);
+          setActiveOrderItems(orderData.pedido_items || []);
+        } else {
+          setActiveOrder(null);
+          setActiveOrderItems([]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching active order for table:", err);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mesaId = params.get("mesa_id");
+    if (mesaId && sucursalId) {
+      fetchActiveOrder(mesaId);
+      
+      const channel = supabase
+        .channel(`mesa-${mesaId}-order`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "pedidos", filter: `mesa_id=eq.${mesaId}` },
+          () => {
+            fetchActiveOrder(mesaId);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [sucursalId]);
 
   // ========== Manejo del historial para botón Atrás de Android ==========
   useEffect(() => {
@@ -368,6 +428,19 @@ function PublicMenuContent() {
         )
       )}
 
+      {/* Table Banner */}
+      {!selectedProduct && mesa && (
+        <div className="bg-gradient-to-r from-orange-600 to-amber-500 text-white py-3 px-4 shadow-lg text-center font-bold text-sm tracking-wide shrink-0 flex items-center justify-center gap-2">
+          <span>🍽️</span>
+          <span>Estás en la Mesa {mesa.numero || mesa.nombre}</span>
+          {activeOrder && (
+            <span className="bg-black/20 text-white/90 text-xs px-2.5 py-0.5 rounded-full border border-white/10 ml-2">
+              Pedido Activo: {activeOrder.numero_pedido || activeOrder.id.slice(0, 8)}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Category Nav — hidden when product detail modal is open */}
       {!selectedProduct && webConfig.estilo === 'original' && (
         <PublicCategoryNav
@@ -411,6 +484,13 @@ function PublicMenuContent() {
           isOpen={isOpen} 
           descuentos={descuentos}
           metodosPago={metodosPago}
+          mesaId={mesa?.id}
+          mesa={mesa}
+          activeOrder={activeOrder}
+          activeOrderItems={activeOrderItems}
+          onOrderUpdated={() => {
+            if (mesa?.id) fetchActiveOrder(mesa.id);
+          }}
         />
       )}
 

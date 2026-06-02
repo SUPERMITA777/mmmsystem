@@ -23,6 +23,7 @@ interface CartItem {
     nota?: string;
     adicionales?: any[];
     impresora?: string;
+    isComandado?: boolean;
 }
 
 export default function MobileOrderModule({ mesaId }: { mesaId: string }) {

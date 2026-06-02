@@ -13,6 +13,7 @@ export type CartItem = {
     opciones?: string; // texto de opciones seleccionadas
     notas?: string;
     categoriaNombre?: string;
+    isComandado?: boolean;
     descuentoInfo?: {
         id: string;
         porcentaje: number;
