@@ -79,6 +79,15 @@ function isDuplicatePrint(key: string): boolean {
   return false;
 }
 
+function getFacturacionKey(impresoras?: any): string {
+  if (!impresoras) return "FACTURACION";
+  const p = impresoras["FACTURACION"];
+  if (p && (p.printerName || p.ip)) {
+    return "FACTURACION";
+  }
+  return impresoras["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+}
+
 const BRIDGE_PORTS = [9100, 9101];
 let lastWorkingPort: number | null = null;
 
@@ -339,7 +348,7 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 
 </body></html>`;
 
-  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const pKey = getFacturacionKey(c.impresoras);
   const printerName = c.impresoras?.[pKey]?.printerName;
   const printerIp = c.impresoras?.[pKey]?.ip;
   doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
@@ -470,7 +479,7 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   });
 
   // Imprimir un ticket por cada impresora física que tenga ítems
-  const facturacionKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const facturacionKey = getFacturacionKey(c.impresoras);
   const facturacionConf = c.impresoras?.[facturacionKey];
   const facturacionPrinterName = facturacionConf?.printerName;
   const facturacionPrinterIp = facturacionConf?.ip;
@@ -657,7 +666,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
 
 </body></html>`;
 
-  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const pKey = getFacturacionKey(c.impresoras);
   const printerName = c.impresoras?.[pKey]?.printerName;
   const printerIp = c.impresoras?.[pKey]?.ip;
 
@@ -866,7 +875,7 @@ export function printCierreTurno(resumen: any, config: Partial<PrintConfig> = {}
 
 </body></html>`;
 
-  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const pKey = getFacturacionKey(c.impresoras);
   const printerName = c.impresoras?.[pKey]?.printerName;
   const printerIp = c.impresoras?.[pKey]?.ip;
 
@@ -1112,7 +1121,7 @@ export function printFacturaFiscal(pedido: any, config: Partial<PrintConfig> = {
 
 </body></html>`;
 
-  const pKey = c.impresoras?.["FACTURACIÓN"] ? "FACTURACIÓN" : "FACTURACION";
+  const pKey = getFacturacionKey(c.impresoras);
   const printerName = c.impresoras?.[pKey]?.printerName;
   const printerIp = c.impresoras?.[pKey]?.ip;
 
