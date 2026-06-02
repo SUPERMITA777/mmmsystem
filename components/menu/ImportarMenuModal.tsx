@@ -5,6 +5,17 @@ import { X, Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-
 import * as XLSX from 'xlsx';
 import { supabase } from '@/lib/supabaseClient';
 
+
+function getField(item: any, possibleKeys: string[]): any {
+  for (const key of possibleKeys) {
+    if (item[key] !== undefined) return item[key];
+    // Check case-insensitive
+    const foundKey = Object.keys(item || {}).find(k => k.toLowerCase() === key.toLowerCase());
+    if (foundKey !== undefined) return item[foundKey];
+  }
+  return undefined;
+}
+
 interface ImportarMenuModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,8 +52,8 @@ export default function ImportarMenuModal({ isOpen, onClose, sucursalId, onSucce
           if (rowsProds.length > 0) {
             setStatus({ type: 'idle', message: `Procesando ${rowsProds.length} productos...` });
 
-            // Coleccionar categorías únicas
-            const categoryNames = [...new Set(rowsProds.map(item => item['Categoría']).filter(Boolean))];
+            // Coleccionar categorías únicas (soporta Categoría, Categoria, categoria, etc.)
+            const categoryNames = [...new Set(rowsProds.map(item => getField(item, ['Categoría', 'Categoria', 'categoria'])).filter(Boolean))];
             const catMap: Record<string, string> = {};
 
             for (const catName of categoryNames) {
@@ -51,44 +62,95 @@ export default function ImportarMenuModal({ isOpen, onClose, sucursalId, onSucce
                 .select('id')
                 .eq('sucursal_id', sucursalId)
                 .eq('nombre', catName)
-                .single();
+                .maybeSingle();
 
               if (existing) {
                 catMap[catName as string] = existing.id;
               } else {
-                const { data: newCat } = await supabase
+                const { data: newCat, error: catErr } = await supabase
                   .from('categorias')
                   .insert([{ sucursal_id: sucursalId, nombre: catName, activo: true }])
                   .select()
                   .single();
+                if (catErr) throw catErr;
                 if (newCat) catMap[catName as string] = newCat.id;
               }
             }
 
             for (let i = 0; i < rowsProds.length; i++) {
               const item = rowsProds[i];
-              const nombre = item['Nombre Producto'];
-              const categoria = item['Categoría'];
+              const id = getField(item, ['ID', 'id', 'Id']);
+              const nombre = getField(item, ['Nombre Producto', 'Nombre', 'nombre']);
+              const categoria = getField(item, ['Categoría', 'Categoria', 'categoria']);
               if (!nombre || !catMap[categoria]) continue;
 
-              const precio = parseFloat(item['Precio Venta']) || 0;
-              const sugerido = item['Es producto sugerido'] === true || item['Es producto sugerido'] === 'true' || item['Es producto sugerido'] === 1 || item['Es producto sugerido'] === 'SI';
-              const oculto = item['Es producto oculto'] === true || item['Es producto oculto'] === 'true' || item['Es producto oculto'] === 1 || item['Es producto oculto'] === 'SI';
-              const activo = item['Está activo'] === true || item['Está activo'] === 'true' || item['Está activo'] === 1 || item['Está activo'] === undefined || item['Está activo'] === 'SI';
+              const precio = parseFloat(getField(item, ['Precio Venta', 'Precio', 'precio'])) || 0;
+              
+              const sugeridoRaw = getField(item, ['Es producto sugerido', 'sugerido', 'Sugerido']);
+              const sugerido = sugeridoRaw === true || sugeridoRaw === 'true' || sugeridoRaw === 1 || sugeridoRaw === 'SI' || sugeridoRaw === 'si';
+              
+              const ocultoRaw = getField(item, ['Es producto oculto', 'oculto', 'Oculto']);
+              const oculto = ocultoRaw === true || ocultoRaw === 'true' || ocultoRaw === 1 || ocultoRaw === 'SI' || ocultoRaw === 'si';
+              
+              const activoRaw = getField(item, ['Está activo', 'activo', 'Activo']);
+              const activo = activoRaw === true || activoRaw === 'true' || activoRaw === 1 || activoRaw === undefined || activoRaw === 'SI' || activoRaw === 'si';
+              
+              const desc = getField(item, ['Descripción Producto', 'Descripción', 'Descripcion', 'descripcion']) || '';
+              const imagenUrl = getField(item, ['Imagen Producto', 'URL Imagen', 'imagen', 'Imagen']) || '';
+              const nombreInterno = getField(item, ['Nombre Interno Producto', 'Nombre Interno', 'nombre_interno']) || nombre;
 
-              await supabase.from('productos').upsert({
+              let existingId = null;
+
+              if (id) {
+                const { data: byId } = await supabase
+                  .from('productos')
+                  .select('id')
+                  .eq('id', id)
+                  .eq('sucursal_id', sucursalId)
+                  .maybeSingle();
+                if (byId) {
+                  existingId = byId.id;
+                }
+              }
+
+              if (!existingId) {
+                const { data: byName } = await supabase
+                  .from('productos')
+                  .select('id')
+                  .eq('sucursal_id', sucursalId)
+                  .eq('nombre', nombre)
+                  .limit(1);
+                if (byName && byName.length > 0) {
+                  existingId = byName[0].id;
+                }
+              }
+
+              const payload = {
                 sucursal_id: sucursalId,
                 categoria_id: catMap[categoria],
                 nombre: nombre,
-                nombre_interno: item['Nombre Interno Producto'] || nombre,
-                descripcion: item['Descripción Producto'] || '',
+                nombre_interno: nombreInterno,
+                descripcion: desc,
                 precio: precio,
-                imagen_url: item['Imagen Producto'] || '',
+                imagen_url: imagenUrl,
                 producto_sugerido: sugerido,
                 producto_oculto: oculto,
                 activo: activo,
                 visible_en_menu: !oculto
-              }, { onConflict: 'sucursal_id,nombre' });
+              };
+
+              if (existingId) {
+                const { error: updateErr } = await supabase
+                  .from('productos')
+                  .update(payload)
+                  .eq('id', existingId);
+                if (updateErr) throw updateErr;
+              } else {
+                const { error: insertErr } = await supabase
+                  .from('productos')
+                  .insert([payload]);
+                if (insertErr) throw insertErr;
+              }
 
               setProgress(Math.round(((i + 1) / rowsProds.length) * 50));
             }
@@ -105,8 +167,9 @@ export default function ImportarMenuModal({ isOpen, onClose, sucursalId, onSucce
 
               for (let i = 0; i < rowsAds.length; i++) {
                 const item = rowsAds[i];
-                const gName = item['Grupo'];
-                const oName = item['Opción'];
+                const optId = getField(item, ['ID', 'id', 'Id']);
+                const gName = getField(item, ['Grupo', 'grupo']);
+                const oName = getField(item, ['Opción', 'Opcion', 'opcion']);
                 if (!gName || !oName) continue;
 
                 // 2.1 Upsert Grupo
@@ -116,35 +179,75 @@ export default function ImportarMenuModal({ isOpen, onClose, sucursalId, onSucce
                     .select('id')
                     .eq('sucursal_id', sucursalId)
                     .eq('nombre', gName)
-                    .single();
+                    .limit(1);
                   
-                  if (existingG) {
-                    groupMap[gName] = existingG.id;
+                  if (existingG && existingG.length > 0) {
+                    groupMap[gName] = existingG[0].id;
                   } else {
-                    const { data: newG } = await supabase
+                    const { data: newG, error: groupErr } = await supabase
                       .from('grupos_adicionales')
                       .insert([{
                         sucursal_id: sucursalId,
                         nombre: gName,
-                        seleccion_obligatoria: item['Obligatorio'] === 'SI',
-                        seleccion_minima: parseInt(item['Mínimo']) || 0,
-                        seleccion_maxima: parseInt(item['Máximo']) || 1
+                        seleccion_obligatoria: getField(item, ['Obligatorio', 'obligatorio']) === 'SI',
+                        seleccion_minima: parseInt(getField(item, ['Mínimo', 'Minimo', 'minimo'])) || 0,
+                        seleccion_maxima: parseInt(getField(item, ['Máximo', 'Maximo', 'maximo'])) || 1
                       }])
                       .select()
                       .single();
+                    if (groupErr) throw groupErr;
                     if (newG) groupMap[gName] = newG.id;
                   }
                 }
 
                 // 2.2 Upsert Opción (Adicional)
-                await supabase.from('adicionales').upsert({
+                let existingOptId = null;
+
+                if (optId) {
+                  const { data: byId } = await supabase
+                    .from('adicionales')
+                    .select('id')
+                    .eq('id', optId)
+                    .eq('sucursal_id', sucursalId)
+                    .maybeSingle();
+                  if (byId) {
+                    existingOptId = byId.id;
+                  }
+                }
+
+                if (!existingOptId && groupMap[gName]) {
+                  const { data: byName } = await supabase
+                    .from('adicionales')
+                    .select('id')
+                    .eq('grupo_id', groupMap[gName])
+                    .eq('nombre', oName)
+                    .limit(1);
+                  if (byName && byName.length > 0) {
+                    existingOptId = byName[0].id;
+                  }
+                }
+
+                const adPayload = {
                   sucursal_id: sucursalId,
                   grupo_id: groupMap[gName],
                   nombre: oName,
-                  precio_venta: parseFloat(item['Precio Venta']) || 0,
-                  precio_costo: parseFloat(item['Precio Costo']) || 0,
-                  visible: item['Visible'] !== 'NO'
-                }, { onConflict: 'grupo_id,nombre' });
+                  precio_venta: parseFloat(getField(item, ['Precio Venta', 'Precio', 'precio'])) || 0,
+                  precio_costo: parseFloat(getField(item, ['Precio Costo', 'PrecioCosto', 'precio_costo'])) || 0,
+                  visible: getField(item, ['Visible', 'visible']) !== 'NO'
+                };
+
+                if (existingOptId) {
+                  const { error: updateErr } = await supabase
+                    .from('adicionales')
+                    .update(adPayload)
+                    .eq('id', existingOptId);
+                  if (updateErr) throw updateErr;
+                } else {
+                  const { error: insertErr } = await supabase
+                    .from('adicionales')
+                    .insert([adPayload]);
+                  if (insertErr) throw insertErr;
+                }
 
                 setProgress(50 + Math.round(((i + 1) / rowsAds.length) * 50));
               }
