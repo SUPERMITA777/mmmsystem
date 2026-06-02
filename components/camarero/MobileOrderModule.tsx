@@ -19,6 +19,7 @@ interface CartItem {
     nombre: string;
     precio: number;
     cantidad: number;
+    cantidadComandada?: number;
     imagen_url?: string;
     nota?: string;
     adicionales?: any[];
@@ -160,6 +161,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                         nombre: item.nombre_producto,
                         precio: item.precio_unitario,
                         cantidad: item.cantidad,
+                        cantidadComandada: item.cantidad,
                         nota: item.notas || undefined,
                         adicionales: item.adicionales || [],
                         impresora: item.impresora || "",
@@ -183,6 +185,12 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
             fetchData();
         }
     }, [sucursalId, mesaId]);
+
+    useEffect(() => {
+        if (step === "setup" && selectedMesaId) {
+            cargarPedidoActivoMesa(selectedMesaId);
+        }
+    }, [selectedMesaId, step]);
 
     async function fetchData() {
         if (!sucursalId) return;
@@ -410,13 +418,21 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     };
 
     const updateQuantity = (id: string, newQty: number) => {
-        setCarrito(prev => prev.map(item => {
-            if (item.id === id) {
-                return { ...item, cantidad: Math.max(0, newQty) };
-            }
-            return item;
-        }).filter(item => item.cantidad > 0));
-    };
+         const target = carrito.find(item => item.id === id);
+         if (target && target.isComandado) {
+             const qtyComandada = target.cantidadComandada || 0;
+             if (newQty < qtyComandada) {
+                 alert("No podés disminuir la cantidad de un producto ya comandado. Solicítalo al administrador.");
+                 return;
+             }
+         }
+         setCarrito(prev => prev.map(item => {
+             if (item.id === id) {
+                 return { ...item, cantidad: Math.max(0, newQty) };
+             }
+             return item;
+         }).filter(item => item.cantidad > 0));
+     };
 
     const total = carrito.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
@@ -521,28 +537,32 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 if (!finalPedido.numero_pedido) {
                     finalPedido.numero_pedido = localId.substring(0, 8).toUpperCase();
                 }
-
-                // Filtrar solo productos nuevos que NO se hayan comandado antes para imprimir incremental a cocina
-                const newItemsOnly = activeOrder ? carrito.filter((item: any) => !item.isComandado) : carrito;
                 
-                const printItemsPayload = newItemsOnly.map(item => {
-                    const fullProd = productos.find(p => p.id === item.producto_id);
-                    const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
-                    return {
-                        producto_id: item.producto_id,
-                        nombre_producto: item.nombre,
-                        precio_unitario: item.precio,
-                        cantidad: item.cantidad,
-                        notas: item.nota || "",
-                        adicionales: item.adicionales ?? [],
-                        impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
-                        categoria_id: fullProd?.categoria_id || "",
-                        categoria_nombre: catOfProd?.nombre || "",
-                        productos: fullProd ? {
-                            ...fullProd,
-                            categorias: catOfProd ? { nombre: catOfProd.nombre } : null
-                        } : null
-                    };
+                // Filtrar solo productos nuevos o incrementos de cantidad para imprimir a cocina
+                const printItemsPayload: any[] = [];
+                
+                carrito.forEach(item => {
+                    const qtyComandada = item.cantidadComandada || 0;
+                    if (item.cantidad > qtyComandada) {
+                        const diffQty = item.cantidad - qtyComandada;
+                        const fullProd = productos.find(p => p.id === item.producto_id);
+                        const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
+                        printItemsPayload.push({
+                            producto_id: item.producto_id,
+                            nombre_producto: item.nombre,
+                            precio_unitario: item.precio,
+                            cantidad: diffQty,
+                            notas: item.nota || "",
+                            adicionales: item.adicionales ?? [],
+                            impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
+                            categoria_id: fullProd?.categoria_id || "",
+                            categoria_nombre: catOfProd?.nombre || "",
+                            productos: fullProd ? {
+                                ...fullProd,
+                                categorias: catOfProd ? { nombre: catOfProd.nombre } : null
+                            } : null
+                        });
+                    }
                 });
 
                 // Print command automatically to corresponding printers (only if there are new items)
@@ -557,6 +577,8 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 setOrderSent(true);
                 setCarrito([]);
                 setActiveOrder(null);
+                setSelectedMesaId("");
+                setMesa(null);
                 setTimeout(() => {
                     setOrderSent(false);
                     setIsCartOpen(false);

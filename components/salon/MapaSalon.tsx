@@ -315,17 +315,35 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
 
         setSelectedMesa(mesa);
         
-        // Load active pedido if there is one
+        // Load all active pedidos for this table
         const { data } = await supabase
             .from("pedidos")
             .select("*, pedido_items(*, productos(categorias(nombre)))")
             .eq("mesa_id", mesa.id)
             .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .order("created_at", { ascending: true });
 
-        setActivePedidoForMesa(data || { tipo: "salon", mesa_id: mesa.id });
+        let activePedido = null;
+        if (data && data.length > 0) {
+            if (data.length === 1) {
+                activePedido = data[0];
+            } else {
+                const main = data[0];
+                const mergedItems = data.flatMap(p => p.pedido_items || []);
+                const totalSubtotal = data.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
+                const totalTotal = data.reduce((sum, p) => sum + Number(p.total || 0), 0);
+                
+                activePedido = {
+                    ...main,
+                    pedido_items: mergedItems,
+                    subtotal: totalSubtotal,
+                    total: totalTotal,
+                    groupedIds: data.map(p => p.id)
+                };
+            }
+        }
+
+        setActivePedidoForMesa(activePedido || { tipo: "salon", mesa_id: mesa.id });
         setIsModalOpen(true);
     };
 

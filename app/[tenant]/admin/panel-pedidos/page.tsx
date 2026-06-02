@@ -16,6 +16,60 @@ import { useHybridPedidos } from "@/hooks/useHybridPedidos";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
+function groupSalonPedidos(pedidosList: Pedido[]): Pedido[] {
+  const salonGroups: Record<string, Pedido[]> = {};
+  const nonSalon: Pedido[] = [];
+
+  pedidosList.forEach(p => {
+    if (p.tipo === "salon" && p.mesa_id) {
+      if (!salonGroups[p.mesa_id]) {
+        salonGroups[p.mesa_id] = [];
+      }
+      salonGroups[p.mesa_id].push(p);
+    } else {
+      nonSalon.push(p);
+    }
+  });
+
+  const groupedSalon: Pedido[] = [];
+
+  Object.entries(salonGroups).forEach(([mesaId, group]) => {
+    if (group.length === 1) {
+      groupedSalon.push(group[0]);
+      return;
+    }
+
+    // Sort by created_at ascending (oldest first) so we keep the main one
+    group.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const main = group[0];
+
+    // Merge items
+    const mergedItems: PedidoItemType[] = [];
+    group.forEach(p => {
+      (p.pedido_items || []).forEach(item => {
+        mergedItems.push(item);
+      });
+    });
+
+    const totalSubtotal = group.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
+    const totalTotal = group.reduce((sum, p) => sum + Number(p.total || 0), 0);
+    const totalDescuento = group.reduce((sum, p) => sum + Number((p as any).descuento || 0), 0);
+
+    const virtualPedido: Pedido = {
+      ...main,
+      pedido_items: mergedItems,
+      subtotal: totalSubtotal,
+      total: totalTotal,
+      descuento: totalDescuento,
+      groupedIds: group.map(p => p.id), 
+    } as any;
+
+    groupedSalon.push(virtualPedido);
+  });
+
+  return [...nonSalon, ...groupedSalon];
+}
+
 type PedidoItemType = {
   id: string;
   nombre_producto: string;
@@ -316,43 +370,47 @@ export default function PanelPedidosPage() {
   }, [sucursalConfig]);
 
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
-    // Si el nuevo estado es 'entregado', sincronizar subtotal/total desde los items
-    // reales en la BD para evitar discrepancias con el cierre de caja
-    if (nuevoEstado === "entregado") {
-      const { data: itemsActuales } = await supabase
-        .from("pedido_items")
-        .select("precio_unitario, cantidad")
-        .eq("pedido_id", pedido.id);
+    const ids = (pedido as any).groupedIds || [pedido.id];
+    for (const id of ids) {
+      if (nuevoEstado === "entregado") {
+        const { data: itemsActuales } = await supabase
+          .from("pedido_items")
+          .select("precio_unitario, cantidad")
+          .eq("pedido_id", id);
 
-      // Recalcular subtotal desde items guardados en BD (source of truth)
-      const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
-        return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
-      }, 0);
-      const costoEnvioActual = Number((pedido as any).costo_envio || 0);
-      // Preservar descuentos: total = subtotalDB + costo_envio - descuento
-      const descuentoActual = Number((pedido as any).descuento || 0);
-      const totalDB = subtotalDB + costoEnvioActual - descuentoActual;
+        const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
+          return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
+        }, 0);
+        const costoEnvioActual = Number((pedido as any).costo_envio || 0);
+        const descuentoActual = Number((pedido as any).descuento || 0);
+        const totalDB = subtotalDB + costoEnvioActual - descuentoActual;
 
-      await supabase.from("pedidos").update({
-        estado: nuevoEstado,
-        subtotal: subtotalDB,
-        total: totalDB,
-      }).eq("id", pedido.id);
-    } else {
-      await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", pedido.id);
+        await supabase.from("pedidos").update({
+          estado: nuevoEstado,
+          subtotal: subtotalDB,
+          total: totalDB,
+        }).eq("id", id);
+      } else {
+        await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", id);
+      }
+
+      if (nuevoEstado === "preparando") {
+        sendWhatsAppNotification(pedido, 'confirmado');
+        if (sucursalId) descontarStockDePedido(id, sucursalId);
+        const { data: rawPed } = await supabase
+          .from("pedidos")
+          .select("*, pedido_items(*)")
+          .eq("id", id)
+          .maybeSingle();
+        if (rawPed) printCocina(rawPed, printConfig);
+      } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
+        sendWhatsAppNotification(pedido, 'listo');
+      } else if (nuevoEstado === "entregado" || nuevoEstado === "cancelado") {
+        sendWhatsAppNotification(pedido, 'entregado');
+      }
     }
 
-    // Send WhatsApp notification at each transition
-    if (nuevoEstado === "preparando") {
-      sendWhatsAppNotification(pedido, 'confirmado');
-      if (sucursalId) descontarStockDePedido(pedido.id, sucursalId);
-      // Auto-print kitchen ticket on confirm
-      printCocina(pedido, printConfig);
-    } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
-      sendWhatsAppNotification(pedido, 'listo');
-    } else if (nuevoEstado === "entregado" || nuevoEstado === "cancelado") {
-      sendWhatsAppNotification(pedido, 'entregado');
-      // Free up the table for salon orders
+    if (nuevoEstado === "entregado" || nuevoEstado === "cancelado") {
       if (pedido.tipo === "salon" && (pedido as any).mesa_id) {
         await supabase.from("mesas").update({ estado: "libre" }).eq("id", (pedido as any).mesa_id);
       }
@@ -365,27 +423,26 @@ export default function PanelPedidosPage() {
   }
 
   async function cerrarMesa(pedido: Pedido) {
-    // Recalcular subtotal y total desde los items reales en BD
-    // para asegurar que el cierre de caja refleje los precios actuales
-    const { data: itemsActuales } = await supabase
-      .from("pedido_items")
-      .select("precio_unitario, cantidad, adicionales")
-      .eq("pedido_id", pedido.id);
+    const ids = (pedido as any).groupedIds || [pedido.id];
+    for (const id of ids) {
+      const { data: itemsActuales } = await supabase
+        .from("pedido_items")
+        .select("precio_unitario, cantidad, adicionales")
+        .eq("pedido_id", id);
 
-    // Recalcular subtotal desde items guardados en BD (source of truth)
-    const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
-      return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
-    }, 0);
-    const costoEnvioActual = Number((pedido as any).costo_envio || 0);
-    // Preservar descuentos: total = subtotalDB + costo_envio - descuento
-    const descuentoActual = Number((pedido as any).descuento || 0);
-    const totalReal = subtotalDB + costoEnvioActual - descuentoActual;
+      const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
+        return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
+      }, 0);
+      const costoEnvioActual = Number((pedido as any).costo_envio || 0);
+      const descuentoActual = Number((pedido as any).descuento || 0);
+      const totalReal = subtotalDB + costoEnvioActual - descuentoActual;
 
-    await supabase.from("pedidos").update({
-      estado: "entregado",
-      subtotal: subtotalDB,
-      total: totalReal,
-    }).eq("id", pedido.id);
+      await supabase.from("pedidos").update({
+        estado: "entregado",
+        subtotal: subtotalDB,
+        total: totalReal,
+      }).eq("id", id);
+    }
 
     if ((pedido as any).mesa_id) {
       await supabase.from("mesas").update({ estado: "libre" }).eq("id", (pedido as any).mesa_id);
@@ -431,7 +488,8 @@ export default function PanelPedidosPage() {
 
     fetchPedidos();
   }
-  const filtrados = (hybridPedidos || []).filter(p => {
+  const groupedPedidos = groupSalonPedidos(hybridPedidos || []);
+  const filtrados = groupedPedidos.filter(p => {
     if (filtro !== "todos" && p.tipo !== filtro) return false;
     if (busqueda && !p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase()) &&
       !p.numero_pedido?.toLowerCase().includes(busqueda.toLowerCase())) return false;
@@ -743,9 +801,12 @@ export default function PanelPedidosPage() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (!confirm(`¿Eliminar definitivamente el pedido N°${selectedPedido.numero_pedido?.split("-").pop() ?? selectedPedido.numero_pedido}? Esta acción no se puede deshacer.`)) return;
-                    await supabase.from("pedido_items").delete().eq("pedido_id", selectedPedido.id);
-                    await supabase.from("pedidos").delete().eq("id", selectedPedido.id);
+                    if (!confirm(`¿Eliminar definitivamente este pedido? Esta acción no se puede deshacer.`)) return;
+                    const ids = (selectedPedido as any).groupedIds || [selectedPedido.id];
+                    for (const id of ids) {
+                      await supabase.from("pedido_items").delete().eq("pedido_id", id);
+                      await supabase.from("pedidos").delete().eq("id", id);
+                    }
                     setSelectedPedido(null);
                     fetchPedidos();
                   }}

@@ -26,6 +26,7 @@ type CartItem = {
     precio: number;
     precioOverride: number;
     cantidad: number;
+    cantidadComandada?: number;
     imagen_url?: string;
     nota?: string;
     adicionales?: { nombre: string; precio: number; cantidad: number; impresora?: string }[];
@@ -125,6 +126,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     precio: item.precio_unitario,
                     precioOverride: item.precio_unitario,
                     cantidad: item.cantidad,
+                    cantidadComandada: item.cantidad,
                     nota: item.notas || "",
                     adicionales: (item.adicionales || []).map((a: any) => ({ nombre: a.nombre, precio: a.precio || 0, cantidad: a.cantidad || 1 })),
                 }));
@@ -594,8 +596,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     function updateCartQty(idx: number, delta: number) {
         const item = carrito[idx];
         if (!item) return;
-        if (itemsComandados.has(item.id) && !isAdmin) {
-            alert("Solo un administrador puede modificar la cantidad de un producto ya comandado.");
+        if (delta < 0 && itemsComandados.has(item.id) && !isAdmin) {
+            alert("Solo un administrador puede disminuir la cantidad de un producto ya comandado.");
             return;
         }
         if (delta < 0 && itemsComandados.has(item.id)) {
@@ -691,8 +693,25 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const mPago = metodosPago.find(m => m.id === metodoPagoId);
             const metodoPagoNombre = mPago ? mPago.nombre : "Efectivo";
 
-            // Identify NEW items (not yet commanded)
-            const newItems = carrito.filter(item => !itemsComandados.has(item.id));
+            // Identify new items or increases in quantity
+            const printItems: any[] = [];
+            carrito.forEach(item => {
+                const qtyComandada = item.cantidadComandada || 0;
+                if (item.cantidad > qtyComandada) {
+                    const diffQty = item.cantidad - qtyComandada;
+                    const fullProd = productos.find(p => p.id === item.producto_id) || {};
+                    const catNombre = categorias.find(c => c.id === fullProd.categoria_id)?.nombre || "";
+                    printItems.push({
+                        nombre_producto: item.nombre,
+                        cantidad: diffQty,
+                        adicionales: item.adicionales || [],
+                        notas: item.nota || "",
+                        impresora: fullProd.impresora,
+                        categoria_id: fullProd.categoria_id,
+                        categoria_nombre: catNombre
+                    });
+                }
+            });
 
             if (editPedido && editPedido.id) {
                 // UPDATE existing salon order
@@ -723,26 +742,20 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }));
                 await supabase.from("pedido_items").insert(items);
 
+                // Consolidate other duplicate active orders for this table if editing a merged view
+                if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
+                    const otherIds = editPedido.groupedIds.filter((id: string) => id !== editPedido.id);
+                    await supabase.from("pedido_items").delete().in("pedido_id", otherIds);
+                    await supabase.from("pedidos").delete().in("id", otherIds);
+                }
+
                 // Print only new items to kitchen
-                if (newItems.length > 0) {
+                if (printItems.length > 0) {
                     const pedidoForPrint = { ...editPedido, tipo: "salon", mesa_numero: editPedido.mesas?.numero, numero_pedido: editPedido.numero_pedido, created_at: new Date().toISOString(), notas: notaPedido };
-                    const printItems = newItems.map(item => {
-                        const fullProd = productos.find(p => p.id === item.producto_id) || {};
-                        const catNombre = categorias.find(c => c.id === fullProd.categoria_id)?.nombre || "";
-                        return {
-                            nombre_producto: item.nombre,
-                            cantidad: item.cantidad,
-                            adicionales: item.adicionales || [],
-                            notas: item.nota || "",
-                            impresora: fullProd.impresora,
-                            categoria_id: fullProd.categoria_id,
-                            categoria_nombre: catNombre
-                        };
-                    });
                     printCocinaIncremental(pedidoForPrint, printItems, printConfig);
                 }
 
-                // Mark all items as commanded
+                // Mark all items as commanded & update original commanded quantities
                 setItemsComandados(new Set(carrito.map(i => i.id)));
             } else {
                 // CREATE new salon order
@@ -872,6 +885,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 adicionales: item.adicionales || []
             }));
             await supabase.from("pedido_items").insert(items);
+
+            // Consolidate and delete other grouped orders
+            if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
+                const otherIds = editPedido.groupedIds.filter((id: string) => id !== editPedido.id);
+                await supabase.from("pedido_items").delete().in("pedido_id", otherIds);
+                await supabase.from("pedidos").delete().in("id", otherIds);
+            }
 
             // 2. Update order status to 'entregado' (finalized) and save payment method
             const { error: uError } = await supabase
