@@ -22,7 +22,9 @@ import {
   ChevronRight,
   X,
   Bot,
-  LogOut
+  LogOut,
+  Briefcase,
+  TrendingUp
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
@@ -39,6 +41,7 @@ const items = [
   { id: "salon", href: "/admin/salon", icon: Store, label: "Salón" },
   { id: "panel-pedidos", href: "/admin/panel-pedidos", icon: ClipboardList, label: "Panel de pedidos" },
   { id: "cajas", href: "/admin/cajas", icon: CreditCard, label: "Cajas" },
+  { id: "finanzas", href: "/admin/finanzas", icon: TrendingUp, label: "Finanzas" },
   { id: "pedidos", href: "/admin/pedidos", icon: FileText, label: "Pedidos" },
   { id: "repartidores", href: "/admin/repartidores", icon: Truck, label: "Repartidores" },
   { id: "reportes", href: "/admin/reportes", icon: BarChart3, label: "Reportes" },
@@ -49,6 +52,7 @@ const items = [
   { id: "agente-ia", href: "/admin/agente-ia", icon: Bot, label: "Agente IA" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
   { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios y Permisos" },
+  { id: "rrhh", href: "/admin/rrhh", icon: Briefcase, label: "RRHH" },
   { id: "monitor-cocina", href: "/admin/monitor-cocina", icon: MonitorPlay, label: "Monitor cocina" },
 ];
 

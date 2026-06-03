@@ -56,6 +56,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
     const [orderSent, setOrderSent] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [printConfig, setPrintConfig] = useState<any>(null);
+    const [isTableConsumoOpen, setIsTableConsumoOpen] = useState(false);
     
     // Setup State
     const [step, setStep] = useState<"identification" | "setup" | "ordering">("identification");
@@ -826,10 +827,17 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 <div className="px-4 py-2 flex items-center justify-between border-b border-slate-100 bg-white">
                     <div className="flex items-center gap-2">
                         <button 
-                            onClick={() => setStep("setup")}
-                            className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                            onClick={() => {
+                                setStep("setup");
+                                setSelectedMesaId("");
+                                setMesa(null);
+                                setCarrito([]);
+                                setActiveOrder(null);
+                            }}
+                            className="p-2 text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1"
+                            title="Salir de la mesa"
                         >
-                            <LayoutGrid className="w-5 h-5" />
+                            <ArrowLeft className="w-5 h-5" />
                         </button>
                         <button 
                             onClick={() => {
@@ -851,11 +859,30 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                             {mesa?.nombre || "Carga de Pedido"}
                         </span>
                     </div>
-                    <div className="bg-indigo-50 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                        <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
-                        <span className="text-[8px] font-black text-indigo-700 uppercase">
-                            {activeWaiter?.nombre?.split(' ')[0] || "..."}
-                        </span>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-indigo-50 px-2.5 py-1 rounded-full flex items-center gap-1.5 shrink-0">
+                            <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
+                            <span className="text-[8px] font-black text-indigo-700 uppercase">
+                                {activeWaiter?.nombre?.split(' ')[0] || "..."}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={() => setIsTableConsumoOpen(true)}
+                            className="relative p-2 text-slate-600 hover:text-indigo-600 transition-colors"
+                            title="Ver Consumo de Mesa"
+                        >
+                            <ShoppingBag className="w-5 h-5" />
+                            {(() => {
+                                const totalComandadoQty = carrito
+                                    .filter(item => item.isComandado)
+                                    .reduce((sum, item) => sum + item.cantidad, 0);
+                                return totalComandadoQty > 0 ? (
+                                    <span className="absolute -top-0.5 -right-0.5 bg-green-500 text-white font-black text-[9px] w-5 h-5 rounded-full flex items-center justify-center border border-white shadow-sm">
+                                        {totalComandadoQty}
+                                    </span>
+                                ) : null;
+                            })()}
+                        </button>
                     </div>
                 </div>
 
@@ -1240,6 +1267,114 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                                         <span>ENVIAR A COCINA</span>
                                     </>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Table Consumo Drawer */}
+            {isTableConsumoOpen && (
+                <div className="fixed inset-0 z-30">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        onClick={() => !isSending && setIsTableConsumoOpen(false)}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] max-h-[85vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-full duration-300">
+                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-4 shrink-0" />
+                        
+                        <div className="px-6 flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900 uppercase">Mesa {mesa?.numero}</h2>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Detalle de Consumo / Vendido</p>
+                            </div>
+                            <button 
+                                onClick={() => setIsTableConsumoOpen(false)}
+                                className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 active:scale-95"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-6 space-y-4 pb-6">
+                            {carrito.filter(i => i.isComandado).length === 0 ? (
+                                <div className="p-12 text-center text-slate-400 font-bold italic">
+                                    No hay productos vendidos en esta mesa aún.
+                                </div>
+                            ) : (
+                                carrito.filter(i => i.isComandado).map(item => {
+                                    const subtotal = item.precio * item.cantidad;
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                            <div className="w-12 h-12 bg-white rounded-xl overflow-hidden border border-slate-100 shrink-0 flex items-center justify-center text-indigo-600 font-black">
+                                                {item.cantidad}x
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-xs font-bold text-slate-800 truncate">{item.nombre}</h4>
+                                                <p className="text-[10px] text-slate-400 font-semibold">Precio unitario: ${item.precio}</p>
+                                                {item.nota && (
+                                                    <p className="text-[9px] text-amber-600 font-bold italic mt-0.5">📝 {item.nota}</p>
+                                                )}
+                                                {item.adicionales && item.adicionales.length > 0 && (
+                                                    <p className="text-[9px] text-indigo-500 font-medium mt-0.5">+ {item.adicionales.map(a => a.nombre).join(", ")}</p>
+                                                )}
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-black text-slate-900">${subtotal}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+
+                            {error && (
+                                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3">
+                                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                    <p className="text-sm text-red-700 font-medium">{error}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Drawer Actions */}
+                        <div className="p-6 bg-slate-50 border-t border-slate-100 rounded-t-[32px] space-y-3">
+                            <div className="flex items-center justify-between px-2 mb-2">
+                                <span className="text-slate-500 font-black text-xs uppercase tracking-wider">Total Consumido</span>
+                                <span className="text-xl font-black text-slate-900 text-green-600">
+                                    ${carrito.filter(i => i.isComandado).reduce((sum, item) => sum + (item.precio * item.cantidad), 0)}
+                                </span>
+                            </div>
+
+                            <button 
+                                onClick={() => setIsTableConsumoOpen(false)}
+                                className="w-full py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-100"
+                            >
+                                🛒 Cargar Más Productos
+                            </button>
+
+                            <button 
+                                onClick={async () => {
+                                    await handlePrecuentaFlow();
+                                    setIsTableConsumoOpen(false);
+                                }}
+                                disabled={isSending || carrito.filter(i => i.isComandado).length === 0}
+                                className="w-full py-3.5 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 active:scale-95 transition-all shadow-md disabled:opacity-50"
+                            >
+                                🖨️ Imprimir Pre-cuenta
+                            </button>
+
+                            <button 
+                                onClick={() => {
+                                    setIsTableConsumoOpen(false);
+                                    // Reset active ordering session and go to setup (table list/input)
+                                    setStep("setup");
+                                    setSelectedMesaId("");
+                                    setMesa(null);
+                                    setCarrito([]);
+                                    setActiveOrder(null);
+                                }}
+                                className="w-full py-3.5 bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-300 active:scale-95 transition-all"
+                            >
+                                🚪 Salir de la Mesa
                             </button>
                         </div>
                     </div>
