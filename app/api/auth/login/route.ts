@@ -55,6 +55,7 @@ export async function POST(req: Request) {
         // Look up the user's role and assigned branch (bypasses RLS)
         let rol = 'empleado';
         let tenantSlug: string | null = null;
+        let sucursalId: string | null = null;
 
         const { data: userData } = await supabaseAdmin
             .from('usuarios')
@@ -65,13 +66,31 @@ export async function POST(req: Request) {
         if (userData?.rol) {
             rol = userData.rol;
         }
+        if (userData?.sucursal_id) {
+            sucursalId = userData.sucursal_id;
+        }
+
+        // Fallback: Check if they are the owner/creator of any sucursal
+        if (!sucursalId) {
+            const { data: ownerSuc } = await supabaseAdmin
+                .from('sucursales')
+                .select('id, slug')
+                .eq('user_id', data.user.id)
+                .maybeSingle();
+            
+            if (ownerSuc) {
+                sucursalId = ownerSuc.id;
+                rol = 'admin';
+                tenantSlug = ownerSuc.slug;
+            }
+        }
 
         // If user has a sucursal, resolve its slug for redirect
-        if (userData?.sucursal_id) {
+        if (sucursalId && !tenantSlug) {
             const { data: sucData } = await supabaseAdmin
                 .from('sucursales')
                 .select('slug')
-                .eq('id', userData.sucursal_id)
+                .eq('id', sucursalId)
                 .single();
             
             if (sucData?.slug) {

@@ -72,7 +72,24 @@ export async function middleware(request: NextRequest) {
                 .eq('id', user.id)
                 .maybeSingle();
 
-            const userRol = userData?.rol;
+            let userRol = userData?.rol;
+            let sucursalId = userData?.sucursal_id;
+
+            // Fallback: Check if they are the owner/creator of any sucursal
+            if (!sucursalId) {
+                const { data: ownerSuc } = await supabaseAdmin
+                    .from('sucursales')
+                    .select('id, slug')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+                
+                if (ownerSuc) {
+                    sucursalId = ownerSuc.id;
+                    if (!userRol) {
+                        userRol = 'admin'; // Sucursal owners are admins by default
+                    }
+                }
+            }
 
             // 2. Role Authorization: 'camarero' cannot access '/admin'
             if (section === 'admin' && userRol === 'camarero') {
@@ -86,11 +103,11 @@ export async function middleware(request: NextRequest) {
             }
 
             // 4. Tenant Enforcement (only on admin section to allow cross-tenant QR scanning for waiters)
-            if (section === 'admin' && userData?.sucursal_id) {
+            if (section === 'admin' && sucursalId) {
                 const { data: sucData } = await supabaseAdmin
                     .from('sucursales')
                     .select('slug')
-                    .eq('id', userData.sucursal_id)
+                    .eq('id', sucursalId)
                     .single();
 
                 if (sucData?.slug && sucData.slug !== urlTenant) {
