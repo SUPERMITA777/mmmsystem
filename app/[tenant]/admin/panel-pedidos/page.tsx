@@ -54,6 +54,9 @@ function groupSalonPedidos(pedidosList: Pedido[]): Pedido[] {
     const totalSubtotal = group.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
     const totalTotal = group.reduce((sum, p) => sum + Number(p.total || 0), 0);
     const totalDescuento = group.reduce((sum, p) => sum + Number((p as any).descuento || 0), 0);
+    const totalRecargo = group.reduce((sum, p) => sum + Number(p.recargo || 0), 0);
+    const totalCubierto = group.reduce((sum, p) => sum + Number(p.cubierto_total || 0), 0);
+    const totalComensales = group.reduce((sum, p) => sum + Number(p.comensales || 0), 0);
 
     const virtualPedido: Pedido = {
       ...main,
@@ -61,6 +64,9 @@ function groupSalonPedidos(pedidosList: Pedido[]): Pedido[] {
       subtotal: totalSubtotal,
       total: totalTotal,
       descuento: totalDescuento,
+      recargo: totalRecargo,
+      cubierto_total: totalCubierto,
+      comensales: totalComensales,
       groupedIds: group.map(p => p.id), 
     } as any;
 
@@ -104,6 +110,12 @@ type Pedido = {
   camarero_id?: string | null;
   mesa_id?: string | null;
   metodo_pago_id?: string | null;
+  recargo?: number;
+  cubierto_total?: number;
+  comensales?: number;
+  descuento?: number;
+  terminal_id?: string | null;
+  notas_internas?: string;
 };
 
 const ESTADOS_3_COLUMNAS = [
@@ -174,6 +186,7 @@ export default function PanelPedidosPage() {
   const [fechaHasta, setFechaHasta] = useState(getLocalDate);
   const [promoActiva, setPromoActiva] = useState(false);
   const [terminalId, setTerminalId] = useState("1");
+  const [preCuentaPedido, setPreCuentaPedido] = useState<Pedido | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -302,12 +315,8 @@ export default function PanelPedidosPage() {
           console.log(`[AutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
           printedPrecuentasRef.current.set(pedido.id, notas);
           
-          try {
-            console.log(`[AutoPrint Debug] Llamando a printPreCuenta para pedido: ${pedido.numero_pedido}`);
-            printPreCuenta(pedido, printConfig);
-          } catch (err) {
-            console.error("[AutoPrint] Error al imprimir pre-cuenta automáticamente:", err);
-          }
+          // En vez de imprimir directamente, abrimos el modal para elegir forma de pago y aplicar recargo
+          setPreCuentaPedido(pedido);
         }
       }
     });
@@ -387,14 +396,97 @@ export default function PanelPedidosPage() {
     const metodo = metodosPago.find(m => m.id === metodoId);
     if (!metodo) return;
     
+    const recargoPorcentaje = Number(metodo.recargo_porcentaje || 0);
+
+    const { data: mainOrder } = await supabase
+      .from("pedidos")
+      .select("subtotal, costo_envio, cubierto_total, descuento")
+      .eq("id", pedido.id)
+      .single();
+
+    if (!mainOrder) return;
+
+    const mainSubtotal = Number(mainOrder.subtotal || 0);
+    const mainDescuento = Number(mainOrder.descuento || 0);
+    const mainCostoEnvio = Number(mainOrder.costo_envio || 0);
+    const mainCubiertoTotal = Number(mainOrder.cubierto_total || 0);
+
+    const mergedSubtotal = Number(pedido.subtotal || 0);
+    const mergedDescuento = Number((pedido as any).descuento || 0);
+    
+    const baseParaRecargo = mergedSubtotal - mergedDescuento;
+    const recargo = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
+    const mainTotal = mainSubtotal + mainCostoEnvio + recargo + mainCubiertoTotal - mainDescuento;
+    
     await supabase.from("pedidos").update({ 
       metodo_pago_id: metodoId,
-      metodo_pago_nombre: metodo.nombre 
+      metodo_pago_nombre: metodo.nombre,
+      recargo: recargo,
+      total: mainTotal
     }).eq("id", pedido.id);
     
     fetchPedidos();
     if (selectedPedido?.id === pedido.id) {
-      setSelectedPedido({ ...pedido, metodo_pago_nombre: metodo.nombre });
+      setSelectedPedido({ 
+        ...pedido, 
+        metodo_pago_id: metodoId,
+        metodo_pago_nombre: metodo.nombre,
+        recargo: recargo,
+        total: (pedido.total - Number(pedido.recargo || 0)) + recargo
+      });
+    }
+  }
+
+  async function selectPreCuentaPayment(pedido: Pedido, metodoId: string) {
+    const metodo = metodosPago.find(m => m.id === metodoId);
+    if (!metodo) return;
+    
+    const recargoPorcentaje = Number(metodo.recargo_porcentaje || 0);
+
+    const { data: mainOrder } = await supabase
+      .from("pedidos")
+      .select("subtotal, costo_envio, cubierto_total, descuento")
+      .eq("id", pedido.id)
+      .single();
+
+    if (!mainOrder) return;
+
+    const mainSubtotal = Number(mainOrder.subtotal || 0);
+    const mainDescuento = Number(mainOrder.descuento || 0);
+    const mainCostoEnvio = Number(mainOrder.costo_envio || 0);
+    const mainCubiertoTotal = Number(mainOrder.cubierto_total || 0);
+
+    const mergedSubtotal = Number(pedido.subtotal || 0);
+    const mergedDescuento = Number((pedido as any).descuento || 0);
+    
+    const baseParaRecargo = mergedSubtotal - mergedDescuento;
+    const recargo = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
+    const mainTotal = mainSubtotal + mainCostoEnvio + recargo + mainCubiertoTotal - mainDescuento;
+    
+    // Update the database
+    await supabase.from("pedidos").update({ 
+      metodo_pago_id: metodoId,
+      metodo_pago_nombre: metodo.nombre,
+      recargo: recargo,
+      total: mainTotal
+    }).eq("id", pedido.id);
+    
+    // Print the pre-cuenta with the updated details
+    const printedPedido = {
+      ...pedido,
+      metodo_pago_id: metodoId,
+      metodo_pago_nombre: metodo.nombre,
+      recargo: recargo,
+      total: (pedido.total - Number(pedido.recargo || 0)) + recargo,
+      recargo_porcentaje: recargoPorcentaje
+    };
+    
+    printPreCuenta(printedPedido, printConfig);
+    
+    setPreCuentaPedido(null);
+    fetchPedidos();
+    if (selectedPedido?.id === pedido.id) {
+      setSelectedPedido(printedPedido);
     }
   }
 
@@ -425,23 +517,33 @@ export default function PanelPedidosPage() {
     const ids = (pedido as any).groupedIds || [pedido.id];
     for (const id of ids) {
       if (nuevoEstado === "entregado") {
-        const { data: itemsActuales } = await supabase
-          .from("pedido_items")
-          .select("precio_unitario, cantidad")
-          .eq("pedido_id", id);
+        const { data: mainOrder } = await supabase
+          .from("pedidos")
+          .select("subtotal, costo_envio, cubierto_total, descuento, recargo")
+          .eq("id", id)
+          .single();
 
-        const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
-          return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
-        }, 0);
-        const costoEnvioActual = Number((pedido as any).costo_envio || 0);
-        const descuentoActual = Number((pedido as any).descuento || 0);
-        const totalDB = subtotalDB + costoEnvioActual - descuentoActual;
+        if (mainOrder) {
+          const { data: itemsActuales } = await supabase
+            .from("pedido_items")
+            .select("precio_unitario, cantidad")
+            .eq("pedido_id", id);
 
-        await supabase.from("pedidos").update({
-          estado: nuevoEstado,
-          subtotal: subtotalDB,
-          total: totalDB,
-        }).eq("id", id);
+          const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
+            return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
+          }, 0);
+          const costoEnvioActual = Number(mainOrder.costo_envio || 0);
+          const descuentoActual = Number(mainOrder.descuento || 0);
+          const recargoActual = Number(mainOrder.recargo || 0);
+          const cubiertoTotalActual = Number(mainOrder.cubierto_total || 0);
+          const totalDB = subtotalDB + costoEnvioActual + recargoActual + cubiertoTotalActual - descuentoActual;
+
+          await supabase.from("pedidos").update({
+            estado: nuevoEstado,
+            subtotal: subtotalDB,
+            total: totalDB,
+          }).eq("id", id);
+        }
       } else {
         await supabase.from("pedidos").update({ estado: nuevoEstado }).eq("id", id);
       }
@@ -477,6 +579,14 @@ export default function PanelPedidosPage() {
   async function cerrarMesa(pedido: Pedido) {
     const ids = (pedido as any).groupedIds || [pedido.id];
     for (const id of ids) {
+      const { data: mainOrder } = await supabase
+        .from("pedidos")
+        .select("subtotal, costo_envio, cubierto_total, descuento, recargo")
+        .eq("id", id)
+        .single();
+
+      if (!mainOrder) continue;
+
       const { data: itemsActuales } = await supabase
         .from("pedido_items")
         .select("precio_unitario, cantidad, adicionales")
@@ -485,9 +595,11 @@ export default function PanelPedidosPage() {
       const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
         return sum + Number(item.precio_unitario || 0) * Number(item.cantidad || 1);
       }, 0);
-      const costoEnvioActual = Number((pedido as any).costo_envio || 0);
-      const descuentoActual = Number((pedido as any).descuento || 0);
-      const totalReal = subtotalDB + costoEnvioActual - descuentoActual;
+      const costoEnvioActual = Number(mainOrder.costo_envio || 0);
+      const descuentoActual = Number(mainOrder.descuento || 0);
+      const recargoActual = Number(mainOrder.recargo || 0);
+      const cubiertoTotalActual = Number(mainOrder.cubierto_total || 0);
+      const totalReal = subtotalDB + costoEnvioActual + recargoActual + cubiertoTotalActual - descuentoActual;
 
       await supabase.from("pedidos").update({
         estado: "entregado",
@@ -1108,7 +1220,7 @@ export default function PanelPedidosPage() {
                     <button onClick={() => printCocina(selectedPedido, printConfig)} className="flex-1 bg-[#E8D5F5] hover:bg-[#d9c0f0] text-[#7B1FA2] py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cocina</button>
                     {selectedPedido.tipo === "salon" && (
                       <>
-                        <button onClick={() => printPreCuenta(selectedPedido, printConfig)} className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Pre-Cuenta</button>
+                        <button onClick={() => setPreCuentaPedido(selectedPedido)} className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Pre-Cuenta</button>
                         <button onClick={() => {
                           if (confirm(`¿Cerrar mesa y marcar pedido como entregado?`)) cerrarMesa(selectedPedido);
                         }} className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cerrar Mesa</button>
@@ -1171,6 +1283,73 @@ export default function PanelPedidosPage() {
         onConfirm={handleConfirmOrder}
         orderNumber={confirmTimePedido?.numero_pedido || ""}
       />
+
+      {preCuentaPedido && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-amber-500 p-4 text-white">
+              <h3 className="font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                <SettingsIcon size={18} />
+                Método de Pago
+              </h3>
+              <p className="text-[10px] opacity-90 mt-1">
+                Seleccioná la forma de pago para el Cierre de Mesa (Mesa {preCuentaPedido.tipo === 'salon' ? (preCuentaPedido.mesa_id ? (preCuentaPedido as any).mesas?.numero || 'Salón' : 'Salón') : '#' + preCuentaPedido.numero_pedido})
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">
+                Forma de Pago:
+              </label>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {metodosPago.map((m) => {
+                  const isCurrent = preCuentaPedido.metodo_pago_nombre === m.nombre;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => selectPreCuentaPayment(preCuentaPedido, m.id)}
+                      className={`py-3 px-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 flex flex-col items-center justify-center gap-1 ${
+                        isCurrent
+                          ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200"
+                          : "bg-white text-gray-500 border-gray-100 hover:border-amber-200"
+                      }`}
+                    >
+                      <span>{m.nombre}</span>
+                      {Number(m.recargo_porcentaje || 0) > 0 && (
+                        <span className={`text-[8px] ${isCurrent ? 'text-amber-100' : 'text-amber-600'}`}>
+                          (+{m.recargo_porcentaje}%)
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {metodosPago.length === 0 && (
+                <button
+                  onClick={() => {
+                    printPreCuenta(preCuentaPedido, printConfig);
+                    setPreCuentaPedido(null);
+                  }}
+                  className="w-full py-3 bg-amber-500 text-white font-black text-[10px] rounded-xl uppercase tracking-widest hover:bg-amber-600 transition-colors"
+                >
+                  🖨️ Imprimir sin método de pago
+                </button>
+              )}
+
+              <div className="flex gap-3 pt-2 border-t border-gray-100 mt-2">
+                <button 
+                  onClick={() => setPreCuentaPedido(null)}
+                  className="w-full py-2.5 text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors text-center"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <NuevoPedidoModal
         isOpen={isNuevoPedidoOpen || !!editingPedido}

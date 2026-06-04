@@ -678,12 +678,20 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
 </body></html>`;
 
   const pKey = getFacturacionKey(c.impresoras);
-  const printerName = c.impresoras?.[pKey]?.printerName;
-  const printerIp = c.impresoras?.[pKey]?.ip;
+  let printerName = c.impresoras?.[pKey]?.printerName;
+  let printerIp = c.impresoras?.[pKey]?.ip;
 
-  if (!printerName && !printerIp) {
-      alert("No hay una impresora asignada a FACTURACIÓN en Ajustes > Impresoras. Se abrirá la ventana normal de impresión.");
+  if (!printerName && !printerIp && c.impresoras) {
+    for (const [key, pConf] of Object.entries(c.impresoras)) {
+      const conf = pConf as any;
+      if (conf && (conf.printerName || conf.ip)) {
+        printerName = conf.printerName;
+        printerIp = conf.ip;
+        break;
+      }
+    }
   }
+
   doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
 }
 

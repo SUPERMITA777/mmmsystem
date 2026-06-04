@@ -742,6 +742,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 // Delete old items and re-insert all
                 await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
                 const items = carrito.map(item => ({
+                    id: item.id,
                     pedido_id: editPedido.id,
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
@@ -2227,7 +2228,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                 metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                                                 metodo_pago_nombre: metodoPagoNombre,
                                                 notas_internas: (isMixto ? "MIXTO" : "") + " | PRECUENTA",
-                                                notas: notasPagoMixto + (notaPedido || "")
+                                                notas: notasPagoMixto + (notaPedido || ""),
+                                                recargo: recargoTotal,
+                                                total: total
                                             }).eq("id", editPedido.id);
                                         }
 
