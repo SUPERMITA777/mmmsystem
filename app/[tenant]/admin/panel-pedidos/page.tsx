@@ -225,6 +225,7 @@ export default function PanelPedidosPage() {
   const printedPrecuentasRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
+    console.log("[AutoPrint Debug] loop triggered. hybridPedidos count:", hybridPedidos?.length, "printConfig present:", !!printConfig, "terminalId:", terminalId);
     if (!hybridPedidos || hybridPedidos.length === 0 || !printConfig) return;
 
     if (isFirstLoadRef.current) {
@@ -249,19 +250,24 @@ export default function PanelPedidosPage() {
     }
 
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
+    console.log("[AutoPrint Debug] autoPrintEnabled:", autoPrintEnabled);
 
     hybridPedidos.forEach((pedido) => {
       // Ruteo de terminal: si el pedido tiene un terminal_id válido y no coincide con el nuestro, lo ignoramos
       const pedTerminal = pedido.terminal_id ? String(pedido.terminal_id).trim() : "";
+      console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido}: estado=${pedido.estado}, pedTerminal=${pedTerminal}, currentTerminalId=${terminalId}`);
       if (pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== String(terminalId)) {
+        console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido} ignorado por ruteo de terminal (${pedTerminal} !== ${terminalId})`);
         return;
       }
 
       // 1. Auto-print comanda de cocina para nuevos ítems
       if (autoPrintEnabled && ["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
         const allItems = pedido.pedido_items || [];
+        console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido} comanda check: allItems length=${allItems.length}`);
         if (allItems.length > 0) {
           const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
+          console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido} comanda check: newItemsToPrint count=${newItemsToPrint.length}`);
           if (newItemsToPrint.length > 0) {
             console.log(`[AutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
             
@@ -270,6 +276,7 @@ export default function PanelPedidosPage() {
             autoPrintedIdsRef.current.add(pedido.id);
 
             try {
+              console.log(`[AutoPrint Debug] Llamando a printCocina para pedido: ${pedido.numero_pedido}`);
               printCocina(pedido, printConfig, newItemsToPrint);
             } catch (err) {
               console.error("[AutoPrint] Error al imprimir cocina automáticamente:", err);
@@ -282,11 +289,13 @@ export default function PanelPedidosPage() {
       const notas = pedido.notas_internas || "";
       if (notas.toUpperCase().includes("PRECUENTA")) {
         const lastPrintedValue = printedPrecuentasRef.current.get(pedido.id);
+        console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido} precuenta check: notas=${notas}, lastPrintedValue=${lastPrintedValue}`);
         if (lastPrintedValue !== notas) {
           console.log(`[AutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
           printedPrecuentasRef.current.set(pedido.id, notas);
           
           try {
+            console.log(`[AutoPrint Debug] Llamando a printPreCuenta para pedido: ${pedido.numero_pedido}`);
             printPreCuenta(pedido, printConfig);
           } catch (err) {
             console.error("[AutoPrint] Error al imprimir pre-cuenta automáticamente:", err);
