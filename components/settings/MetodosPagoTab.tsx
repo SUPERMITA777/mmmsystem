@@ -27,6 +27,7 @@ export function MetodosPagoTab() {
       activo: boolean;
       expandido?: boolean;
       detalles?: Record<string, any>;
+      recargo_porcentaje?: number;
     }>
   >([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,7 @@ export function MetodosPagoTab() {
           ...metodosMap.get(m.codigo),
           activo: metodosMap.has(m.codigo) ? metodosMap.get(m.codigo)!.activo : false,
           detalles: metodosMap.has(m.codigo) ? metodosMap.get(m.codigo)!.detalles || {} : {},
+          recargo_porcentaje: metodosMap.has(m.codigo) ? Number(metodosMap.get(m.codigo)!.recargo_porcentaje || 0) : 0,
           expandido: false,
         }));
         setMetodos(todosMetodos);
@@ -64,6 +66,7 @@ export function MetodosPagoTab() {
           ...m,
           activo: m.codigo === "efectivo" || m.codigo === "transferencia", // Solo estos activos por defecto
           detalles: {},
+          recargo_porcentaje: 0,
           expandido: false,
         }));
         setMetodos(defaultMetodos);
@@ -85,6 +88,7 @@ export function MetodosPagoTab() {
         codigo: m.codigo,
         activo: m.activo,
         detalles: m.detalles || {},
+        recargo_porcentaje: Number(m.recargo_porcentaje || 0),
         orden: index + 1
       }));
 
@@ -241,7 +245,7 @@ export function MetodosPagoTab() {
                     </div>
                   )}
 
-                  <div>
+                  <div className="border-t border-slate-200 pt-4">
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Instrucciones adicionales para el cliente
                     </label>
@@ -252,6 +256,32 @@ export function MetodosPagoTab() {
                       placeholder={`Ej: Por favor envía el comprobante al WhatsApp tras seleccionar ${metodo.nombre}.`}
                       rows={2}
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200 pt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Recargo / Incremento (%)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={metodo.recargo_porcentaje || ""}
+                        onChange={(e) => {
+                          const val = e.target.value === "" ? 0 : parseFloat(e.target.value);
+                          const nuevosMetodos = [...metodos];
+                          nuevosMetodos[index].recargo_porcentaje = val;
+                          setMetodos(nuevosMetodos);
+                        }}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                        placeholder="0 %"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Se sumará este porcentaje al total del ticket si se selecciona este método de pago.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

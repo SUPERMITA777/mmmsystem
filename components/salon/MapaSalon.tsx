@@ -28,6 +28,7 @@ type Mesa = {
     height: number;
     camarero_color?: string;
     is_precuenta?: boolean;
+    costo_cubierto?: number;
 };
 
 export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean }) {
@@ -176,7 +177,8 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             pos_y: 0,
             forma: "cuadrada",
             width: 100,
-            height: 100
+            height: 100,
+            costo_cubierto: 0
         };
 
         const { data, error } = await supabase.from("mesas").insert(newMesa).select().single();
@@ -312,12 +314,48 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                         }
                     }
                 } else if (action === "3") {
-
+                    handleDeleteMesa(mesa.id);
+                }
+            } else {
+                const action = prompt("¿Qué deseas editar? (1: Capacidad, 2: Nombre/Número, 3: Costo de cubierto por persona, 4: Eliminar)", "1");
+                
+                if (action === "1") {
+                    const nuevaCapacidad = prompt("Nueva capacidad de la mesa:", String(mesa.capacidad));
+                    if (nuevaCapacidad !== null) {
+                        const cap = parseInt(nuevaCapacidad);
+                        if (!isNaN(cap)) {
+                            const { error } = await supabase.from("mesas").update({ capacidad: cap }).eq("id", mesa.id);
+                            if (!error) {
+                                setMesas(prev => prev.map(m => m.id === mesa.id ? { ...m, capacidad: cap } : m));
+                            }
+                        }
+                    }
+                } else if (action === "2") {
+                    const nuevoNombre = prompt("Nombre/Número de la mesa:", mesa.nombre);
+                    if (nuevoNombre !== null) {
+                        const { error } = await supabase.from("mesas").update({ nombre: nuevoNombre }).eq("id", mesa.id);
+                        if (!error) {
+                            setMesas(prev => prev.map(m => m.id === mesa.id ? { ...m, nombre: nuevoNombre } : m));
+                        }
+                    }
+                } else if (action === "3") {
+                    const nuevoCubierto = prompt("Costo de cubierto por persona ($):", String(mesa.costo_cubierto || 0));
+                    if (nuevoCubierto !== null) {
+                        const price = parseFloat(nuevoCubierto);
+                        if (!isNaN(price)) {
+                            const { error } = await supabase.from("mesas").update({ costo_cubierto: price }).eq("id", mesa.id);
+                            if (!error) {
+                                setMesas(prev => prev.map(m => m.id === mesa.id ? { ...m, costo_cubierto: price } : m));
+                            }
+                        }
+                    }
+                } else if (action === "4") {
                     handleDeleteMesa(mesa.id);
                 }
             }
             return;
         }
+
         if (mesa.forma === 'label') return;
 
         setSelectedMesa(mesa);

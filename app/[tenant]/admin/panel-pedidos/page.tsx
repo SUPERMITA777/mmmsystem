@@ -259,10 +259,12 @@ export default function PanelPedidosPage() {
     console.log("[AutoPrint Debug] autoPrintEnabled:", autoPrintEnabled);
 
     hybridPedidos.forEach((pedido) => {
-      // Ruteo de terminal: si el pedido tiene un terminal_id válido y no coincide con el nuestro, lo ignoramos
+      // Ruteo de terminal: si el pedido proviene del POS, tiene un terminal_id válido y no coincide con el nuestro, lo ignoramos
       const pedTerminal = pedido.terminal_id ? String(pedido.terminal_id).trim() : "";
-      console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido}: estado=${pedido.estado}, pedTerminal=${pedTerminal}, currentTerminalId=${terminalId}`);
-      if (pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== String(terminalId)) {
+      console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido}: origen=${pedido.origen}, estado=${pedido.estado}, pedTerminal=${pedTerminal}, currentTerminalId=${terminalId}`);
+      
+      const isPosOrder = pedido.origen === "pos";
+      if (isPosOrder && pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== String(terminalId)) {
         console.log(`[AutoPrint Debug] Pedido ${pedido.numero_pedido} ignorado por ruteo de terminal (${pedTerminal} !== ${terminalId})`);
         return;
       }
@@ -936,6 +938,24 @@ export default function PanelPedidosPage() {
                     <div className="flex justify-between items-center text-sm text-gray-500">
                       <span>Costo de envío</span>
                       <span>$ {fmt(selectedPedido.costo_envio)}</span>
+                    </div>
+                  )}
+                  {((selectedPedido as any).cubierto_total ?? 0) > 0 && (
+                    <div className="flex justify-between items-center text-sm text-gray-500">
+                      <span>Cubiertos ({(selectedPedido as any).comensales || 1} pers.)</span>
+                      <span>$ {fmt((selectedPedido as any).cubierto_total)}</span>
+                    </div>
+                  )}
+                  {((selectedPedido as any).descuento ?? 0) > 0 && (
+                    <div className="flex justify-between items-center text-sm text-green-600 font-bold">
+                      <span>Descuentos</span>
+                      <span>- $ {fmt((selectedPedido as any).descuento)}</span>
+                    </div>
+                  )}
+                  {((selectedPedido as any).recargo ?? 0) > 0 && (
+                    <div className="flex justify-between items-center text-sm text-amber-700 font-bold">
+                      <span>Recargo de pago</span>
+                      <span>$ {fmt((selectedPedido as any).recargo)}</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center text-base font-black text-gray-900 border-t border-gray-200 pt-3">

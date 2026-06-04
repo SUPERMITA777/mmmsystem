@@ -627,6 +627,7 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
 
   <div class="center" style="font-size:24px;font-weight:900;margin-bottom:4px">${title}</div>
   <div class="center" style="font-size:20px;font-weight:bold;margin-bottom:2px">Mesa ${mesaNum}</div>
+  ${pedido.comensales ? `<div class="center" style="font-size:14px;font-weight:bold;margin-bottom:2px">COMENSALES: ${pedido.comensales}</div>` : ""}
   <div class="center" style="font-size:${c.fuente_footer}px;color:#333">${fechaLarga}</div>
   <div class="center" style="font-size:${c.fuente_footer}px;color:#333">Pedido a las ${horaCreado} hs.</div>
 
@@ -647,6 +648,16 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
     <tr>
       <td style="color:#1a7a3f;font-weight:bold">🏷️ Descuento${pedido.notas_internas ? ` (${pedido.notas_internas})` : ""}</td>
       <td style="text-align:right;color:#1a7a3f;font-weight:bold">- ${fmtARS(pedido.descuento)}</td>
+    </tr>` : ""}
+    ${(pedido.cubierto_total ?? 0) > 0 ? `
+    <tr>
+      <td style="color:#333">Cubiertos (${pedido.comensales || 1} pers.)</td>
+      <td style="text-align:right;color:#333">${fmtARS(pedido.cubierto_total)}</td>
+    </tr>` : ""}
+    ${(pedido.recargo ?? 0) > 0 ? `
+    <tr>
+      <td style="color:#333">Recargo ${pedido.recargo_porcentaje ? `(${pedido.recargo_porcentaje}%)` : ""}</td>
+      <td style="text-align:right;color:#333">${fmtARS(pedido.recargo)}</td>
     </tr>` : ""}
     <tr>
       <td style="font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:6px">${metodoPago}</td>

@@ -725,6 +725,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const { error: uError } = await supabase.from("pedidos").update({
                     cliente_nombre: cliente.nombre || "Consumidor Final",
                     tipo: "salon", subtotal, total,
+                    recargo: recargoTotal,
+                    cubierto_total: cubiertoTotal,
                     metodo_pago_id: metodoPagoId || null,
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notaPedido || "",
@@ -789,6 +791,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         numero_pedido: numeroPedido,
                         cliente_nombre: cliente.nombre || "Consumidor Final",
                         tipo: "salon", subtotal, costo_envio: 0, total,
+                        recargo: recargoTotal,
+                        cubierto_total: cubiertoTotal,
                         metodo_pago_id: metodoPagoId || null,
                         metodo_pago_nombre: metodoPagoNombre,
                         estado: "preparando",
@@ -909,6 +913,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     estado: "entregado",
                     subtotal,
                     total,
+                    recargo: recargoTotal,
+                    cubierto_total: cubiertoTotal,
                     metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notasPagoMixto + (notaPedido || "")
@@ -935,7 +941,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 })),
                 subtotal,
                 total,
-                descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
+                recargo: recargoTotal,
+                recargo_porcentaje: recargoPorcentaje,
+                cubierto_total: cubiertoTotal,
+                comensales: comensales,
+                descuento: codigoDescuento + promoDescuento
             };
             printPreCuenta(patchedPedido, printConfig, "CIERRE DE MESA");
 
@@ -954,6 +964,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
 
     const subtotal = carrito.reduce((s, item) => s + item.precioOverride * item.cantidad, 0);
+
+    const selectedMesa = mesas.find(m => m.id === mesaId);
+    const costoCubiertoMesa = selectedMesa?.costo_cubierto || 0;
+    const cubiertoTotal = (tipo === "salon" && cubiertoCobrado) ? (comensales * costoCubiertoMesa) : 0;
+
+    const selectedMP = metodosPago.find(m => m.id === metodoPagoId);
+    const recargoPorcentaje = selectedMP?.recargo_porcentaje || 0;
 
     const costoEnvio = tipo === "delivery" ? validacionDelivery.costo : 0;
 
@@ -1004,7 +1021,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         return 0;
     })();
 
-    const total = subtotal + costoEnvio - promoDescuento - codigoDescuento;
+    const baseParaRecargo = subtotal - promoDescuento - codigoDescuento;
+    const recargoTotal = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
+
+    const total = subtotal + costoEnvio + recargoTotal + cubiertoTotal - promoDescuento - codigoDescuento;
 
     // Auto-apply discounts logic
     useEffect(() => {
@@ -1125,6 +1145,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                     tipo, subtotal, costo_envio: costoEnvio, total,
+                    recargo: recargoTotal,
+                    cubierto_total: cubiertoTotal,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                     notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
                     metodo_pago_id: metodoPagoId || null,
@@ -1189,6 +1211,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     cliente_telefono: cliente.telefono,
                     cliente_direccion: tipo === "delivery" ? cliente.direccion : (tipo === "salon" ? "Salón" : "Take Away"),
                     tipo, subtotal, costo_envio: costoEnvio, total,
+                    recargo: recargoTotal,
+                    cubierto_total: cubiertoTotal,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
                     notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
                     metodo_pago_id: metodoPagoId || null,
@@ -1973,6 +1997,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                 <span>Envío</span><span className="font-bold">$ {fmt(costoEnvio)}</span>
                             </div>
                         )}
+                        {cubiertoTotal > 0 && (
+                            <div className="flex justify-between text-xs text-gray-500">
+                                <span>Cubiertos ({comensales} pers.)</span><span className="font-bold">$ {fmt(cubiertoTotal)}</span>
+                            </div>
+                        )}
                         {promoDescuento > 0 && (
                             <div className="flex justify-between text-xs text-green-600 font-bold">
                                 <span>🎁 Promo QR</span><span>- $ {fmt(promoDescuento)}</span>
@@ -1981,6 +2010,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         {codigoDescuento > 0 && (
                             <div className="flex justify-between text-xs text-green-600 font-bold">
                                 <span>🏷️ {descuentoSeleccionado?.codigo}</span><span>- $ {fmt(codigoDescuento)}</span>
+                            </div>
+                        )}
+                        {recargoTotal > 0 && (
+                            <div className="flex justify-between text-xs text-amber-700 font-bold">
+                                <span>Recargo ({recargoPorcentaje}%)</span><span>$ {fmt(recargoTotal)}</span>
                             </div>
                         )}
                         <div className="flex justify-between text-sm font-black text-gray-900 pt-2 border-t border-gray-200">
@@ -2212,7 +2246,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             })),
                                             subtotal,
                                             total,
-                                            descuento: subtotal + ((tipo as string) === "delivery" ? costoEnvio : 0) - promoDescuento - total
+                                            recargo: recargoTotal,
+                                            recargo_porcentaje: recargoPorcentaje,
+                                            cubierto_total: cubiertoTotal,
+                                            comensales: comensales,
+                                            descuento: codigoDescuento + promoDescuento
                                         };
                                         printPreCuenta(patchedPedido, printConfig);
                                         setShowPreCuentaModal(false);
