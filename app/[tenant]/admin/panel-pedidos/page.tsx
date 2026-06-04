@@ -251,8 +251,9 @@ export default function PanelPedidosPage() {
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
 
     hybridPedidos.forEach((pedido) => {
-      // Ruteo de terminal: si el pedido tiene terminal_id y no coincide con el nuestro, lo ignoramos
-      if (pedido.terminal_id && String(pedido.terminal_id) !== String(terminalId)) {
+      // Ruteo de terminal: si el pedido tiene un terminal_id válido y no coincide con el nuestro, lo ignoramos
+      const pedTerminal = pedido.terminal_id ? String(pedido.terminal_id).trim() : "";
+      if (pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== String(terminalId)) {
         return;
       }
 
