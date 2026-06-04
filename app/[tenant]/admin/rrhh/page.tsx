@@ -13,6 +13,7 @@ type Employee = {
     activo: boolean;
     color?: string;
     sueldo?: number;
+    tipo_sueldo?: string;
     horario?: string;
     informacion_general?: string;
 };
@@ -41,8 +42,11 @@ export default function RrhhPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+    const [paymentsHistory, setPaymentsHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
     const [form, setForm] = useState({
         sueldo: "",
+        tipo_sueldo: "MES",
         horario: "",
         informacion_general: ""
     });
@@ -73,13 +77,32 @@ export default function RrhhPage() {
         }
     }
 
+    async function fetchPaymentsHistory(employeeId: string) {
+        setLoadingHistory(true);
+        try {
+            const { data, error } = await supabase
+                .from("pagos_sueldo")
+                .select("*")
+                .eq("usuario_id", employeeId)
+                .order("fecha_pago", { ascending: false });
+            if (error) throw error;
+            setPaymentsHistory(data || []);
+        } catch (error) {
+            console.error("Error fetching payments history:", error);
+        } finally {
+            setLoadingHistory(false);
+        }
+    }
+
     const openEditModal = (emp: Employee) => {
         setEditingEmployee(emp);
         setForm({
             sueldo: emp.sueldo !== undefined && emp.sueldo !== null ? String(emp.sueldo) : "",
+            tipo_sueldo: emp.tipo_sueldo || "MES",
             horario: emp.horario || "",
             informacion_general: emp.informacion_general || ""
         });
+        fetchPaymentsHistory(emp.id);
     };
 
     async function handleSave() {
@@ -92,6 +115,7 @@ export default function RrhhPage() {
                 body: JSON.stringify({
                     id: editingEmployee.id,
                     sueldo: form.sueldo === "" ? 0 : Number(form.sueldo),
+                    tipo_sueldo: form.tipo_sueldo,
                     horario: form.horario || null,
                     informacion_general: form.informacion_general || null
                 })
@@ -113,7 +137,16 @@ export default function RrhhPage() {
     const activeStaff = employees.filter(e => e.activo).length;
     const monthlyBudget = employees
         .filter(e => e.activo)
-        .reduce((sum, e) => sum + Number(e.sueldo || 0), 0);
+        .reduce((sum, e) => {
+            const sueldoVal = Number(e.sueldo || 0);
+            const tipo = e.tipo_sueldo || "MES";
+            let mult = 1;
+            if (tipo === "HORA") mult = 160;
+            else if (tipo === "DIA") mult = 30;
+            else if (tipo === "SEMANA") mult = 4.33;
+            else if (tipo === "QUINCENA") mult = 2;
+            return sum + (sueldoVal * mult);
+        }, 0);
     const staffedSchedules = employees
         .filter(e => e.activo && e.horario)
         .length;
@@ -182,7 +215,7 @@ export default function RrhhPage() {
                             <tr className="bg-gray-50/50 border-b border-gray-100">
                                 <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Colaborador</th>
                                 <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Rango</th>
-                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Sueldo Mensual</th>
+                                <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Sueldo / Modalidad</th>
                                 <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Horario</th>
                                 <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Información Interna</th>
                                 <th className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Acción</th>
@@ -218,7 +251,14 @@ export default function RrhhPage() {
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 font-bold text-gray-900">
-                                            {emp.sueldo ? formatARS(emp.sueldo) : <span className="text-gray-300 font-normal italic">Sin asignar</span>}
+                                            {emp.sueldo ? (
+                                                <div className="flex flex-col">
+                                                    <span className="text-gray-900 font-bold">{formatARS(emp.sueldo)}</span>
+                                                    <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{emp.tipo_sueldo || "MES"}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-300 font-normal italic">Sin asignar</span>
+                                            )}
                                         </td>
                                         <td className="px-8 py-5 font-bold text-gray-700">
                                             {emp.horario ? (
@@ -257,87 +297,145 @@ export default function RrhhPage() {
             {/* Edit HR Modal */}
             {editingEmployee && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
-                    <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="px-8 pt-8 pb-4 flex items-center justify-between">
+                    <div className="w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="px-8 pt-8 pb-4 flex items-center justify-between border-b border-gray-100">
                             <h3 className="text-xl font-black text-gray-900 uppercase">Ficha RRHH</h3>
                             <button onClick={() => setEditingEmployee(null)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all">
                                 <X size={20} className="text-gray-400" />
                             </button>
                         </div>
 
-                        <div className="p-8 space-y-5">
-                            {/* Employee Info Header */}
-                            <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <div 
-                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black uppercase text-sm"
-                                    style={{ backgroundColor: editingEmployee.color || "#111" }}
-                                >
-                                    {editingEmployee.nombre.charAt(0)}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                            {/* Left: Edit Form */}
+                            <div className="p-8 space-y-5">
+                                {/* Employee Info Header */}
+                                <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                                    <div 
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black uppercase text-sm"
+                                        style={{ backgroundColor: editingEmployee.color || "#111" }}
+                                    >
+                                        {editingEmployee.nombre.charAt(0)}
+                                    </div>
+                                    <div className="overflow-hidden">
+                                        <h4 className="font-black text-sm text-gray-900 truncate">{editingEmployee.nombre}</h4>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{ROL_LABELS[editingEmployee.rol] || editingEmployee.rol}</p>
+                                    </div>
                                 </div>
-                                <div className="overflow-hidden">
-                                    <h4 className="font-black text-sm text-gray-900 truncate">{editingEmployee.nombre}</h4>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">{ROL_LABELS[editingEmployee.rol] || editingEmployee.rol}</p>
+
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tipo de Sueldo</label>
+                                        <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                            <Briefcase size={16} className="text-gray-400" />
+                                            <select
+                                                value={form.tipo_sueldo}
+                                                onChange={e => setForm({ ...form, tipo_sueldo: e.target.value })}
+                                                className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
+                                            >
+                                                <option value="HORA">HORA</option>
+                                                <option value="DIA">DIA</option>
+                                                <option value="SEMANA">SEMANA</option>
+                                                <option value="QUINCENA">QUINCENA</option>
+                                                <option value="MES">MES</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Importe ($)</label>
+                                        <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                            <DollarSign size={16} className="text-gray-400" />
+                                            <input
+                                                type="number"
+                                                value={form.sueldo}
+                                                onChange={e => setForm({ ...form, sueldo: e.target.value })}
+                                                className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
+                                                placeholder="Ej: 250000"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Horario Laboral</label>
+                                        <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                            <Clock size={16} className="text-gray-400" />
+                                            <input
+                                                type="text"
+                                                value={form.horario}
+                                                onChange={e => setForm({ ...form, horario: e.target.value })}
+                                                className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
+                                                placeholder="Ej: Lun a Vie 09:00 - 18:00"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Información General</label>
+                                        <div className="flex items-start gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                            <Info size={16} className="text-gray-400 mt-0.5 shrink-0" />
+                                            <textarea
+                                                value={form.informacion_general}
+                                                onChange={e => setForm({ ...form, informacion_general: e.target.value })}
+                                                className="bg-transparent outline-none text-xs font-bold text-gray-900 w-full min-h-[90px] resize-none"
+                                                placeholder="Detalles sobre contrato, obra social, información de contacto de emergencia, etc..."
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-4 pt-4">
+                                    <button
+                                        onClick={() => setEditingEmployee(null)}
+                                        className="flex-1 px-6 py-4 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSave}
+                                        disabled={submitting}
+                                        className="flex-1 bg-purple-600 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-purple-700 transition-all shadow-xl shadow-purple-100 active:scale-95 disabled:opacity-50 disabled:scale-100"
+                                    >
+                                        {submitting ? "Guardando..." : "Guardar"}
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sueldo Mensual ($)</label>
-                                    <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
-                                        <DollarSign size={16} className="text-gray-400" />
-                                        <input
-                                            type="number"
-                                            value={form.sueldo}
-                                            onChange={e => setForm({ ...form, sueldo: e.target.value })}
-                                            className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
-                                            placeholder="Ej: 250000"
-                                            autoFocus
-                                        />
+                            {/* Right: Payment History */}
+                            <div className="p-8 flex flex-col h-full min-h-[300px]">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Historial de Pagos de Sueldo</h4>
+                                
+                                {loadingHistory ? (
+                                    <div className="flex flex-col items-center justify-center py-12 gap-3 flex-1">
+                                        <div className="w-6 h-6 border-2 border-purple-100 border-t-purple-600 rounded-full animate-spin" />
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Cargando pagos...</span>
                                     </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Horario Laboral</label>
-                                    <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
-                                        <Clock size={16} className="text-gray-400" />
-                                        <input
-                                            type="text"
-                                            value={form.horario}
-                                            onChange={e => setForm({ ...form, horario: e.target.value })}
-                                            className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
-                                            placeholder="Ej: Lun a Vie 09:00 - 18:00"
-                                        />
+                                ) : paymentsHistory.length === 0 ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-gray-50/50 border border-dashed border-gray-100 rounded-2xl min-h-[250px]">
+                                        <p className="text-xs text-gray-400 font-bold italic">No hay constancias de pagos registrados para este empleado.</p>
                                     </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Información General</label>
-                                    <div className="flex items-start gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
-                                        <Info size={16} className="text-gray-400 mt-0.5 shrink-0" />
-                                        <textarea
-                                            value={form.informacion_general}
-                                            onChange={e => setForm({ ...form, informacion_general: e.target.value })}
-                                            className="bg-transparent outline-none text-xs font-bold text-gray-900 w-full min-h-[90px] resize-none"
-                                            placeholder="Detalles sobre contrato, obra social, información de contacto de emergencia, etc..."
-                                        />
+                                ) : (
+                                    <div className="flex-1 overflow-y-auto space-y-3 pr-2 max-h-[400px]">
+                                        {paymentsHistory.map((p) => (
+                                            <div key={p.id} className="bg-gray-50 border border-gray-100 p-4 rounded-2xl flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-800">{formatARS(p.monto)}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{p.metodo_pago_nombre || "Efectivo"}</p>
+                                                    {p.concepto && p.concepto !== "Pago de Sueldo" && (
+                                                        <p className="text-[9px] text-purple-600 font-bold">{p.concepto}</p>
+                                                    )}
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] text-gray-500 font-bold">
+                                                        {new Date(p.fecha_pago).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-400">
+                                                        {new Date(p.fecha_pago).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4 pt-4">
-                                <button
-                                    onClick={() => setEditingEmployee(null)}
-                                    className="flex-1 px-6 py-4 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSave}
-                                    disabled={submitting}
-                                    className="flex-1 bg-purple-600 text-white px-6 py-4 rounded-2xl text-sm font-black hover:bg-purple-700 transition-all shadow-xl shadow-purple-100 active:scale-95 disabled:opacity-50 disabled:scale-100"
-                                >
-                                    {submitting ? "Guardando..." : "Guardar"}
-                                </button>
+                                )}
                             </div>
                         </div>
                     </div>

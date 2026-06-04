@@ -27,6 +27,7 @@ type Transaccion = {
     monto: number;
     concepto: string;
     created_at: string;
+    metodo_pago_id?: string;
 };
 
 type UserProfile = {
@@ -50,8 +51,17 @@ export default function CajasPage() {
     // Forms
     const [aperturaForm, setAperturaForm] = useState({ monto: "", cajeroId: "", cajeroNombre: "" });
     const [cierreForm, setCierreForm] = useState({ montoReal: "", notas: "" });
-    const [movForm, setMovForm] = useState({ tipo: "ingreso", monto: "", concepto: "" });
+    const [movForm, setMovForm] = useState({ tipo: "ingreso", monto: "", concepto: "", metodo_pago_id: "" });
     
+    // Custom Concepts
+    const [metodosPago, setMetodosPago] = useState<any[]>([]);
+    const [showConceptosModal, setShowConceptosModal] = useState(false);
+    const [concepts, setConcepts] = useState<any[]>([]);
+    const [conceptForm, setConceptForm] = useState({ id: "", nombre: "", tipo: "egreso" });
+    const [savingConcept, setSavingConcept] = useState(false);
+    const [selectedConcept, setSelectedConcept] = useState("");
+    const [customConceptText, setCustomConceptText] = useState("");
+
     // Stats
     const [totalManual, setTotalManual] = useState(0);
     const [totalVentasEfectivo, setTotalVentasEfectivo] = useState(0);
@@ -63,8 +73,101 @@ export default function CajasPage() {
         if (sucursalId) {
             fetchCaja();
             fetchStaff();
+            fetchMetodosPago();
+            fetchConcepts();
         }
     }, [sucursalId]);
+
+    // Default payment method
+    useEffect(() => {
+        if (metodosPago.length > 0 && !movForm.metodo_pago_id) {
+            const efectivoMethod = metodosPago.find(m => m.nombre.toLowerCase().includes("efectivo"));
+            if (efectivoMethod) {
+                setMovForm(prev => ({ ...prev, metodo_pago_id: efectivoMethod.id }));
+            } else {
+                setMovForm(prev => ({ ...prev, metodo_pago_id: metodosPago[0].id }));
+            }
+        }
+    }, [metodosPago]);
+
+    async function fetchMetodosPago() {
+        if (!sucursalId) return;
+        try {
+            const { data, error } = await supabase
+                .from("metodos_pago")
+                .select("*")
+                .eq("sucursal_id", sucursalId)
+                .eq("activo", true)
+                .order("orden");
+            if (!error) {
+                setMetodosPago(data || []);
+            }
+        } catch (error) {
+            console.error("Error fetching metodos_pago:", error);
+        }
+    }
+
+    async function fetchConcepts() {
+        if (!sucursalId) return;
+        try {
+            const { data, error } = await supabase
+                .from("conceptos_movimiento")
+                .select("*")
+                .eq("sucursal_id", sucursalId)
+                .order("nombre");
+            if (!error) {
+                setConcepts(data || []);
+            }
+        } catch (error) {
+            console.error("Error fetching concepts:", error);
+        }
+    }
+
+    async function handleSaveConcept() {
+        if (!sucursalId || !conceptForm.nombre) return;
+        setSavingConcept(true);
+        try {
+            if (conceptForm.id) {
+                const { error } = await supabase
+                    .from("conceptos_movimiento")
+                    .update({
+                        nombre: conceptForm.nombre,
+                        tipo: conceptForm.tipo
+                    })
+                    .eq("id", conceptForm.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from("conceptos_movimiento")
+                    .insert({
+                        sucursal_id: sucursalId,
+                        nombre: conceptForm.nombre,
+                        tipo: conceptForm.tipo
+                    });
+                if (error) throw error;
+            }
+            setConceptForm({ id: "", nombre: "", tipo: "egreso" });
+            fetchConcepts();
+        } catch (error: any) {
+            alert("Error al guardar concepto: " + error.message);
+        } finally {
+            setSavingConcept(false);
+        }
+    }
+
+    async function handleDeleteConcept(id: string) {
+        if (!confirm("¿Estás seguro de eliminar este concepto?")) return;
+        try {
+            const { error } = await supabase
+                .from("conceptos_movimiento")
+                .delete()
+                .eq("id", id);
+            if (error) throw error;
+            fetchConcepts();
+        } catch (error: any) {
+            alert("Error al eliminar concepto: " + error.message);
+        }
+    }
 
     async function fetchStaff() {
         if (!sucursalId) return;
@@ -290,13 +393,65 @@ export default function CajasPage() {
 
     async function handleNuevoMovimiento() {
         if (!caja || !movForm.monto) return;
-        await supabase.from("transacciones_caja").insert({
+        
+        let finalConcepto = "";
+        let selectedEmpId: string | null = null;
+
+        if (selectedConcept === "OTRO") {
+            finalConcepto = customConceptText;
+        } else {
+            finalConcepto = selectedConcept;
+        }
+
+        if (!finalConcepto) {
+            alert("Por favor, ingresá o seleccioná un concepto.");
+            return;
+        }
+
+        // Check if the selected concept is a salary payment
+        if (finalConcepto.startsWith("SUELDO DE ")) {
+            const nombreEmp = finalConcepto.substring("SUELDO DE ".length);
+            const empObj = staff.find(s => `${s.nombre}`.trim().toUpperCase() === nombreEmp.trim().toUpperCase());
+            if (empObj) {
+                selectedEmpId = empObj.id;
+            }
+        }
+
+        const { data: newTx, error: txError } = await supabase.from("transacciones_caja").insert({
             caja_id: caja.id,
             tipo: movForm.tipo,
             monto: Number(movForm.monto),
-            concepto: movForm.concepto,
+            concepto: finalConcepto,
+            metodo_pago_id: movForm.metodo_pago_id || null,
+            usuario_id: selectedEmpId || null
         });
-        setMovForm({ tipo: "ingreso", monto: "", concepto: "" });
+
+        if (txError) {
+            alert("Error al registrar movimiento: " + txError.message);
+            return;
+        }
+
+        // If it is a salary payment, we also insert a record in the pagos_sueldo table!
+        if (selectedEmpId) {
+            const metPago = metodosPago.find(m => m.id === movForm.metodo_pago_id);
+            const { error: pagoError } = await supabase.from("pagos_sueldo").insert({
+                usuario_id: selectedEmpId,
+                caja_id: caja.id,
+                monto: Number(movForm.monto),
+                metodo_pago_id: movForm.metodo_pago_id || null,
+                metodo_pago_nombre: metPago ? metPago.nombre : "Efectivo",
+                concepto: finalConcepto,
+                fecha_pago: new Date().toISOString()
+            });
+
+            if (pagoError) {
+                console.error("Error inserting salary payment record:", pagoError);
+            }
+        }
+
+        setMovForm({ tipo: "ingreso", monto: "", concepto: "", metodo_pago_id: "" });
+        setSelectedConcept("");
+        setCustomConceptText("");
         setShowMovimiento(false);
         fetchCaja();
     }
@@ -443,12 +598,21 @@ export default function CajasPage() {
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
                             <div className="p-8 border-b border-gray-50 flex items-center justify-between">
                                 <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Movimientos del Turno</h4>
-                                <button
-                                    onClick={() => setShowMovimiento(true)}
-                                    className="text-xs font-black text-purple-600 uppercase tracking-widest hover:underline"
-                                >
-                                    + Agregar Movimiento
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => setShowConceptosModal(true)}
+                                        className="text-xs font-black text-gray-500 hover:text-gray-900 uppercase tracking-widest hover:underline"
+                                    >
+                                        Conceptos
+                                    </button>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                    <button
+                                        onClick={() => setShowMovimiento(true)}
+                                        className="text-xs font-black text-purple-600 uppercase tracking-widest hover:underline"
+                                    >
+                                        + Agregar Movimiento
+                                    </button>
+                                </div>
                             </div>
                             
                             <div className="divide-y divide-gray-50">
@@ -457,22 +621,30 @@ export default function CajasPage() {
                                         No hay movimientos manuales registrados en este turno.
                                     </div>
                                 ) : (
-                                    transacciones.map(tx => (
-                                        <div key={tx.id} className="p-6 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.tipo === "ingreso" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                                                    {tx.tipo === "ingreso" ? <ArrowDownRight size={20} /> : <ArrowUpRight size={20} />}
+                                    transacciones.map(tx => {
+                                        const metodo = metodosPago.find(m => m.id === tx.metodo_pago_id);
+                                        const metodoNombre = metodo ? metodo.nombre : "Efectivo";
+                                        return (
+                                            <div key={tx.id} className="p-6 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.tipo === "ingreso" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                                                        {tx.tipo === "ingreso" ? <ArrowDownRight size={20} /> : <ArrowUpRight size={20} />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{tx.concepto || "Sin concepto"}</p>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <p className="text-[10px] font-bold text-gray-400">{formatDate(tx.created_at)}</p>
+                                                            <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                                            <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">{metodoNombre}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{tx.concepto || "Sin concepto"}</p>
-                                                    <p className="text-[10px] font-bold text-gray-400">{formatDate(tx.created_at)}</p>
-                                                </div>
+                                                <span className={`text-lg font-black ${tx.tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>
+                                                    {tx.tipo === "ingreso" ? "+" : "-"} $ {new Intl.NumberFormat("es-AR").format(tx.monto)}
+                                                </span>
                                             </div>
-                                            <span className={`text-lg font-black ${tx.tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>
-                                                {tx.tipo === "ingreso" ? "+" : "-"} $ {new Intl.NumberFormat("es-AR").format(tx.monto)}
-                                            </span>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
@@ -485,7 +657,9 @@ export default function CajasPage() {
                             <div className="space-y-3">
                                 <button 
                                     onClick={() => {
-                                        setMovForm({ tipo: "ingreso", monto: "", concepto: "" });
+                                        setMovForm({ tipo: "ingreso", monto: "", concepto: "", metodo_pago_id: "" });
+                                        setSelectedConcept("");
+                                        setCustomConceptText("");
                                         setShowMovimiento(true);
                                     }}
                                     className="w-full bg-white/10 hover:bg-white/20 p-4 rounded-2xl flex items-center gap-3 transition-all active:scale-95"
@@ -495,7 +669,9 @@ export default function CajasPage() {
                                 </button>
                                 <button 
                                     onClick={() => {
-                                        setMovForm({ tipo: "egreso", monto: "", concepto: "" });
+                                        setMovForm({ tipo: "egreso", monto: "", concepto: "", metodo_pago_id: "" });
+                                        setSelectedConcept("");
+                                        setCustomConceptText("");
                                         setShowMovimiento(true);
                                     }}
                                     className="w-full bg-white/10 hover:bg-white/20 p-4 rounded-2xl flex items-center gap-3 transition-all active:scale-95"
@@ -698,7 +874,7 @@ export default function CajasPage() {
                                 </button>
                             </div>
 
-                            <div className="space-y-4">
+                             <div className="space-y-4">
                                 <div>
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-1 block">Monto ($)</label>
                                     <input 
@@ -710,16 +886,58 @@ export default function CajasPage() {
                                         autoFocus
                                     />
                                 </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-1 block">Método de Pago</label>
+                                    <select
+                                        value={movForm.metodo_pago_id}
+                                        onChange={e => setMovForm({ ...movForm, metodo_pago_id: e.target.value })}
+                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-purple-600 focus:bg-white rounded-2xl py-3 px-6 outline-none transition-all text-sm font-bold text-gray-900"
+                                    >
+                                        <option value="">Seleccionar método...</option>
+                                        {metodosPago.map(m => (
+                                            <option key={m.id} value={m.id}>{m.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
                                 <div>
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-1 block">Concepto</label>
-                                    <input 
-                                        type="text" 
-                                        value={movForm.concepto} 
-                                        onChange={e => setMovForm({ ...movForm, concepto: e.target.value })}
+                                    <select
+                                        value={selectedConcept}
+                                        onChange={e => setSelectedConcept(e.target.value)}
                                         className="w-full bg-gray-50 border-2 border-transparent focus:border-purple-600 focus:bg-white rounded-2xl py-3 px-6 outline-none transition-all text-sm font-bold text-gray-900"
-                                        placeholder="Ej: Compra de insumos..."
-                                    />
+                                    >
+                                        <option value="">Seleccionar concepto...</option>
+                                        
+                                        {/* Predefined custom concepts */}
+                                        {concepts.filter(c => c.tipo === movForm.tipo).map(c => (
+                                            <option key={c.id} value={c.nombre}>{c.nombre}</option>
+                                        ))}
+
+                                        {/* Salary concepts (only for egress) */}
+                                        {movForm.tipo === "egreso" && staff.map(s => (
+                                            <option key={s.id} value={`SUELDO DE ${s.nombre.toUpperCase()}`}>
+                                                SUELDO DE {s.nombre.toUpperCase()} {s.apellido ? s.apellido.toUpperCase() : ""}
+                                            </option>
+                                        ))}
+
+                                        <option value="OTRO">Otro (especificar)...</option>
+                                    </select>
                                 </div>
+
+                                {selectedConcept === "OTRO" && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-1 block">Concepto Personalizado</label>
+                                        <input 
+                                            type="text" 
+                                            value={customConceptText} 
+                                            onChange={e => setCustomConceptText(e.target.value)}
+                                            className="w-full bg-gray-50 border-2 border-transparent focus:border-purple-600 focus:bg-white rounded-2xl py-3 px-6 outline-none transition-all text-sm font-bold text-gray-900"
+                                            placeholder="Ej: Compra de insumos..."
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <button 
@@ -729,6 +947,105 @@ export default function CajasPage() {
                             >
                                 Guardar Movimiento
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Administrar Conceptos Modal */}
+            {showConceptosModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[3rem] w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+                        <div className="p-8">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-black text-gray-900 uppercase">Administrar Conceptos</h3>
+                                <button onClick={() => setShowConceptosModal(false)} className="text-gray-400 hover:text-gray-900 transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Add/Edit Form */}
+                            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-6 space-y-4">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">
+                                    {conceptForm.id ? "Editar Concepto" : "Nuevo Concepto"}
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2 mb-1 block">Nombre</label>
+                                        <input 
+                                            type="text" 
+                                            value={conceptForm.nombre} 
+                                            onChange={e => setConceptForm({ ...conceptForm, nombre: e.target.value })}
+                                            className="w-full bg-white border border-gray-200 rounded-xl py-2 px-4 outline-none text-xs font-bold text-gray-900 focus:border-purple-600 transition-all"
+                                            placeholder="Ej: Alquiler, Proveedores..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-2 mb-1 block">Tipo de Flujo</label>
+                                        <select
+                                            value={conceptForm.tipo}
+                                            onChange={e => setConceptForm({ ...conceptForm, tipo: e.target.value })}
+                                            className="w-full bg-white border border-gray-200 rounded-xl py-2 px-4 outline-none text-xs font-bold text-gray-900 focus:border-purple-600 transition-all"
+                                        >
+                                            <option value="ingreso">Ingreso</option>
+                                            <option value="egreso">Egreso</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 pt-2 justify-end">
+                                    {conceptForm.id && (
+                                        <button 
+                                            onClick={() => setConceptForm({ id: "", nombre: "", tipo: "egreso" })}
+                                            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded-xl transition-all"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={handleSaveConcept}
+                                        disabled={savingConcept || !conceptForm.nombre}
+                                        className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all disabled:opacity-50"
+                                    >
+                                        {savingConcept ? "Guardando..." : "Guardar"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* List of Concepts */}
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-2">Conceptos Registrados</h4>
+                            <div className="max-h-[250px] overflow-y-auto space-y-2 pr-2">
+                                {concepts.length === 0 ? (
+                                    <p className="text-center py-6 text-xs text-gray-400 italic">No hay conceptos cargados.</p>
+                                ) : (
+                                    concepts.map(c => (
+                                        <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl hover:bg-gray-100/50 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <span className={`w-2.5 h-2.5 rounded-full ${c.tipo === "ingreso" ? "bg-green-500" : "bg-red-500"}`} />
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-800 uppercase tracking-tight">{c.nombre}</p>
+                                                    <p className="text-[9px] font-bold text-gray-400 uppercase">{c.tipo === "ingreso" ? "Ingreso" : "Egreso"}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setConceptForm({ id: c.id, nombre: c.nombre, tipo: c.tipo })}
+                                                    className="p-1.5 hover:text-purple-600 text-gray-400 hover:bg-purple-50 rounded-lg transition-all"
+                                                    title="Editar"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteConcept(c.id)}
+                                                    className="p-1.5 hover:text-red-600 text-gray-400 hover:bg-red-50 rounded-lg transition-all"
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
