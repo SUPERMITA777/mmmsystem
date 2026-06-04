@@ -395,6 +395,7 @@ export default function CartModal({
                         }
                     }
 
+                    const terminalParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get("terminal") || null : null;
                     const { data: pedido, error: pedidoError } = await supabase
                         .from("pedidos")
                         .insert([{
@@ -416,7 +417,8 @@ export default function CartModal({
                             metodo_pago_id: mPagoId,
                             metodo_pago_nombre: mPagoNombre || (metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'),
                             notas: conCuanto ? `Abona con: $${conCuanto}` : "",
-                            mesa_id: tipoEntrega === "salon" ? mesaId : null
+                            mesa_id: tipoEntrega === "salon" ? mesaId : null,
+                            terminal_id: terminalParam
                         }])
                         .select()
                         .single();

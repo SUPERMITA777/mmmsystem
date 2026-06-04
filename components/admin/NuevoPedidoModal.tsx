@@ -34,6 +34,13 @@ type CartItem = {
 };
 
 export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedido, camareroMode = false }: NuevoPedidoModalProps) {
+    const [terminalId, setTerminalId] = useState("1");
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            setTerminalId(localStorage.getItem("terminal_id") || "1");
+        }
+    }, []);
+
     // Data
     const [productos, setProductos] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
@@ -726,6 +733,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     camarero_id: camareroId || null,
                     camarero_nombre: camareros.find(c => c.id === camareroId)?.nombre || null,
                     comensales: comensales,
+                    terminal_id: terminalId,
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
@@ -789,6 +797,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         camarero_id: camareroId || null,
                         camarero_nombre: camareros.find(c => c.id === camareroId)?.nombre || null,
                         comensales: comensales,
+                        terminal_id: terminalId,
                     }).select().single();
 
                     if (pError) {
@@ -1126,7 +1135,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     camarero_id: tipo === "salon" ? (camareroId || null) : null,
                     camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
                     comensales: tipo === "salon" ? comensales : null,
-                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
+                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false,
+                    terminal_id: terminalId,
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
@@ -1190,7 +1200,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     camarero_id: tipo === "salon" ? (camareroId || null) : null,
                     camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
                     comensales: tipo === "salon" ? comensales : null,
-                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false
+                    cubierto_cobrado: tipo === "salon" ? cubiertoCobrado : false,
+                    terminal_id: terminalId
                 };
 
                 const itemsPayload = carrito.map(item => ({

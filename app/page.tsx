@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { 
     Phone, Mail, MessageSquare, Check, ArrowRight, Shield, 
-    Smartphone, Bot, Printer, Layers, Loader2, Sparkles, Building
+    Smartphone, Bot, Printer, Layers, Loader2, Sparkles, Building, Lock
 } from "lucide-react";
 
 export default function SalesLandingPage() {
@@ -80,6 +80,12 @@ export default function SalesLandingPage() {
                     </nav>
 
                     <div className="flex items-center gap-3">
+                        <a 
+                            href="/login" 
+                            className="hidden sm:inline-block text-xs font-black uppercase tracking-wider text-slate-300 hover:text-cyan-400 transition-all px-4 py-2.5 border border-white/5 rounded-xl hover:border-cyan-500/30 hover:bg-cyan-500/5 active:scale-95"
+                        >
+                            Acceso Admin
+                        </a>
                         <a 
                             href={`https://wa.me/${c.whatsapp}`} 
                             target="_blank" 
@@ -298,7 +304,7 @@ export default function SalesLandingPage() {
 
             {/* Footer / Contact Section */}
             <footer id="contacto" className="bg-[#040610] py-20 px-6 border-t border-white/5 z-10 relative">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                     <div className="space-y-4">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gradient-to-tr from-cyan-400 to-purple-600 rounded-xl flex items-center justify-center text-white font-black">
@@ -309,6 +315,16 @@ export default function SalesLandingPage() {
                         <p className="text-slate-500 text-xs leading-relaxed max-w-xs font-medium">
                             El ecosistema definitivo para potenciar la rentabilidad y automatización de tu negocio gastronómico.
                         </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Panel de Control</h4>
+                        <ul className="space-y-3 text-slate-400 text-xs font-semibold">
+                            <li className="flex items-center gap-3 hover:text-cyan-400 transition-colors">
+                                <Lock size={14} className="text-cyan-400" />
+                                <a href="/login">Acceso Administradores</a>
+                            </li>
+                        </ul>
                     </div>
 
                     <div className="space-y-4">

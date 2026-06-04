@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Settings, Bell, MessageSquare, Monitor, Printer, Upload, Music, Trash2, Download } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { useParams } from "next/navigation";
 
 interface PanelSettings {
     columnas: string[];
@@ -40,6 +41,9 @@ export default function OrderPanelSettingsModal({
     configId,
     initialSettings
 }: OrderPanelSettingsModalProps) {
+    const params = useParams();
+    const tenantSlug = params?.tenant as string || "mmm";
+
     const [settings, setSettings] = useState<PanelSettings>({
         columnas: ["pendiente", "preparando", "listo"],
         ocultar_mapa_delivery: false,
@@ -208,8 +212,8 @@ export default function OrderPanelSettingsModal({
                             <div className="flex flex-col gap-2 pt-2 border-t border-blue-100">
                                 <p className="text-[10px] text-blue-900 font-bold uppercase px-1">Instalador del Servidor</p>
                                 <a 
-                                    href="/INSTALAR_HUB_Y_SISTEMA.bat" 
-                                    download
+                                    href={`/api/admin/download-installer?tenant=${tenantSlug}`} 
+                                    download={`INSTALAR_HUB_Y_SISTEMA_${tenantSlug}.bat`}
                                     className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm"
                                 >
                                     <Download size={14} /> Descargar Instalador para PC Principal

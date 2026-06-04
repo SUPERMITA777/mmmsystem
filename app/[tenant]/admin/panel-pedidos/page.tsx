@@ -173,6 +173,13 @@ export default function PanelPedidosPage() {
   const [fechaDesde, setFechaDesde] = useState(getLocalDate);
   const [fechaHasta, setFechaHasta] = useState(getLocalDate);
   const [promoActiva, setPromoActiva] = useState(false);
+  const [terminalId, setTerminalId] = useState("1");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setTerminalId(localStorage.getItem("terminal_id") || "1");
+    }
+  }, []);
 
   const { sucursalId } = useTenant();
   const { pedidos: hybridPedidos, lastSyncSource, refresh: refreshHybrid } = useHybridPedidos(
@@ -215,6 +222,7 @@ export default function PanelPedidosPage() {
   const autoPrintedIdsRef = useRef<Set<string>>(new Set());
   const autoPrintedItemIdsRef = useRef<Set<string>>(new Set());
   const isFirstLoadRef = useRef<boolean>(true);
+  const printedPrecuentasRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!hybridPedidos || hybridPedidos.length === 0 || !printConfig) return;
@@ -228,6 +236,12 @@ export default function PanelPedidosPage() {
           autoPrintedIdsRef.current.add(p.id);
           const items = p.pedido_items || [];
           items.forEach((it: any) => autoPrintedItemIdsRef.current.add(it.id));
+          
+          // También pre-cargar pre-cuentas existentes como ya impresas
+          const notas = p.notas_internas || "";
+          if (notas.toUpperCase().includes("PRECUENTA")) {
+            printedPrecuentasRef.current.set(p.id, notas);
+          }
         }
       });
       isFirstLoadRef.current = false;
@@ -235,31 +249,51 @@ export default function PanelPedidosPage() {
     }
 
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
-    if (!autoPrintEnabled) return;
 
     hybridPedidos.forEach((pedido) => {
-      // Imprimir cocina para pedidos nuevos o modificados en 'pendiente', 'confirmado' o 'preparando'
-      if (["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
+      // Ruteo de terminal: si el pedido tiene terminal_id y no coincide con el nuestro, lo ignoramos
+      if (pedido.terminal_id && String(pedido.terminal_id) !== String(terminalId)) {
+        return;
+      }
+
+      // 1. Auto-print comanda de cocina para nuevos ítems
+      if (autoPrintEnabled && ["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
         const allItems = pedido.pedido_items || [];
-        if (allItems.length === 0) return;
+        if (allItems.length > 0) {
+          const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
+          if (newItemsToPrint.length > 0) {
+            console.log(`[AutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
+            
+            // Registrar estos ítems como impresos para evitar reimpresiones
+            newItemsToPrint.forEach((item: any) => autoPrintedItemIdsRef.current.add(item.id));
+            autoPrintedIdsRef.current.add(pedido.id);
 
-        const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
-        if (newItemsToPrint.length > 0) {
-          console.log(`[AutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
+            try {
+              printCocina(pedido, printConfig, newItemsToPrint);
+            } catch (err) {
+              console.error("[AutoPrint] Error al imprimir cocina automáticamente:", err);
+            }
+          }
+        }
+      }
+
+      // 2. Auto-print Pre-cuenta cuando sea solicitado desde el celular (notas_internas contiene PRECUENTA)
+      const notas = pedido.notas_internas || "";
+      if (notas.toUpperCase().includes("PRECUENTA")) {
+        const lastPrintedValue = printedPrecuentasRef.current.get(pedido.id);
+        if (lastPrintedValue !== notas) {
+          console.log(`[AutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
+          printedPrecuentasRef.current.set(pedido.id, notas);
           
-          // Registrar estos ítems como impresos para evitar reimpresiones
-          newItemsToPrint.forEach((item: any) => autoPrintedItemIdsRef.current.add(item.id));
-          autoPrintedIdsRef.current.add(pedido.id);
-
           try {
-            printCocina(pedido, printConfig, newItemsToPrint);
+            printPreCuenta(pedido, printConfig);
           } catch (err) {
-            console.error("[AutoPrint] Error al imprimir cocina automáticamente:", err);
+            console.error("[AutoPrint] Error al imprimir pre-cuenta automáticamente:", err);
           }
         }
       }
     });
-  }, [hybridPedidos, printConfig, sucursalConfig]);
+  }, [hybridPedidos, printConfig, sucursalConfig, terminalId]);
 
   // When selectedPedido changes, reset to detalle tab
   useEffect(() => {
@@ -539,6 +573,26 @@ export default function PanelPedidosPage() {
              {lastSyncSource !== 'supabase' && (
                <span className="text-[10px] text-gray-400 italic">Usando Hub Local en {printConfig?.bridge_ip}</span>
              )}
+
+             {/* Selector de Terminal */}
+             <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1 ml-4 shadow-sm hover:border-[#7B1FA2] transition-all">
+               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider select-none">🖨️ Terminal</span>
+               <select
+                 value={terminalId}
+                 onChange={(e) => {
+                   const val = e.target.value;
+                   setTerminalId(val);
+                   localStorage.setItem("terminal_id", val);
+                 }}
+                 className="text-[10px] font-extrabold text-slate-700 bg-transparent outline-none cursor-pointer border-none p-0 pr-1 select-none focus:ring-0"
+               >
+                 <option value="1">Terminal 1</option>
+                 <option value="2">Terminal 2</option>
+                 <option value="3">Terminal 3</option>
+                 <option value="4">Terminal 4</option>
+                 <option value="5">Terminal 5</option>
+               </select>
+             </div>
           </div>
         </div>
 

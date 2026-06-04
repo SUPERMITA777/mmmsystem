@@ -27,9 +27,15 @@ interface CartItem {
     isComandado?: boolean;
 }
 
-export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
+export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string; terminal?: string }) {
     const { sucursalId } = useTenant();
     const { user, logout } = useAuth();
+
+    useEffect(() => {
+        if (terminal) {
+            localStorage.setItem("active_terminal", terminal);
+        }
+    }, [terminal]);
     
     // Data State
     const [productos, setProductos] = useState<any[]>([]);
@@ -460,6 +466,7 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 } catch {}
             }
 
+            const activeTerminal = typeof window !== 'undefined' ? localStorage.getItem("active_terminal") || null : null;
             const pedidoPayload = {
                 id: localId,
                 sucursal_id: sucursalId,
@@ -471,7 +478,8 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 estado: "preparando", // Directamente EN COCINA
                 total: total,
                 created_at: activeOrder ? activeOrder.created_at : new Date().toISOString(),
-                numero_pedido: activeOrder ? activeOrder.numero_pedido : undefined
+                numero_pedido: activeOrder ? activeOrder.numero_pedido : undefined,
+                terminal_id: activeTerminal
             };
 
             const itemsPayload = carrito.map(item => {
@@ -482,7 +490,9 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     precio_unitario: item.precio,
+                    fancy: "test placeholder",
                     cantidad: item.cantidad,
+                    precio: item.precio,
                     notas: item.nota || "",
                     adicionales: item.adicionales ?? [],
                     impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
@@ -509,70 +519,6 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                     await supabase.from("mesas").update({ estado: "ocupada" }).eq("id", selectedMesaId);
                 } catch (tableErr) {
                     console.error("[MobileOrder] Error al marcar mesa como ocupada:", tableErr);
-                }
-
-                // Determine order number for printing
-                let finalPedido: any = {
-                    ...pedidoPayload,
-                    pedido_items: itemsPayload,
-                    mesas: { numero: mesa?.numero }
-                };
-
-                if (result.source === "supabase") {
-                    try {
-                        const { data: remotePedido } = await supabase
-                            .from("pedidos")
-                            .select("numero_pedido, created_at")
-                            .eq("id", localId)
-                            .single();
-                        
-                        if (remotePedido) {
-                            finalPedido.numero_pedido = remotePedido.numero_pedido;
-                            finalPedido.created_at = remotePedido.created_at;
-                        }
-                    } catch (fetchErr) {
-                        console.warn("[MobileOrder] Error fetching remote order details for printing:", fetchErr);
-                    }
-                }
-
-                if (!finalPedido.numero_pedido) {
-                    finalPedido.numero_pedido = localId.substring(0, 8).toUpperCase();
-                }
-                
-                // Filtrar solo productos nuevos o incrementos de cantidad para imprimir a cocina
-                const printItemsPayload: any[] = [];
-                
-                carrito.forEach(item => {
-                    const qtyComandada = item.cantidadComandada || 0;
-                    if (item.cantidad > qtyComandada) {
-                        const diffQty = item.cantidad - qtyComandada;
-                        const fullProd = productos.find(p => p.id === item.producto_id);
-                        const catOfProd = categorias.find(c => c.id === fullProd?.categoria_id);
-                        printItemsPayload.push({
-                            producto_id: item.producto_id,
-                            nombre_producto: item.nombre,
-                            precio_unitario: item.precio,
-                            cantidad: diffQty,
-                            notas: item.nota || "",
-                            adicionales: item.adicionales ?? [],
-                            impresora: item.impresora || fullProd?.impresora || fullProd?.impresora_id || "",
-                            categoria_id: fullProd?.categoria_id || "",
-                            categoria_nombre: catOfProd?.nombre || "",
-                            productos: fullProd ? {
-                                ...fullProd,
-                                categorias: catOfProd ? { nombre: catOfProd.nombre } : null
-                            } : null
-                        });
-                    }
-                });
-
-                // Print command automatically to corresponding printers (only if there are new items)
-                try {
-                    if (printItemsPayload.length > 0) {
-                        await printCocina(finalPedido, printConfig || {}, printItemsPayload);
-                    }
-                } catch (printErr) {
-                    console.error("Print error:", printErr);
                 }
 
                 setOrderSent(true);
@@ -617,21 +563,15 @@ export default function MobileOrderModule({ mesaId }: { mesaId: string }) {
                 return;
             }
 
+            const selectedMesa = mesas.find(m => m.id === selectedMesaId);
             const { error: updateErr } = await supabase
                 .from("pedidos")
-                .update({ notas_internas: "MIXTO | PRECUENTA" })
+                .update({ notas_internas: `MIXTO | PRECUENTA | PRINT_REQ_${Date.now()}` })
                 .eq("id", pedido.id);
 
             if (updateErr) throw updateErr;
 
-            const selectedMesa = mesas.find(m => m.id === selectedMesaId);
-            const formattedPedido = {
-                ...pedido,
-                mesas: { numero: selectedMesa?.numero || "—" }
-            };
-
-            await printPreCuenta(formattedPedido, printConfig || {});
-            alert(`Pre-cuenta de la Mesa ${selectedMesa?.numero} solicitada correctamente.`);
+            alert(`Pre-cuenta de la Mesa ${selectedMesa?.numero || "—"} solicitada correctamente.`);
         } catch (err: any) {
             console.error("Precuenta error:", err);
             alert(err.message || "Error al solicitar la pre-cuenta.");

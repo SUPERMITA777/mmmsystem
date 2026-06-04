@@ -45,6 +45,13 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
     const [qrMesa, setQrMesa] = useState<Mesa | null>(null);
     const [staff, setStaff] = useState<any[]>([]);
     const [selectedWaiterId, setSelectedWaiterId] = useState("");
+    const [terminalId, setTerminalId] = useState("1");
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            setTerminalId(localStorage.getItem("terminal_id") || "1");
+        }
+    }, []);
 
     useEffect(() => {
         if (sucursalId) loadMesas();
@@ -558,8 +565,9 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
             {/* QR Modal */}
             {qrModalOpen && (() => {
                 const qrUrl = window.location.origin + "/" + tenantSlug + "/camarero/pedir" + 
-                              (selectedWaiterId ? `?waiter_id=${selectedWaiterId}` : "") + 
-                              (qrMesa ? (selectedWaiterId ? `&mesa_id=${qrMesa.id}` : `?mesa_id=${qrMesa.id}`) : "");
+                              `?terminal=${terminalId}` + 
+                              (selectedWaiterId ? `&waiter_id=${selectedWaiterId}` : "") + 
+                              (qrMesa ? `&mesa_id=${qrMesa.id}` : "");
                 return (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
                         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setQrModalOpen(false); setSelectedWaiterId(""); }} />

@@ -2,6 +2,13 @@
 title INSTALADOR HUB LOCAL MMM v3.0
 setlocal enabledelayedexpansion
 
+:: --- CONFIGURACION POR DEFECTO ---
+if not defined SYSTEM_URL (
+    set "TENANT_SLUG=mmm"
+    set "SYSTEM_URL=https://mmmsystem.vercel.app"
+)
+:: ---------------------------------
+
 :: Directorio actual
 set "ROOT=%~dp0"
 cd /d "%ROOT%"
@@ -66,6 +73,19 @@ echo.
 :: 4. Iniciar ahora mismo
 echo Iniciando Hub Local ahora...
 start "" "%BAT_PATH%"
+
+if defined SYSTEM_URL (
+    echo Creando acceso directo al Panel de Pedidos en el Escritorio...
+    set "SHORTCUT_PATH=%USERPROFILE%\Desktop\MMM System - Admin.url"
+    (
+        echo [InternetShortcut]
+        echo URL=!SYSTEM_URL!
+        echo IconIndex=0
+    ) > "!SHORTCUT_PATH!"
+    
+    echo Abriendo Panel de Pedidos en el navegador...
+    start "" "!SYSTEM_URL!"
+)
 
 echo.
 echo Proceso completado. Ya puedes cerrar esta ventana.

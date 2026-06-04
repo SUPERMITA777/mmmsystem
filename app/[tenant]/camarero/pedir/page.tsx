@@ -7,14 +7,15 @@ export const metadata = {
   description: "Módulo móvil para toma de pedidos",
 };
 
-export default function PedirPage({ searchParams }: { searchParams: { mesa_id?: string } }) {
+export default function PedirPage({ searchParams }: { searchParams: { mesa_id?: string; terminal?: string } }) {
     const mesaId = searchParams.mesa_id || "";
+    const terminal = searchParams.terminal || "";
 
     return (
         <TenantProvider>
             <AuthProvider>
                 <div className="h-screen bg-slate-50">
-                    <MobileOrderModule mesaId={mesaId} />
+                    <MobileOrderModule mesaId={mesaId} terminal={terminal} />
                 </div>
             </AuthProvider>
         </TenantProvider>
