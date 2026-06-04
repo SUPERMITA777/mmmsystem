@@ -29,6 +29,7 @@ type CartItem = {
     cantidadComandada?: number;
     imagen_url?: string;
     nota?: string;
+    motivo_descuento?: string;
     adicionales?: { nombre: string; precio: number; cantidad: number; impresora?: string }[];
     impresora?: string;
 };
@@ -54,6 +55,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     // UI State
     const { user } = useAuth();
     const isAdmin = user?.rol === "admin" || user?.rol === "super_admin";
+    const canCloseTable = !camareroMode && (user?.rol === "admin" || user?.rol === "super_admin" || user?.rol === "cajero");
+    const canManageAdminTasks = user?.rol === "admin" || user?.rol === "super_admin" || user?.rol === "cajero";
     const [busqueda, setBusqueda] = useState("");
     const [catSeleccionada, setCatSeleccionada] = useState<string>("todos");
     const [view, setView] = useState<"catalog" | "customize">("catalog");
@@ -126,17 +129,24 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             if (editPedido) {
                 isLoadingEditPedido.current = true;
                 // Pre-fill from existing order
-                const items: CartItem[] = (editPedido.pedido_items || []).map((item: any) => ({
-                    id: item.id || crypto.randomUUID(),
-                    producto_id: item.producto_id,
-                    nombre: item.nombre_producto,
-                    precio: item.precio_unitario,
-                    precioOverride: item.precio_unitario,
-                    cantidad: item.cantidad,
-                    cantidadComandada: item.cantidad,
-                    nota: item.notas || "",
-                    adicionales: (item.adicionales || []).map((a: any) => ({ nombre: a.nombre, precio: a.precio || 0, cantidad: a.cantidad || 1 })),
-                }));
+                const items: CartItem[] = (editPedido.pedido_items || []).map((item: any) => {
+                    const match = item.notas?.match(/\[Descuento: (.*?)\]/);
+                    const motivo_descuento = match ? match[1] : "";
+                    const nota_clean = item.notas ? item.notas.replace(/\[Descuento: (.*?)\]/, "").trim() : "";
+                    
+                    return {
+                        id: item.id || crypto.randomUUID(),
+                        producto_id: item.producto_id,
+                        nombre: item.nombre_producto,
+                        precio: item.precio_unitario,
+                        precioOverride: item.precio_unitario,
+                        cantidad: item.cantidad,
+                        cantidadComandada: item.cantidad,
+                        nota: nota_clean,
+                        motivo_descuento: motivo_descuento,
+                        adicionales: (item.adicionales || []).map((a: any) => ({ nombre: a.nombre, precio: a.precio || 0, cantidad: a.cantidad || 1 })),
+                    };
+                });
                 setCarrito(items);
                 // Mark existing items as already commanded for salon orders
                 if (editPedido.tipo === "salon" && editPedido.estado !== "pendiente") {
@@ -603,12 +613,26 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     function updateCartQty(idx: number, delta: number) {
         const item = carrito[idx];
         if (!item) return;
-        if (delta < 0 && itemsComandados.has(item.id) && !isAdmin) {
-            alert("Solo un administrador puede disminuir la cantidad de un producto ya comandado.");
+        if (delta < 0 && itemsComandados.has(item.id) && !canManageAdminTasks) {
+            alert("Solo un administrador o cajero puede disminuir la cantidad de un producto ya comandado.");
             return;
         }
         if (delta < 0 && itemsComandados.has(item.id)) {
-            // Even admins might want a warning or reason here, but for now we just allow it.
+            const motivo = prompt("Motivo de la reducción de cantidad del producto comandado:");
+            if (!motivo) return;
+            
+            // Log to database
+            supabase.from("logs_eliminacion_pedidos").insert({
+                sucursal_id: sucursalId,
+                pedido_id: editPedido?.id,
+                producto_nombre: item.nombre,
+                cantidad: -delta,
+                motivo: motivo.trim(),
+                usuario_id: user?.id,
+                usuario_nombre: user?.email
+            }).then(({ error }) => {
+                if (error) console.error("Error logging qty reduction:", error);
+            });
         }
         setCarrito(prev => prev.map((it, i) => {
             if (i !== idx) return it;
@@ -619,11 +643,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
 
     function updateCartPrice(idx: number, price: number) {
         const item = carrito[idx];
-        if (item && item.precioOverride !== price) {
-            const motivo = prompt("Motivo del ajuste de precio:");
-            if (!motivo) return;
+        let motivo = "";
+        if (item && (item.precioOverride !== price || item.precio !== price)) {
+            const res = prompt("Motivo del ajuste de precio / descuento:");
+            if (!res) return;
+            motivo = res;
         }
-        setCarrito(prev => prev.map((item, i) => i === idx ? { ...item, precioOverride: price } : item));
+        setCarrito(prev => prev.map((it, i) => i === idx ? { ...it, precioOverride: price, motivo_descuento: motivo } : it));
     }
 
     function removeFromCart(index: number) {
@@ -631,8 +657,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
         const isComandado = itemsComandados.has(item.id);
 
         if (isComandado) {
-            if (!isAdmin) {
-                alert("Solo un administrador puede eliminar productos comandados.");
+            if (!canManageAdminTasks) {
+                alert("Solo un administrador o cajero puede eliminar productos comandados.");
                 return;
             }
             setItemToDelete(index);
@@ -747,8 +773,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride,
-                    notas: item.nota || "",
+                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                    notas: item.motivo_descuento 
+                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                        : (item.nota || ""),
                     adicionales: item.adicionales || []
                 }));
                 await supabase.from("pedido_items").insert(items);
@@ -818,8 +846,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride,
-                    notas: item.nota || "",
+                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                    notas: item.motivo_descuento 
+                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                        : (item.nota || ""),
                     adicionales: item.adicionales || []
                 }));
                 await supabase.from("pedido_items").insert(items);
@@ -859,7 +889,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }
 
     async function cobrarMesa() {
-        if (!isAdmin) {
+        if (!canManageAdminTasks) {
             alert("No tenés permisos para cobrar mesas.");
             return;
         }
@@ -894,8 +924,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 producto_id: item.producto_id,
                 nombre_producto: item.nombre,
                 cantidad: item.cantidad,
-                precio_unitario: item.precioOverride,
-                notas: item.nota || "",
+                precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                notas: item.motivo_descuento 
+                    ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                    : (item.nota || ""),
                 adicionales: item.adicionales || []
             }));
             await supabase.from("pedido_items").insert(items);
@@ -923,6 +955,22 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 .eq("id", editPedido.id);
             if (uError) throw uError;
 
+            // Fetch deletion logs for this order
+            let logsEliminados: any[] = [];
+            try {
+                if (editPedido?.id) {
+                    const { data: logsData } = await supabase
+                        .from("logs_eliminacion_pedidos")
+                        .select("producto_nombre, cantidad, motivo")
+                        .eq("pedido_id", editPedido.id);
+                    if (logsData) {
+                        logsEliminados = logsData;
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching logs_eliminacion_pedidos in cobrarMesa:", err);
+            }
+
             // 2. Print ticket (identical to pre-cuenta)
             const mesaObj = mesas.find(m => m.id === mesaId);
             const camareroObj = camareros.find(c => c.id === camareroId);
@@ -936,9 +984,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 pedido_items: carrito.map(item => ({
                     cantidad: item.cantidad,
                     nombre_producto: item.nombre,
-                    precio_unitario: item.precioOverride || item.precio,
+                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
                     adicionales: item.adicionales ?? [],
-                    notas: item.nota || ""
+                    notas: item.nota || "",
+                    motivo_descuento: item.motivo_descuento || ""
                 })),
                 subtotal,
                 total,
@@ -946,7 +995,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 recargo_porcentaje: recargoPorcentaje,
                 cubierto_total: cubiertoTotal,
                 comensales: comensales,
-                descuento: codigoDescuento + promoDescuento
+                descuento: codigoDescuento + promoDescuento,
+                logs_eliminacion: logsEliminados
             };
             printPreCuenta(patchedPedido, printConfig, "CIERRE DE MESA");
 
@@ -1170,8 +1220,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     producto_id: item.producto_id,
                     nombre_producto: item.nombre,
                     cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride,
-                    notas: item.nota || "",
+                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                    notas: item.motivo_descuento 
+                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                        : (item.nota || ""),
                     adicionales: item.adicionales || []
                 }));
                 const { error: iError2 } = await supabase.from("pedido_items").insert(items);
@@ -2038,13 +2090,13 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             </button>
 
 
-                                            {isAdmin && (
+                                            {canCloseTable && (
                                                 <button
                                                     onClick={cobrarMesa}
                                                     disabled={loading}
                                                     className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-full text-[10px] font-black transition-colors shadow-lg shadow-emerald-500/20"
                                                 >
-                                                    💰 COBRAR
+                                                    💰 CIERRE DE MESA
                                                 </button>
                                             )}
                                         </div>

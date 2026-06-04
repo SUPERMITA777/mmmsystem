@@ -35,6 +35,8 @@ type UserProfile = {
     nombre: string;
     apellido: string;
     rol: string;
+    sueldo?: number;
+    tipo_sueldo?: string;
 };
 
 export default function CajasPage() {
@@ -172,7 +174,7 @@ export default function CajasPage() {
     async function fetchStaff() {
         if (!sucursalId) return;
         try {
-            const res = await fetch(`/api/staff?sucursal_id=${sucursalId}`);
+            const res = await fetch(`/api/staff?sucursal_id=${sucursalId}&all=true`);
             if (res.ok) {
                 const data = await res.json();
                 setStaff(data || []);
@@ -391,6 +393,23 @@ export default function CajasPage() {
         }
     }
 
+    function handleConceptChange(conceptValue: string) {
+        setSelectedConcept(conceptValue);
+        
+        if (conceptValue.startsWith("SUELDO DE ")) {
+            const nombreEmp = conceptValue.substring("SUELDO DE ".length).trim().toUpperCase();
+            const empObj = staff.find(s => {
+                const fullName = `${s.nombre} ${s.apellido || ""}`.trim().toUpperCase();
+                return fullName === nombreEmp;
+            });
+            if (empObj && empObj.sueldo) {
+                setMovForm(prev => ({ ...prev, monto: String(empObj.sueldo) }));
+            } else {
+                setMovForm(prev => ({ ...prev, monto: "" }));
+            }
+        }
+    }
+
     async function handleNuevoMovimiento() {
         if (!caja || !movForm.monto) return;
         
@@ -410,8 +429,11 @@ export default function CajasPage() {
 
         // Check if the selected concept is a salary payment
         if (finalConcepto.startsWith("SUELDO DE ")) {
-            const nombreEmp = finalConcepto.substring("SUELDO DE ".length);
-            const empObj = staff.find(s => `${s.nombre}`.trim().toUpperCase() === nombreEmp.trim().toUpperCase());
+            const nombreEmp = finalConcepto.substring("SUELDO DE ".length).trim().toUpperCase();
+            const empObj = staff.find(s => {
+                const fullName = `${s.nombre} ${s.apellido || ""}`.trim().toUpperCase();
+                return fullName === nombreEmp;
+            });
             if (empObj) {
                 selectedEmpId = empObj.id;
             }
@@ -905,7 +927,7 @@ export default function CajasPage() {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4 mb-1 block">Concepto</label>
                                     <select
                                         value={selectedConcept}
-                                        onChange={e => setSelectedConcept(e.target.value)}
+                                        onChange={e => handleConceptChange(e.target.value)}
                                         className="w-full bg-gray-50 border-2 border-transparent focus:border-purple-600 focus:bg-white rounded-2xl py-3 px-6 outline-none transition-all text-sm font-bold text-gray-900"
                                     >
                                         <option value="">Seleccionar concepto...</option>
@@ -917,7 +939,7 @@ export default function CajasPage() {
 
                                         {/* Salary concepts (only for egress) */}
                                         {movForm.tipo === "egreso" && staff.map(s => (
-                                            <option key={s.id} value={`SUELDO DE ${s.nombre.toUpperCase()}`}>
+                                            <option key={s.id} value={`SUELDO DE ${s.nombre.toUpperCase()} ${s.apellido ? s.apellido.toUpperCase() : ""}`.trim()}>
                                                 SUELDO DE {s.nombre.toUpperCase()} {s.apellido ? s.apellido.toUpperCase() : ""}
                                             </option>
                                         ))}

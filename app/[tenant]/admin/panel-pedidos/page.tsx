@@ -315,8 +315,13 @@ export default function PanelPedidosPage() {
           console.log(`[AutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
           printedPrecuentasRef.current.set(pedido.id, notas);
           
-          // En vez de imprimir directamente, abrimos el modal para elegir forma de pago y aplicar recargo
-          setPreCuentaPedido(pedido);
+          if (pedido.metodo_pago_id) {
+            // El camarero ya eligió el método de pago, imprimir directamente!
+            printPreCuenta(pedido, printConfig);
+          } else {
+            // En vez de imprimir directamente, abrimos el modal para elegir forma de pago y aplicar recargo
+            setPreCuentaPedido(pedido);
+          }
         }
       }
     });

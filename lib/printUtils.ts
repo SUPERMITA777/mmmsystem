@@ -1,6 +1,5 @@
-/* ────────────────────────────────────────────
-   printUtils.ts – Utilidades de impresión 80mm
-   ──────────────────────────────────────────── */
+import { supabase } from "@/lib/supabaseClient";
+
 
 export type PrintConfig = {
   fuente_titulo: number;
@@ -581,7 +580,7 @@ export function printCocinaIncremental(pedido: any, newItems: any[], config: Par
 /* ──────────────────────────────────────────────────────
    PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
    ────────────────────────────────────────────────────── */
-export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, title: string = "PRE-CUENTA") {
+export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, title: string = "PRE-CUENTA") {
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const mesaNum = pedido.mesas?.numero || pedido.mesa_numero || "—";
@@ -603,12 +602,70 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
         <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px">+${fmtARS(a.precio ?? 0)}</td>
       </tr>`
     ).join("");
+
+    // Check if there is a discount reason in item or in notas
+    let discountReason = item.motivo_descuento || "";
+    if (!discountReason && item.notas) {
+      const match = item.notas.match(/\[Descuento: (.*?)\]/);
+      if (match) discountReason = match[1];
+    }
+    const cleanNotas = item.notas ? item.notas.replace(/\[Descuento: (.*?)\]/, "").trim() : "";
+    const cleanNotasRow = cleanNotas 
+      ? `<tr>
+          <td colspan="2" style="font-size:10px;color:#555;font-style:italic;padding-left:10px">
+            Nota: ${cleanNotas}
+          </td>
+         </tr>`
+      : "";
+
+    const reasonRow = discountReason 
+      ? `<tr>
+          <td colspan="2" style="font-size:10px;color:#b45309;font-weight:bold;font-style:italic;padding-left:10px">
+            * Motivo Descuento: ${discountReason}
+          </td>
+         </tr>`
+      : "";
+
     return `
       <tr>
         <td style="padding:3px 0;font-size:${c.fuente_items}px">${item.cantidad} ${item.nombre_producto}</td>
         <td style="text-align:right;padding:3px 0;font-size:${c.fuente_items}px;white-space:nowrap">${fmtARS(subtotal)}</td>
-      </tr>${ads}`;
+      </tr>
+      ${reasonRow}
+      ${cleanNotasRow}
+      ${ads}`;
   }).join("");
+
+  // Load deletion logs
+  let logsEliminados = pedido.logs_eliminacion || [];
+  if (logsEliminados.length === 0 && pedido.id) {
+    try {
+      const { data } = await supabase
+        .from("logs_eliminacion_pedidos")
+        .select("producto_nombre, cantidad, motivo")
+        .eq("pedido_id", pedido.id);
+      if (data) logsEliminados = data;
+    } catch (e) {
+      console.error("Error fetching logs_eliminacion_pedidos inside printPreCuenta:", e);
+    }
+  }
+
+  const logsHtml = logsEliminados.length > 0
+    ? `<hr class="sep">
+       <div style="font-size:11px;font-weight:black;margin-bottom:4px;color:#b45309;text-transform:uppercase;">
+         Modificaciones / Eliminaciones:
+       </div>
+       <table style="width:100%;font-size:10px;color:#444;margin-bottom:6px;">
+         ${logsEliminados.map((log: any) => `
+           <tr>
+             <td style="padding:2px 0;">
+               - ${log.cantidad}x ${log.producto_nombre}<br>
+               <span style="font-style:italic;color:#666;padding-left:8px;">Motivo: ${log.motivo}</span>
+             </td>
+           </tr>
+         `).join("")}
+       </table>`
+    : "";
 
   const html = `<!DOCTYPE html>
 <html><head>
@@ -664,6 +721,8 @@ export function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, t
       <td style="text-align:right;font-weight:bold;font-size:${c.fuente_total_bold}px;padding-top:6px">${fmtARS(pedido.total ?? 0)}</td>
     </tr>
   </table>
+
+  ${logsHtml}
 
   <hr class="sep">
 

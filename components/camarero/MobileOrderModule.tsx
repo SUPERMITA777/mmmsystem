@@ -72,6 +72,9 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
     const [selectedMesaId, setSelectedMesaId] = useState(mesaId || "");
     const [comensales, setComensales] = useState(1);
     const [activeOrder, setActiveOrder] = useState<any>(null);
+    const [metodosPago, setMetodosPago] = useState<any[]>([]);
+    const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
+    const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
 
     useEffect(() => {
         if (!sucursalId) return;
@@ -282,6 +285,10 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                  // Fetch Producto Grupos Adicionales
                  const { data: pg } = await supabase.from("producto_grupos_adicionales").select("*").eq("sucursal_id", sucursalId);
                  if (pg) setProductoGrupos(pg);
+                 
+                 // Fetch Payment Methods
+                 const { data: mps } = await supabase.from("metodos_pago").select("*").eq("sucursal_id", sucursalId).eq("activo", true);
+                 if (mps) setMetodosPago(mps);
 
                 // Fetch Waiters (via server API to bypass RLS seamlessly)
                 try {
@@ -542,7 +549,38 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
         }
     };
 
-    const handlePrecuentaFlow = async () => {
+    const startPrecuentaPaymentSelection = async () => {
+        if (!selectedMesaId || !sucursalId) return;
+        setIsSending(true);
+        try {
+            const { data: pedido, error: fetchErr } = await supabase
+                .from("pedidos")
+                .select("*, pedido_items(*)")
+                .eq("mesa_id", selectedMesaId)
+                .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (fetchErr) throw fetchErr;
+
+            if (!pedido) {
+                alert("No hay un pedido activo para esta mesa.");
+                return;
+            }
+
+            setActiveOrder(pedido);
+            setSelectedPaymentMethodId(pedido.metodo_pago_id || "");
+            setShowMobilePaymentModal(true);
+        } catch (err: any) {
+            console.error("Error loading order for precuenta:", err);
+            alert("Error al cargar el pedido activo: " + (err.message || ""));
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handlePrecuentaFlow = async (metodoId: string) => {
         if (!selectedMesaId || !sucursalId) return;
         setIsSending(true);
         setError(null);
@@ -564,14 +602,35 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
             }
 
             const selectedMesa = mesas.find(m => m.id === selectedMesaId);
+            
+            const metodo = metodosPago.find(m => m.id === metodoId);
+            if (!metodo) throw new Error("Método de pago no válido");
+
+            const recargoPorcentaje = Number(metodo.recargo_porcentaje || 0);
+            const subtotal = Number(pedido.subtotal || 0);
+            const descuento = Number(pedido.descuento || 0);
+            const costoEnvio = Number(pedido.costo_envio || 0);
+            const cubiertoTotal = Number(pedido.cubierto_total || 0);
+
+            const baseParaRecargo = subtotal - descuento;
+            const recargoTotal = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
+            const totalFinal = subtotal + costoEnvio + cubiertoTotal + recargoTotal - descuento;
+
             const { error: updateErr } = await supabase
                 .from("pedidos")
-                .update({ notas_internas: `MIXTO | PRECUENTA | PRINT_REQ_${Date.now()}` })
+                .update({ 
+                    notas_internas: `MIXTO | PRECUENTA | PRINT_REQ_${Date.now()}`,
+                    metodo_pago_id: metodoId,
+                    metodo_pago_nombre: metodo.nombre,
+                    recargo: recargoTotal,
+                    recargo_porcentaje: recargoPorcentaje,
+                    total: totalFinal
+                })
                 .eq("id", pedido.id);
 
             if (updateErr) throw updateErr;
 
-            alert(`Pre-cuenta de la Mesa ${selectedMesa?.numero || "—"} solicitada correctamente.`);
+            alert(`Pre-cuenta de la Mesa ${selectedMesa?.numero || "—"} solicitada correctamente con método de pago: ${metodo.nombre}.`);
         } catch (err: any) {
             console.error("Precuenta error:", err);
             alert(err.message || "Error al solicitar la pre-cuenta.");
@@ -729,7 +788,7 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                         </button>
                         
                         <button 
-                            onClick={handlePrecuentaFlow}
+                            onClick={startPrecuentaPaymentSelection}
                             disabled={!selectedMesaId || isSending}
                             className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-md mt-2 ${
                                 selectedMesaId 
@@ -1293,7 +1352,7 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
 
                             <button 
                                 onClick={async () => {
-                                    await handlePrecuentaFlow();
+                                    await startPrecuentaPaymentSelection();
                                     setIsTableConsumoOpen(false);
                                 }}
                                 disabled={isSending || carrito.filter(i => i.isComandado).length === 0}
@@ -1315,6 +1374,134 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                                 className="w-full py-3.5 bg-slate-200 text-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-300 active:scale-95 transition-all"
                             >
                                 🚪 Salir de la Mesa
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payment Selection Drawer */}
+            {showMobilePaymentModal && activeOrder && (
+                <div className="fixed inset-0 z-50">
+                    <div 
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        onClick={() => setShowMobilePaymentModal(false)}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[32px] max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300">
+                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto my-3 shrink-0" />
+                        
+                        <div className="px-6 pb-3 flex items-center justify-between border-b border-slate-100 shrink-0">
+                            <div className="space-y-0.5">
+                                <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Medio de Pago Pre-cuenta</h2>
+                                <p className="text-slate-500 text-xs">Mesa {mesas.find(m => m.id === selectedMesaId)?.numero || ""}</p>
+                            </div>
+                            <button 
+                                onClick={() => setShowMobilePaymentModal(false)}
+                                className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 active:scale-95 transition-all"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 pb-28">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Medios de Pago Disponibles</label>
+                            <div className="grid grid-cols-1 gap-2">
+                                {metodosPago.map(m => {
+                                    const isSelected = selectedPaymentMethodId === m.id;
+                                    const recargoPorc = Number(m.recargo_porcentaje || 0);
+                                    return (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => setSelectedPaymentMethodId(m.id)}
+                                            className={`flex items-center justify-between p-4 rounded-2xl border transition-all text-left ${
+                                                isSelected 
+                                                ? "border-indigo-600 bg-indigo-50/50 text-indigo-900 ring-2 ring-indigo-600/20" 
+                                                : "border-slate-100 bg-slate-50 hover:bg-slate-100 text-slate-700"
+                                            }`}
+                                        >
+                                            <div className="space-y-0.5">
+                                                <span className="text-xs font-black uppercase tracking-wider block">{m.nombre}</span>
+                                                {recargoPorc > 0 ? (
+                                                    <span className="text-[10px] text-amber-700 font-extrabold uppercase">Recargo: +{recargoPorc}%</span>
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase">Sin recargo</span>
+                                                )}
+                                            </div>
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                                isSelected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"
+                                            }`}>
+                                                {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Surcharge summary */}
+                            {(() => {
+                                const selectedMethod = metodosPago.find(m => m.id === selectedPaymentMethodId);
+                                const recargoPorc = selectedMethod ? Number(selectedMethod.recargo_porcentaje || 0) : 0;
+                                const subtotal = Number(activeOrder.subtotal || 0);
+                                const descuento = Number(activeOrder.descuento || 0);
+                                const costoEnvio = Number(activeOrder.costo_envio || 0);
+                                const cubiertoTotal = Number(activeOrder.cubierto_total || 0);
+                                const baseParaRecargo = subtotal - descuento;
+                                const recargoMonto = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorc) / 100) : 0;
+                                const totalFinal = subtotal + costoEnvio + cubiertoTotal + recargoMonto - descuento;
+
+                                return (
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2 mt-4">
+                                        <div className="flex justify-between text-xs font-bold text-slate-500">
+                                            <span>Subtotal</span>
+                                            <span>${subtotal}</span>
+                                        </div>
+                                        {descuento > 0 && (
+                                            <div className="flex justify-between text-xs font-bold text-green-600">
+                                                <span>Descuento</span>
+                                                <span>-${descuento}</span>
+                                            </div>
+                                        )}
+                                        {cubiertoTotal > 0 && (
+                                            <div className="flex justify-between text-xs font-bold text-slate-500">
+                                                <span>Cubiertos</span>
+                                                <span>${cubiertoTotal}</span>
+                                            </div>
+                                        )}
+                                        {recargoMonto > 0 && (
+                                            <div className="flex justify-between text-xs font-extrabold text-amber-700">
+                                                <span>Recargo ({recargoPorc}%)</span>
+                                                <span>+${recargoMonto}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-200/60 pt-2 mt-1">
+                                            <span>Total Pre-cuenta</span>
+                                            <span>${totalFinal}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-slate-100 flex gap-3 z-10 shrink-0">
+                            <button 
+                                onClick={() => setShowMobilePaymentModal(false)}
+                                className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all"
+                            >
+                                Atrás
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    if (!selectedPaymentMethodId) {
+                                        alert("Por favor selecciona un medio de pago.");
+                                        return;
+                                    }
+                                    setShowMobilePaymentModal(false);
+                                    await handlePrecuentaFlow(selectedPaymentMethodId);
+                                }}
+                                disabled={!selectedPaymentMethodId || isSending}
+                                className="flex-1 py-3.5 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 active:scale-95 transition-all shadow-md disabled:opacity-50"
+                            >
+                                {isSending ? "Solicitando..." : "🖨️ Solicitar Pre-cuenta"}
                             </button>
                         </div>
                     </div>
