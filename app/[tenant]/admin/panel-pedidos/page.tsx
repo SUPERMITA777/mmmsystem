@@ -230,13 +230,19 @@ export default function PanelPedidosPage() {
 
     if (isFirstLoadRef.current) {
       // Inicializar con los pedidos existentes para evitar reimprimir todo al cargar la página.
-      // Solo agregamos como "impresos" los pedidos que tengan más de 2 minutos de antigüedad.
+      // Solo agregamos como "impresos" los pedidos/items que tengan más de 2 minutos de antigüedad.
       const dosMinutosAtras = new Date(Date.now() - 2 * 60 * 1000);
       hybridPedidos.forEach(p => {
+        const items = p.pedido_items || [];
+        items.forEach((it: any) => {
+          const itemCreatedAt = it.created_at ? new Date(it.created_at) : new Date(p.created_at);
+          if (itemCreatedAt < dosMinutosAtras) {
+            autoPrintedItemIdsRef.current.add(it.id);
+          }
+        });
+
         if (new Date(p.created_at) < dosMinutosAtras) {
           autoPrintedIdsRef.current.add(p.id);
-          const items = p.pedido_items || [];
-          items.forEach((it: any) => autoPrintedItemIdsRef.current.add(it.id));
           
           // También pre-cargar pre-cuentas existentes como ya impresas
           const notas = p.notas_internas || "";
