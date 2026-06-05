@@ -99,6 +99,17 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
   if (bridgeEnabled && (printerName || printerIp)) {
     let sent = false;
     
+    let resolvedBridgeIp = bridgeIp;
+    if ((resolvedBridgeIp === '127.0.0.1' || resolvedBridgeIp === 'localhost') && typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      const isLocalIP = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host);
+      const isLocalHostname = host && host !== 'localhost' && host !== '127.0.0.1' && !host.includes('.');
+      if (isLocalIP || isLocalHostname) {
+        resolvedBridgeIp = host;
+        console.log(`[Printer] Dynamic bridge IP routing resolved to: ${resolvedBridgeIp}`);
+      }
+    }
+
     // Probar primero el último puerto que funcionó para ganar velocidad
     const portsToTry = lastWorkingPort ? [lastWorkingPort, ...BRIDGE_PORTS.filter(p => p !== lastWorkingPort)] : BRIDGE_PORTS;
 
@@ -106,7 +117,7 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // Aumentado a 5s para mayor estabilidad en redes locales
-        const res = await fetch(`http://${bridgeIp}:${port}/print`, {
+        const res = await fetch(`http://${resolvedBridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html, printerName, printerIp }),

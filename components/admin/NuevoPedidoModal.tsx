@@ -755,7 +755,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         cantidad: diffQty,
                         adicionales: item.adicionales || [],
                         notas: item.nota || "",
-                        impresora: fullProd.impresora,
+                        impresora: fullProd.impresora || item.impresora,
                         categoria_id: fullProd.categoria_id,
                         categoria_nombre: catNombre
                     });
