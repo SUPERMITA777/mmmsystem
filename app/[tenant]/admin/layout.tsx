@@ -7,6 +7,7 @@ import { NotificationProvider } from "@/context/NotificationContext";
 import { AdminUIProvider } from "@/context/AdminUIContext";
 import { PermissionsProvider } from "@/context/PermissionsContext";
 import SyncProvider from "@/components/admin/SyncProvider";
+import GlobalAutoPrinter from "@/components/admin/GlobalAutoPrinter";
 import versionData from "@/version.json";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
                 {/* Local-First: Indicador de sincronización offline/online */}
                 <SyncProvider />
+                {/* Global print event processor */}
+                <GlobalAutoPrinter />
               </div>
             </AdminUIProvider>
           </PermissionsProvider>
