@@ -155,6 +155,11 @@ export default function GlobalAutoPrinter() {
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
     const printOnConfirm = sucursalConfig?.panel_settings?.imprimir_al_confirmar ?? false;
 
+    // EVITAR MULTI-DISPOSITIVO DUPLICADOS: Solo la terminal 1 realiza la impresión automática en segundo plano
+    if (terminalId !== "1") {
+      return;
+    }
+
     hybridPedidos.forEach((pedido) => {
       // Ruteo de terminal si el pedido es del POS
       const pedTerminal = pedido.terminal_id ? String(pedido.terminal_id).trim() : "";

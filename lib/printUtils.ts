@@ -383,11 +383,11 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 /* ──────────────────────────────────────────────────────
    COCINA – Ticket para cocina con N° grande y horario
    ────────────────────────────────────────────────────── */
-export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, itemsOverride?: any[]) {
+export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}, itemsOverride?: any[]) {
   const printKey = `cocina-${pedido.id}-${JSON.stringify(itemsOverride || [])}`;
   if (isDuplicatePrint(printKey)) return;
 
-  const c = { ...DEFAULT_CONFIG, ...config };
+  const c: PrintConfig = { ...DEFAULT_CONFIG, ...config };
 
   if (c.bridge_enabled === false) {
     console.log(`[Printer] Impresión en cocina anulada porque el puente de impresión está desactivado.`);
@@ -534,14 +534,14 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
   const facturacionPrinterName = facturacionConf?.printerName;
   const facturacionPrinterIp = facturacionConf?.ip;
 
-  Object.values(physicalPrinters).forEach(({ printerName, printerIp, items, pKeys }) => {
+  for (const { printerName, printerIp, items, pKeys } of Object.values(physicalPrinters)) {
     if (pedido.tipo === "delivery" || pedido.tipo === "takeaway") {
       const isSameAsFacturacion = 
         (printerIp && printerIp === facturacionPrinterIp) ||
         (printerName && printerName === facturacionPrinterName);
       if (isSameAsFacturacion) {
         console.log(`[Printer] Saltando ticket de cocina en hardware compartido de FACTURACION para el pedido ${pedido.tipo}: ${printerName || printerIp}`);
-        return;
+        continue;
       }
     }
 
@@ -616,8 +616,8 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
 </body></html>`;
 
-    doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
-  });
+    await doPrint(html, printerName, c.bridge_ip, printerIp, true);
+  }
 }
 
 /* ──────────────────────────────────────────────────────
