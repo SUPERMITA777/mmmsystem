@@ -766,20 +766,30 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (uError) throw uError;
 
                 // Delete old items and re-insert all
-                await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
-                const items = carrito.map(item => ({
-                    id: item.id,
-                    pedido_id: editPedido.id,
-                    producto_id: item.producto_id,
-                    nombre_producto: item.nombre,
-                    cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
-                    notas: item.motivo_descuento 
-                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
-                        : (item.nota || ""),
-                    adicionales: item.adicionales || []
-                }));
-                await supabase.from("pedido_items").insert(items);
+                const { error: deleteErr } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+                if (deleteErr) throw deleteErr;
+
+                const items = carrito.map(item => {
+                    const mappedItem: any = {
+                        pedido_id: editPedido.id,
+                        producto_id: item.producto_id,
+                        nombre_producto: item.nombre,
+                        cantidad: item.cantidad,
+                        precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                        notas: item.motivo_descuento 
+                            ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                            : (item.nota || ""),
+                        adicionales: item.adicionales || []
+                    };
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    if (item.id && uuidRegex.test(item.id)) {
+                        mappedItem.id = item.id;
+                    }
+                    return mappedItem;
+                });
+                
+                const { error: insertErr } = await supabase.from("pedido_items").insert(items);
+                if (insertErr) throw insertErr;
 
                 // Consolidate other duplicate active orders for this table if editing a merged view
                 if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
@@ -852,7 +862,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         : (item.nota || ""),
                     adicionales: item.adicionales || []
                 }));
-                await supabase.from("pedido_items").insert(items);
+                const { error: iError } = await supabase.from("pedido_items").insert(items);
+                if (iError) throw iError;
 
                 // Update mesa status
                 if (mesaId) {
@@ -918,7 +929,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             }
 
             // 1. Synchronize the cart items in database to reflect any final modifications
-            await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+            const { error: dError } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+            if (dError) throw dError;
+            
             const items = carrito.map(item => ({
                 pedido_id: editPedido.id,
                 producto_id: item.producto_id,
@@ -930,7 +943,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     : (item.nota || ""),
                 adicionales: item.adicionales || []
             }));
-            await supabase.from("pedido_items").insert(items);
+            const { error: iError } = await supabase.from("pedido_items").insert(items);
+            if (iError) throw iError;
 
             // Consolidate and delete other grouped orders
             if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
