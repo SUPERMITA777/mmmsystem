@@ -770,7 +770,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (deleteErr) throw deleteErr;
 
                 const items = carrito.map(item => {
-                    const mappedItem: any = {
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
+                    return {
+                        id: finalId,
                         pedido_id: editPedido.id,
                         producto_id: item.producto_id,
                         nombre_producto: item.nombre,
@@ -781,11 +784,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                             : (item.nota || ""),
                         adicionales: item.adicionales || []
                     };
-                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                    if (item.id && uuidRegex.test(item.id)) {
-                        mappedItem.id = item.id;
-                    }
-                    return mappedItem;
                 });
                 
                 const { error: insertErr } = await supabase.from("pedido_items").insert(items);
