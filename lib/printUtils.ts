@@ -105,7 +105,7 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
     for (const port of portsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // Reducido a 3s para respuesta rápida
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Aumentado a 5s para mayor estabilidad en redes locales
         const res = await fetch(`http://${bridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

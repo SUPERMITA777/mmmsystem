@@ -716,7 +716,23 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
             if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
             else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
-        } catch {}
+        } catch (err) {
+            console.warn("[NuevoPedidoModal] Error fetching print config from Supabase, trying Dexie...", err);
+            try {
+                const localConfig = await db.config_sucursal.where("sucursal_id").equals(sucursalId).first();
+                if (localConfig) {
+                    const boldMap = localConfig.panel_settings?.print_bold || {};
+                    const fuente_adicionales = localConfig.panel_settings?.fuente_adicionales;
+                    const impresoras = localConfig.panel_settings?.impresoras || {};
+                    const bridge_ip = localConfig.panel_settings?.bridge_ip || "127.0.0.1";
+                    const bridge_enabled = localConfig.panel_settings?.bridge_enabled !== false;
+                    const nombre_local = localConfig.nombre || "MMM Pizza Artesanal";
+                    setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled });
+                }
+            } catch (dexieErr) {
+                console.error("[NuevoPedidoModal] Error fetching from Dexie:", dexieErr);
+            }
+        }
     }
 
     async function comandarSalon() {

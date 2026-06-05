@@ -95,7 +95,7 @@ function processQueue() {
             client.write(data, 'binary', () => {
                 client.destroy();
                 console.log('>>> Impresion IP completada OK');
-                if (!job.res.writableEnded) {
+                if (job.res && !job.res.writableEnded) {
                     job.res.writeHead(200, { 'Content-Type': 'application/json' });
                     job.res.end(JSON.stringify({ success: true, mode: 'direct-ip' }));
                 }
@@ -106,7 +106,7 @@ function processQueue() {
 
         client.on('error', (err) => {
             console.error(`*** Error imprimiendo a IP ${job.printerIp}:`, err.message);
-            if (!job.res.writableEnded) {
+            if (job.res && !job.res.writableEnded) {
                 job.res.writeHead(500);
                 job.res.end(JSON.stringify({ error: 'Error de conexión con impresora IP: ' + err.message }));
             }
@@ -117,7 +117,7 @@ function processQueue() {
 
         client.on('timeout', () => {
             console.error(`*** Timeout conectando a IP ${job.printerIp}`);
-            if (!job.res.writableEnded) {
+            if (job.res && !job.res.writableEnded) {
                 job.res.writeHead(500);
                 job.res.end(JSON.stringify({ error: 'Timeout de conexión con impresora IP' }));
             }
@@ -149,13 +149,13 @@ function processQueue() {
 
         if (code !== 0) {
             console.error('*** Proceso termino con error (codigo ' + code + ')');
-            if (!job.res.writableEnded) {
+            if (job.res && !job.res.writableEnded) {
                 job.res.writeHead(500);
                 job.res.end(JSON.stringify({ error: 'Error en proceso (codigo ' + code + ')' }));
             }
         } else {
             console.log('>>> Impresion completada OK');
-            if (!job.res.writableEnded) {
+            if (job.res && !job.res.writableEnded) {
                 job.res.writeHead(200, { 'Content-Type': 'application/json' });
                 job.res.end(JSON.stringify({ success: true }));
             }
@@ -256,6 +256,10 @@ function startServer(port) {
                         res.writeHead(400).end(JSON.stringify({ error: 'Falta printerName o printerIp' }));
                         return;
                     }
+                    // Responder inmediatamente al cliente para evitar timeouts y fallback a la impresión del navegador
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, queued: true }));
+
                     printQueue.push({ html, printerName, printerIp, res });
                     processQueue();
                 } catch (e) {
@@ -280,6 +284,10 @@ function startServer(port) {
                             <p>Fecha: ${new Date().toLocaleString()}</p>
                         </body></html>
                     `;
+                    // Responder inmediatamente al cliente
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, queued: true }));
+
                     printQueue.push({ html: testHtml, printerName, res });
                     processQueue();
                 } catch (e) {

@@ -13,6 +13,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { descontarStockDePedido } from "@/lib/stockUtils";
 import { getArgentinaDate, getStartOfDayArgentina, getEndOfDayArgentina, formatToArgentinaDateTime, formatToArgentinaTime } from "@/lib/dateUtils";
 import { useHybridPedidos } from "@/hooks/useHybridPedidos";
+import { db } from "@/lib/db";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
@@ -347,18 +348,37 @@ export default function PanelPedidosPage() {
 
   async function fetchPrintConfig() {
     if (!sucursalId) return;
-    const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-    const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
-    const { data: infoSuc } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
-    const boldMap = suc?.panel_settings?.print_bold || {};
-    const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
-    const impresoras = suc?.panel_settings?.impresoras || {};
-    const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
-    const bridge_enabled = suc?.panel_settings?.bridge_enabled !== false;
-    const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
-    const fiscal = suc?.panel_settings?.fiscal || {};
-    if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
-    else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+    try {
+      const { data } = await supabase.from("config_impresion").select("*").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+      const { data: suc } = await supabase.from("config_sucursal").select("panel_settings").eq("sucursal_id", sucursalId).limit(1).maybeSingle();
+      const { data: infoSuc } = await supabase.from("sucursales").select("nombre").eq("id", sucursalId).limit(1).maybeSingle();
+      const boldMap = suc?.panel_settings?.print_bold || {};
+      const fuente_adicionales = suc?.panel_settings?.fuente_adicionales;
+      const impresoras = suc?.panel_settings?.impresoras || {};
+      const bridge_ip = suc?.panel_settings?.bridge_ip || "127.0.0.1";
+      const bridge_enabled = suc?.panel_settings?.bridge_enabled !== false;
+      const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
+      const fiscal = suc?.panel_settings?.fiscal || {};
+      if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+      else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+    } catch (err) {
+      console.warn("[PanelPedidos] Error fetching print config from Supabase, trying Dexie...", err);
+      try {
+        const localConfig = await db.config_sucursal.where("sucursal_id").equals(sucursalId).first();
+        if (localConfig) {
+          const boldMap = localConfig.panel_settings?.print_bold || {};
+          const fuente_adicionales = localConfig.panel_settings?.fuente_adicionales;
+          const impresoras = localConfig.panel_settings?.impresoras || {};
+          const bridge_ip = localConfig.panel_settings?.bridge_ip || "127.0.0.1";
+          const bridge_enabled = localConfig.panel_settings?.bridge_enabled !== false;
+          const nombre_local = localConfig.nombre || "MMM Pizza Artesanal";
+          const fiscal = localConfig.panel_settings?.fiscal || {};
+          setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+        }
+      } catch (dexieErr) {
+        console.error("[PanelPedidos] Error fetching config from Dexie:", dexieErr);
+      }
+    }
   }
 
   async function fetchSucursalConfig() {
