@@ -107,6 +107,19 @@ export default function GlobalAutoPrinter() {
     if (!hybridPedidos || hybridPedidos.length === 0 || !printConfig) return;
 
     if (isFirstLoadRef.current) {
+      // Cargar desde localStorage para no re-imprimir cosas de pestañas anteriores o reloads
+      if (typeof window !== "undefined") {
+        try {
+          const storedItemIds = JSON.parse(localStorage.getItem("printed_item_ids") || "[]");
+          storedItemIds.forEach((id: string) => autoPrintedItemIdsRef.current.add(id));
+
+          const storedOrderIds = JSON.parse(localStorage.getItem("printed_order_ids") || "[]");
+          storedOrderIds.forEach((id: string) => autoPrintedIdsRef.current.add(id));
+        } catch (e) {
+          console.error("Error loading printed IDs from localStorage", e);
+        }
+      }
+
       // Marcar ítems existentes de más de 2 minutos para evitar reimpresión al iniciar sesión
       const dosMinutosAtras = new Date(Date.now() - 2 * 60 * 1000);
       hybridPedidos.forEach(p => {
@@ -126,11 +139,21 @@ export default function GlobalAutoPrinter() {
           }
         }
       });
+
+      // Guardar de vuelta en localStorage los inicializados
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("printed_item_ids", JSON.stringify(Array.from(autoPrintedItemIdsRef.current).slice(-1000)));
+          localStorage.setItem("printed_order_ids", JSON.stringify(Array.from(autoPrintedIdsRef.current).slice(-1000)));
+        } catch (e) {}
+      }
+
       isFirstLoadRef.current = false;
       console.log("[GlobalAutoPrint] Inicializado listado de pedidos impresos. Viejos ignorados:", autoPrintedIdsRef.current.size);
     }
 
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
+    const printOnConfirm = sucursalConfig?.panel_settings?.imprimir_al_confirmar ?? false;
 
     hybridPedidos.forEach((pedido) => {
       // Ruteo de terminal si el pedido es del POS
@@ -142,14 +165,35 @@ export default function GlobalAutoPrinter() {
       }
 
       // 1. Auto-impresión de comanda de cocina para nuevos ítems
-      if (autoPrintEnabled && ["pendiente", "confirmado", "preparando"].includes(pedido.estado)) {
+      const printForCurrentState = 
+        (pedido.estado === "pendiente" && autoPrintEnabled) ||
+        ((pedido.estado === "confirmado" || pedido.estado === "preparando") && (autoPrintEnabled || printOnConfirm));
+
+      if (printForCurrentState) {
         const allItems = pedido.pedido_items || [];
         if (allItems.length > 0) {
+          // Primero recargamos de localStorage por si otra pestaña ya los marcó
+          if (typeof window !== "undefined") {
+            try {
+              const storedItemIds = JSON.parse(localStorage.getItem("printed_item_ids") || "[]");
+              storedItemIds.forEach((id: string) => autoPrintedItemIdsRef.current.add(id));
+            } catch (e) {}
+          }
+
           const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
           if (newItemsToPrint.length > 0) {
             console.log(`[GlobalAutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
+            
+            // Marcar inmediatamente en el Ref e intentar guardar en localStorage
             newItemsToPrint.forEach((item: any) => autoPrintedItemIdsRef.current.add(item.id));
             autoPrintedIdsRef.current.add(pedido.id);
+
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("printed_item_ids", JSON.stringify(Array.from(autoPrintedItemIdsRef.current).slice(-1000)));
+                localStorage.setItem("printed_order_ids", JSON.stringify(Array.from(autoPrintedIdsRef.current).slice(-1000)));
+              } catch (e) {}
+            }
 
             try {
               printCocina(pedido, printConfig, newItemsToPrint);

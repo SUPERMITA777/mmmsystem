@@ -68,14 +68,30 @@ const DEFAULT_CONFIG: PrintConfig = {
 const recentlyPrinted = new Map<string, number>();
 
 function isDuplicatePrint(key: string): boolean {
+  if (typeof window === "undefined") return false;
   const now = Date.now();
-  const lastTime = recentlyPrinted.get(key);
-  if (lastTime && (now - lastTime) < 4000) {
-    console.warn(`[Printer] Ignorando impresión duplicada para la clave: ${key}`);
-    return true;
+  try {
+    const lastTimeStr = localStorage.getItem(`printed_key_${key}`);
+    if (lastTimeStr) {
+      const lastTime = parseInt(lastTimeStr, 10);
+      if (now - lastTime < 4000) {
+        console.warn(`[Printer] Ignorando impresión duplicada para la clave: ${key}`);
+        return true;
+      }
+    }
+    localStorage.setItem(`printed_key_${key}`, String(now));
+    
+    // Auto-limpiar clave de localStorage después de 10 segundos para no acumular basura
+    setTimeout(() => {
+      try {
+        localStorage.removeItem(`printed_key_${key}`);
+      } catch (e) {}
+    }, 10000);
+    
+    return false;
+  } catch (e) {
+    return false;
   }
-  recentlyPrinted.set(key, now);
-  return false;
 }
 
 function getFacturacionKey(impresoras?: any): string {
@@ -392,6 +408,30 @@ export function printCocina(pedido: any, config: Partial<PrintConfig> = {}, item
 
   const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
 
+  // Guardar en localStorage que ya se mandaron a imprimir estos ítems
+  if (typeof window !== "undefined" && itemsToPrint.length > 0) {
+    try {
+      let printedIds: string[] = [];
+      const stored = localStorage.getItem("printed_item_ids");
+      if (stored) printedIds = JSON.parse(stored);
+      
+      let changed = false;
+      itemsToPrint.forEach((item: any) => {
+        if (item.id && !printedIds.includes(item.id)) {
+          printedIds.push(item.id);
+          changed = true;
+        }
+      });
+      
+      if (changed) {
+        if (printedIds.length > 1000) printedIds = printedIds.slice(printedIds.length - 1000);
+        localStorage.setItem("printed_item_ids", JSON.stringify(printedIds));
+      }
+    } catch (e) {
+      console.error("[Printer] Error saving printed items to localStorage:", e);
+    }
+  }
+
   // Agrupar items por impresora según configuración
   const itemsByPrinter: Record<string, any[]> = {};
   const defaultPrinterKey = "COCINA 1";
@@ -592,6 +632,9 @@ export function printCocinaIncremental(pedido: any, newItems: any[], config: Par
    PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
    ────────────────────────────────────────────────────── */
 export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, title: string = "PRE-CUENTA") {
+  const printKey = `precuenta-${pedido.id}-${pedido.notas_internas || ""}`;
+  if (isDuplicatePrint(printKey)) return;
+
   const c = { ...DEFAULT_CONFIG, ...config };
 
   const mesaNum = pedido.mesas?.numero || pedido.mesa_numero || "—";

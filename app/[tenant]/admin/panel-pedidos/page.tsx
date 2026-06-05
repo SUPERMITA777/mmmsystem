@@ -568,9 +568,11 @@ export default function PanelPedidosPage() {
       tiempo_preparacion_minutos: minutes
     }).eq("id", pedido.id);
 
-    // Auto-print comanda + kitchen ticket
-    printComanda(pedido, printConfig);
-    printCocina(pedido, printConfig);
+    // Auto-print comanda according to local settings. Kitchen ticket is handled automatically by GlobalAutoPrinter.
+    const printOnConfirm = sucursalConfig?.panel_settings?.imprimir_al_confirmar ?? false;
+    if (printOnConfirm) {
+      printComanda(pedido, printConfig);
+    }
 
     // Enviar WhatsApp de confirmación
     sendWhatsAppNotification(pedido, 'confirmado');
