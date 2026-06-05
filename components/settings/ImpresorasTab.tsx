@@ -108,7 +108,7 @@ export function ImpresorasTab() {
 
     async function handleTest(printerId: string) {
         if (!bridgePort) {
-            alert("El Puente de Impresión no está activo. Ejecutá iniciar-impresoras.bat primero.");
+            alert("El Puente de Impresión no está activo. Ejecutá run_bridge_silently.bat primero.");
             return;
         }
         const printer = config[printerId];
@@ -192,10 +192,9 @@ export function ImpresorasTab() {
                             <div className="mt-4 bg-white/80 rounded-xl p-4 border border-amber-100">
                                 <p className="font-bold text-sm text-gray-800 mb-2">Configuración rápida (1 vez):</p>
                                 <ol className="text-sm text-gray-600 space-y-2 list-decimal ml-4">
-                                    <li>Abrí la carpeta del proyecto: <code className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs font-mono">scripts/</code></li>
-                                    <li>Hacé doble clic en <code className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs font-mono">iniciar-impresoras.bat</code></li>
-                                    <li>Elegí &quot;S&quot; para que se inicie solo con Windows</li>
-                                    <li>¡Listo! Esta página se actualizará automáticamente.</li>
+                                    <li>Abrí la carpeta del proyecto o de descarga.</li>
+                                    <li>Hacé doble clic en <code className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-xs font-mono">run_bridge_silently.bat</code></li>
+                                    <li>¡Listo! Esta página se actualizará automáticamente y mantendrá el puente activo en bucle.</li>
                                 </ol>
                             </div>
                             <div className="mt-3 flex gap-2">
@@ -209,8 +208,8 @@ export function ImpresorasTab() {
 
                                 <div className="flex gap-2">
                                     <a 
-                                        href="/bridge/iniciar-impresoras.bat" 
-                                        download="iniciar-impresoras.bat"
+                                        href="/bridge/run_bridge_silently.bat" 
+                                        download="run_bridge_silently.bat"
                                         className="px-4 py-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-sm"
                                     >
                                         <Download size={14} />
@@ -475,8 +474,8 @@ export function ImpresorasTab() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a 
-                        href="/bridge/iniciar-impresoras.bat" 
-                        download="iniciar-impresoras.bat"
+                        href="/bridge/run_bridge_silently.bat" 
+                        download="run_bridge_silently.bat"
                         className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-purple-300 hover:shadow-md transition-all group"
                     >
                         <div className="flex flex-col">
