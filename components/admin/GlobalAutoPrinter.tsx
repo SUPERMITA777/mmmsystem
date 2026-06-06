@@ -217,7 +217,7 @@ export default function GlobalAutoPrinter() {
           console.log(`[GlobalAutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
           printedPrecuentasRef.current.set(pedido.id, notas);
           
-          if (pedido.metodo_pago_id) {
+          if (pedido.metodo_pago_id || notas.toUpperCase().includes("MIXTO")) {
             printPreCuenta(pedido, printConfig);
           }
         }

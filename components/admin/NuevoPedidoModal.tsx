@@ -175,10 +175,26 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }
                 setCubiertoCobrado(editPedido.cubierto_cobrado || false);
                 // Preserve original payment method
-                if (editPedido.metodo_pago_id) setMetodoPagoId(editPedido.metodo_pago_id);
                 setIsMixto(false);
+                setMetodoPagoId("");
                 setMetodoPago2Id("");
                 setMontoMixto1("");
+                if (editPedido.metodo_pago_id) {
+                    setMetodoPagoId(editPedido.metodo_pago_id);
+                } else if (editPedido.notas_internas && editPedido.notas_internas.includes("MIXTO")) {
+                    try {
+                        const jsonMatch = editPedido.notas_internas.match(/\{.*\}/);
+                        if (jsonMatch) {
+                            const data = JSON.parse(jsonMatch[0]);
+                            setIsMixto(true);
+                            if (data.id1) setMetodoPagoId(data.id1);
+                            if (data.id2) setMetodoPago2Id(data.id2);
+                            if (data.monto1) setMontoMixto1(data.monto1.toString());
+                        }
+                    } catch (e) {
+                        console.error("Error parsing mixed payment from notas_internas:", e);
+                    }
+                }
                 // Restore delivery validation if previously verified
                 if (editPedido.tipo === "delivery") {
                     setValidacionDelivery({
@@ -1210,8 +1226,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     recargo: recargoTotal,
                     cubierto_total: cubiertoTotal,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
-                    notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
-                    metodo_pago_id: metodoPagoId || null,
+                    notas_internas: isMixto
+                        ? `MIXTO | ${JSON.stringify({ id1: metodoPagoId, id2: metodoPago2Id, monto1: montoMixto1 })}` + (descuentoSeleccionado ? ` | ${descuentoSeleccionado.nombre}` : "")
+                        : (descuentoSeleccionado ? descuentoSeleccionado.nombre : null),
+                    metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                     metodo_pago_nombre: metodoPagoNombre,
                     notas: notasPagoMixto + (notaPedido || (seAbona ? `Abona con: $${seAbona}` : "")),
                     cliente_lng: direccionGeocoded?.lng,
@@ -1278,8 +1296,10 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     recargo: recargoTotal,
                     cubierto_total: cubiertoTotal,
                     descuento: codigoDescuento > 0 ? codigoDescuento : (promoDescuento > 0 ? promoDescuento : 0),
-                    notas_internas: descuentoSeleccionado ? descuentoSeleccionado.nombre : null,
-                    metodo_pago_id: metodoPagoId || null,
+                    notas_internas: isMixto
+                        ? `MIXTO | ${JSON.stringify({ id1: metodoPagoId, id2: metodoPago2Id, monto1: montoMixto1 })}` + (descuentoSeleccionado ? ` | ${descuentoSeleccionado.nombre}` : "")
+                        : (descuentoSeleccionado ? descuentoSeleccionado.nombre : null),
+                    metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                     metodo_pago_nombre: metodoPagoNombre,
                     estado: "pendiente",
                     notas: notasPagoMixto + (notaPedido || (seAbona ? `Abona con: $${seAbona}` : "")),
@@ -2290,7 +2310,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             await supabase.from("pedidos").update({ 
                                                 metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                                                 metodo_pago_nombre: metodoPagoNombre,
-                                                notas_internas: (isMixto ? "MIXTO" : "") + " | PRECUENTA",
+                                                notas_internas: isMixto
+                                                    ? `MIXTO | PRECUENTA | ${JSON.stringify({ id1: metodoPagoId, id2: metodoPago2Id, monto1: montoMixto1 })}`
+                                                    : " | PRECUENTA",
                                                 notas: notasPagoMixto + (notaPedido || ""),
                                                 recargo: recargoTotal,
                                                 total: total
