@@ -919,32 +919,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 notasPagoMixto = `Pago mixto: $${montoMixto1} en ${mPagoNombre1}, resto en ${mPagoNombre2}. `;
             }
 
-            // 1. Synchronize the cart items in database to reflect any final modifications
-            const { error: dError } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
-            if (dError) throw dError;
-            
-            const items = carrito.map(item => ({
-                pedido_id: editPedido.id,
-                producto_id: item.producto_id,
-                nombre_producto: item.nombre,
-                cantidad: item.cantidad,
-                precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
-                notas: item.motivo_descuento 
-                    ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
-                    : (item.nota || ""),
-                adicionales: item.adicionales || []
-            }));
-            const { error: iError } = await supabase.from("pedido_items").insert(items);
-            if (iError) throw iError;
-
-            // Consolidate and delete other grouped orders
-            if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
-                const otherIds = editPedido.groupedIds.filter((id: string) => id !== editPedido.id);
-                await supabase.from("pedido_items").delete().in("pedido_id", otherIds);
-                await supabase.from("pedidos").delete().in("id", otherIds);
-            }
-
-            // 2. Update order status to 'entregado' (finalized) and save payment method
+            // 1. Update order status to 'entregado' (finalized) first to prevent race conditions
+            // with GlobalAutoPrinter (or other terminals) which might fetch active orders and see new item IDs.
             const { error: uError } = await supabase
                 .from("pedidos")
                 .update({ 
@@ -959,6 +935,36 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 })
                 .eq("id", editPedido.id);
             if (uError) throw uError;
+
+            // 2. Synchronize the cart items in database to reflect any final modifications
+            const { error: dError } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
+            if (dError) throw dError;
+            
+            const items = carrito.map(item => {
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
+                return {
+                    id: finalId,
+                    pedido_id: editPedido.id,
+                    producto_id: item.producto_id,
+                    nombre_producto: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                    notas: item.motivo_descuento 
+                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                        : (item.nota || ""),
+                    adicionales: item.adicionales || []
+                };
+            });
+            const { error: iError } = await supabase.from("pedido_items").insert(items);
+            if (iError) throw iError;
+
+            // Consolidate and delete other grouped orders
+            if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
+                const otherIds = editPedido.groupedIds.filter((id: string) => id !== editPedido.id);
+                await supabase.from("pedido_items").delete().in("pedido_id", otherIds);
+                await supabase.from("pedidos").delete().in("id", otherIds);
+            }
 
             // Fetch deletion logs for this order
             let logsEliminados: any[] = [];
