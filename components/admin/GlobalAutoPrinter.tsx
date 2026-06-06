@@ -155,17 +155,17 @@ export default function GlobalAutoPrinter() {
     const autoPrintEnabled = sucursalConfig?.panel_settings?.imprimir_al_recibir !== false;
     const printOnConfirm = sucursalConfig?.panel_settings?.imprimir_al_confirmar ?? false;
 
-    // EVITAR MULTI-DISPOSITIVO DUPLICADOS: Solo la terminal 1 realiza la impresión automática en segundo plano
-    if (terminalId !== "1") {
-      return;
-    }
-
     hybridPedidos.forEach((pedido) => {
-      // Ruteo de terminal si el pedido es del POS
+      // Ruteo de terminal:
+      // Si el pedido tiene un terminal_id válido asignado, lo imprime únicamente ese terminal.
+      // Si el pedido NO tiene terminal_id (es null, undefined o vacío), por defecto lo imprime la Terminal 1.
       const pedTerminal = pedido.terminal_id ? String(pedido.terminal_id).trim() : "";
-      const isPosOrder = pedido.origen === "pos";
-      
-      if (isPosOrder && pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== String(terminalId)) {
+      let targetTerminal = "1";
+      if (pedTerminal && pedTerminal !== "null" && pedTerminal !== "undefined" && pedTerminal !== "") {
+        targetTerminal = pedTerminal;
+      }
+
+      if (String(terminalId) !== targetTerminal) {
         return;
       }
 
