@@ -812,12 +812,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     await supabase.from("pedidos").delete().in("id", otherIds);
                 }
 
-                // Print only new items to kitchen
-                if (printItems.length > 0) {
-                    const pedidoForPrint = { ...editPedido, tipo: "salon", mesa_numero: editPedido.mesas?.numero, numero_pedido: editPedido.numero_pedido, created_at: new Date().toISOString(), notas: notaPedido };
-                    printCocinaIncremental(pedidoForPrint, printItems, printConfig);
-                }
-
                 // Mark all items as commanded & update original commanded quantities
                 setItemsComandados(new Set(carrito.map(i => i.id)));
             } else {
@@ -883,23 +877,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 if (mesaId) {
                     await supabase.from("mesas").update({ estado: "ocupada" }).eq("id", mesaId);
                 }
-
-                // Print ALL items to kitchen (first comanda)
-                const pedidoForPrint = { ...createdPedido, mesas: { numero: mesas.find(m => m.id === mesaId)?.numero } };
-                const printItems = carrito.map(item => {
-                    const fullProd = productos.find(p => p.id === item.producto_id) || {};
-                    const catNombre = categorias.find(c => c.id === fullProd.categoria_id)?.nombre || "";
-                    return {
-                        nombre_producto: item.nombre,
-                        cantidad: item.cantidad,
-                        adicionales: item.adicionales || [],
-                        notas: item.nota || "",
-                        impresora: fullProd.impresora || item.impresora,
-                        categoria_id: fullProd.categoria_id,
-                        categoria_nombre: catNombre
-                    };
-                });
-                printCocina(pedidoForPrint, printConfig, printItems);
 
                 // Mark all items as commanded
                 setItemsComandados(new Set(carrito.map(i => i.id)));
@@ -2335,7 +2312,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             comensales: comensales,
                                             descuento: codigoDescuento + promoDescuento
                                         };
-                                        printPreCuenta(patchedPedido, printConfig);
                                         setShowPreCuentaModal(false);
                                         onClose();
                                     }}

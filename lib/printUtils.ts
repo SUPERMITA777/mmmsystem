@@ -384,7 +384,12 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
    COCINA – Ticket para cocina con N° grande y horario
    ────────────────────────────────────────────────────── */
 export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}, itemsOverride?: any[]) {
-  const printKey = `cocina-${pedido.id}-${JSON.stringify(itemsOverride || [])}`;
+  const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
+  const itemsSummary = itemsToPrint
+    .map((it: any) => `${it.nombre_producto || it.nombre || ""}:${it.cantidad}`)
+    .sort()
+    .join(",");
+  const printKey = `cocina-${pedido.id}-${itemsSummary}`;
   if (isDuplicatePrint(printKey)) return;
 
   const c: PrintConfig = { ...DEFAULT_CONFIG, ...config };
@@ -405,8 +410,6 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
   const createdAt = new Date(pedido.created_at || new Date());
   const horaComandado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
   const fechaCorta = createdAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
-
-  const itemsToPrint = itemsOverride ?? pedido.pedido_items ?? [];
 
   // Guardar en localStorage que ya se mandaron a imprimir estos ítems
   if (typeof window !== "undefined" && itemsToPrint.length > 0) {
@@ -632,7 +635,7 @@ export function printCocinaIncremental(pedido: any, newItems: any[], config: Par
    PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
    ────────────────────────────────────────────────────── */
 export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> = {}, title: string = "PRE-CUENTA") {
-  const printKey = `precuenta-${pedido.id}-${pedido.notas_internas || ""}`;
+  const printKey = `precuenta-${pedido.id}`;
   if (isDuplicatePrint(printKey)) return;
 
   const c = { ...DEFAULT_CONFIG, ...config };

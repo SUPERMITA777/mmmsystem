@@ -397,6 +397,9 @@ export default function PanelPedidosPage() {
     await supabase.from("pedidos").update({ 
       metodo_pago_id: metodoId,
       metodo_pago_nombre: metodo.nombre,
+      notas_internas: (pedido.notas_internas || "").includes("PRECUENTA") 
+        ? pedido.notas_internas 
+        : (pedido.notas_internas ? `${pedido.notas_internas} | PRECUENTA` : "PRECUENTA"),
       recargo: recargo,
       total: mainTotal
     }).eq("id", pedido.id);
@@ -410,8 +413,6 @@ export default function PanelPedidosPage() {
       total: (pedido.total - Number(pedido.recargo || 0)) + recargo,
       recargo_porcentaje: recargoPorcentaje
     };
-    
-    printPreCuenta(printedPedido, printConfig);
     
     setPreCuentaPedido(null);
     fetchPedidos();
@@ -481,12 +482,6 @@ export default function PanelPedidosPage() {
       if (nuevoEstado === "preparando") {
         sendWhatsAppNotification(pedido, 'confirmado');
         if (sucursalId) descontarStockDePedido(id, sucursalId);
-        const { data: rawPed } = await supabase
-          .from("pedidos")
-          .select("*, pedido_items(*)")
-          .eq("id", id)
-          .maybeSingle();
-        if (rawPed) printCocina(rawPed, printConfig);
       } else if (nuevoEstado === "listo" || nuevoEstado === "en_camino") {
         sendWhatsAppNotification(pedido, 'listo');
       } else if (nuevoEstado === "entregado" || nuevoEstado === "cancelado") {
