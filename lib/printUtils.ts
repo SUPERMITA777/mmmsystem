@@ -380,6 +380,17 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   doPrint(html, printerName, c.bridge_ip, printerIp, c.bridge_enabled !== false);
 }
 
+/**
+ * Normaliza una cadena de texto eliminando acentos/tildes y convirtiéndola a mayúsculas.
+ */
+function normalizeString(str: string): string {
+  return (str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+}
+
 /* ──────────────────────────────────────────────────────
    COCINA – Ticket para cocina con N° grande y horario
    ────────────────────────────────────────────────────── */
@@ -438,6 +449,16 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
   // Agrupar items por impresora según configuración
   const itemsByPrinter: Record<string, any[]> = {};
   const defaultPrinterKey = "COCINA 1";
+
+  const isValidPrinter = (printerKey: string) => {
+    if (!printerKey) return false;
+    return !!(c.impresoras?.[printerKey] || Object.values(c.impresoras || {}).some((p: any) => p.printerName === printerKey));
+  };
+
+  const getResolvedPrinterKey = (printerKey: string) => {
+    if (c.impresoras?.[printerKey]) return printerKey;
+    return Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === printerKey) || defaultPrinterKey;
+  };
   
   itemsToPrint.forEach((item: any) => {
     const mainProdObj = Array.isArray(item.productos) ? item.productos[0] : item.productos;
@@ -455,19 +476,39 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
                        finalMainProd.id_impresora || 
                        finalMainProd.impresora_id;
 
-    if (prodPrinter && (c.impresoras?.[prodPrinter] || Object.values(c.impresoras || {}).some((p: any) => p.printerName === prodPrinter))) {
-      mainPrinterKey = c.impresoras?.[prodPrinter] ? prodPrinter : 
-                       Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === prodPrinter) || defaultPrinterKey;
-    } else if (c.impresoras) {
+    // 1. Verificar si es un override explícito (distinto de 'COCINA1' / 'COCINA 1' y válido)
+    const isExplicitOverride = prodPrinter && 
+                               prodPrinter !== "COCINA1" && 
+                               prodPrinter !== "COCINA 1" && 
+                               prodPrinter !== "null" && 
+                               prodPrinter !== "undefined" &&
+                               isValidPrinter(prodPrinter);
+
+    // 2. Buscar si hay una impresora asignada a la categoría
+    let categoryPrinterKey: string | null = null;
+    if (c.impresoras) {
+      const cleanCatName = normalizeString(mainItemCatName);
       for (const [key, pConf] of Object.entries(c.impresoras)) {
         const conf = pConf as any;
         const catIds = conf.categoriasIds || [];
-        const catNames = (conf.categoriasNombres || []).map((n: string) => n.toUpperCase());
-        if ((mainItemCatId && catIds.includes(mainItemCatId)) || (mainItemCatName && catNames.includes(mainItemCatName))) {
-          mainPrinterKey = key;
+        const catNames = (conf.categoriasNombres || []).map((n: string) => normalizeString(n));
+        
+        if ((mainItemCatId && catIds.includes(mainItemCatId)) || (cleanCatName && catNames.includes(cleanCatName))) {
+          categoryPrinterKey = key;
           break;
         }
       }
+    }
+
+    // 3. Decidir destino final por prioridad
+    if (isExplicitOverride && prodPrinter) {
+      mainPrinterKey = getResolvedPrinterKey(prodPrinter);
+    } else if (categoryPrinterKey) {
+      mainPrinterKey = categoryPrinterKey;
+    } else if (prodPrinter && isValidPrinter(prodPrinter)) {
+      mainPrinterKey = getResolvedPrinterKey(prodPrinter);
+    } else {
+      mainPrinterKey = defaultPrinterKey;
     }
 
     // Separate additionals that have a different printer

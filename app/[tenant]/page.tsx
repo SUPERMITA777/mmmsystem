@@ -332,6 +332,11 @@ function PublicMenuContent() {
                 .filter((p: any) =>
                   p.activo && p.visible_en_menu && !p.producto_oculto
                 )
+                .map((p: any) => ({
+                  ...p,
+                  categoria_id: cat.id,
+                  categoria_nombre: cat.nombre
+                }))
                 .sort((a: any, b: any) => (a.orden ?? 999) - (b.orden ?? 999)),
             };
           })

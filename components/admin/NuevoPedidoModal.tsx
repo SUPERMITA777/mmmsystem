@@ -1312,15 +1312,26 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     terminal_id: terminalId
                 };
 
-                const itemsPayload = carrito.map(item => ({
-                    id: generateLocalId(),
-                    producto_id: item.producto_id,
-                    nombre_producto: item.nombre,
-                    cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride,
-                    notas: item.nota || "",
-                    adicionales: item.adicionales || []
-                }));
+                const itemsPayload = carrito.map(item => {
+                    const fullProd = productos.find(p => p.id === item.producto_id) || {};
+                    const catOfProd = categorias.find(c => c.id === fullProd.categoria_id);
+                    return {
+                        id: generateLocalId(),
+                        producto_id: item.producto_id,
+                        nombre_producto: item.nombre,
+                        cantidad: item.cantidad,
+                        precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                        notas: item.nota || "",
+                        adicionales: item.adicionales || [],
+                        impresora: fullProd.impresora || item.impresora || "",
+                        categoria_id: fullProd.categoria_id || "",
+                        categoria_nombre: catOfProd?.nombre || "",
+                        productos: fullProd.id ? {
+                            ...fullProd,
+                            categorias: catOfProd ? { nombre: catOfProd.nombre } : null
+                        } : null
+                    };
+                });
 
                 // persistirPedidoHibrido handles IndexedDB -> Supabase -> Local Hub
                 const result = await persistirPedidoHibrido(
