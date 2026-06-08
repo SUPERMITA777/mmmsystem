@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { handleApiError, handleSupabaseError, ValidationError, AuthError } from '@/lib/errors';
 
 export async function POST(req: Request) {
     try {
         const { email, password, nombre } = await req.json();
 
         if (!email || !password) {
-            return NextResponse.json(
-                { error: 'Email y contraseña son requeridos' },
-                { status: 400 }
-            );
+            throw new ValidationError('Email y contraseña son requeridos');
         }
 
         // Check if any admin users already exist
@@ -19,11 +17,12 @@ export async function POST(req: Request) {
             .in('rol', ['super_admin', 'admin'])
             .limit(1);
 
+        if (checkError) {
+            throw handleSupabaseError(checkError);
+        }
+
         if (existingUsers && existingUsers.length > 0) {
-            return NextResponse.json(
-                { error: 'Ya existe un usuario administrador. Use el panel para crear más usuarios.' },
-                { status: 403 }
-            );
+            throw new AuthError('Ya existe un usuario administrador. Use el panel para crear más usuarios.', 403);
         }
 
         // Create the auth user
@@ -34,10 +33,7 @@ export async function POST(req: Request) {
         });
 
         if (authError) {
-            return NextResponse.json(
-                { error: `Error al crear usuario: ${authError.message}` },
-                { status: 500 }
-            );
+            throw new Error(`Error al crear usuario: ${authError.message}`);
         }
 
         // Insert into usuarios table
@@ -54,10 +50,7 @@ export async function POST(req: Request) {
         if (insertError) {
             // Rollback: delete the auth user if insert fails
             await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-            return NextResponse.json(
-                { error: `Error al crear perfil: ${insertError.message}` },
-                { status: 500 }
-            );
+            throw handleSupabaseError(insertError);
         }
 
         return NextResponse.json({
@@ -66,9 +59,7 @@ export async function POST(req: Request) {
             user: { id: authData.user.id, email },
         });
     } catch (err: any) {
-        return NextResponse.json(
-            { error: 'Error interno del servidor' },
-            { status: 500 }
-        );
+        return handleApiError(err);
     }
 }
+

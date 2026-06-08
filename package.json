@@ -38,6 +38,7 @@
     "recharts": "^3.8.1",
     "tailwindcss": "4.1.18",
     "uuid": "^14.0.0",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -45,6 +46,7 @@
     "@types/node": "25.2.0",
     "@types/react": "19.2.10",
     "@types/react-dom": "19.2.3",
+    "@types/web-push": "^3.6.4",
     "eslint": "9.39.2",
     "eslint-config-next": "16.1.6",
     "pg": "^8.18.0",

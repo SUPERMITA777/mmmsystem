@@ -4,6 +4,14 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
+/**
+ * @typedef {Object} TenantContextType
+ * @property {string} tenantSlug - El slug identificador único del comercio obtenido de la ruta URL (ej: "mmm").
+ * @property {string|null} sucursalId - El identificador UUID de la sucursal activa en la base de datos Supabase.
+ * @property {Object|null} sucursalData - Información extendida del comercio (horarios, dirección, estado de suscripción).
+ * @property {boolean} loading - Indica si se está consultando la información del tenant en el inicio de la navegación.
+ */
+
 interface TenantContextType {
     tenantSlug: string;
     sucursalId: string | null;
@@ -18,11 +26,26 @@ const TenantContext = createContext<TenantContextType>({
     loading: true,
 });
 
+/**
+ * Hook para consumir la información de la sucursal o tenant activo en el contexto actual.
+ * 
+ * @returns {TenantContextType} El estado del tenant activo.
+ */
 export function useTenant() {
     return useContext(TenantContext);
 }
 
+/**
+ * Proveedor del tenant/sucursal activo.
+ * Determina el slug del comercio basándose en la URL, carga su configuración desde Supabase,
+ * y valida si su suscripción está activa, bloqueando la visualización si expiró.
+ * 
+ * @provider TenantProvider
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a renderizar.
+ */
 export function TenantProvider({ children }: { children: ReactNode }) {
+
     const params = useParams();
     const pathname = usePathname();
     const router = useRouter();

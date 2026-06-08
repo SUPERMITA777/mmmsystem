@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { handleApiError, ValidationError, AuthError, handleSupabaseError } from '@/lib/errors';
 
 // Service role client for reliable lookup (bypasses RLS)
 const supabaseAdmin = createClient(
@@ -34,10 +35,7 @@ export async function POST(req: Request) {
         const { email, password } = await req.json();
 
         if (!email || !password) {
-            return NextResponse.json(
-                { error: 'Email y contraseña son requeridos' },
-                { status: 400 }
-            );
+            throw new ValidationError('Email y contraseña son requeridos');
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -46,10 +44,7 @@ export async function POST(req: Request) {
         });
 
         if (error) {
-            return NextResponse.json(
-                { error: 'Credenciales inválidas' },
-                { status: 401 }
-            );
+            throw new AuthError('Credenciales inválidas', 401);
         }
 
         // Look up the user's role and assigned branch (bypasses RLS)
@@ -57,11 +52,15 @@ export async function POST(req: Request) {
         let tenantSlug: string | null = null;
         let sucursalId: string | null = null;
 
-        const { data: userData } = await supabaseAdmin
+        const { data: userData, error: userError } = await supabaseAdmin
             .from('usuarios')
             .select('rol, sucursal_id')
             .eq('id', data.user.id)
             .maybeSingle();
+
+        if (userError) {
+            throw handleSupabaseError(userError);
+        }
 
         if (userData?.rol) {
             rol = userData.rol;
@@ -72,11 +71,15 @@ export async function POST(req: Request) {
 
         // Fallback: Check if they are the owner/creator of any sucursal
         if (!sucursalId) {
-            const { data: ownerSuc } = await supabaseAdmin
+            const { data: ownerSuc, error: ownerError } = await supabaseAdmin
                 .from('sucursales')
                 .select('id, slug')
                 .eq('user_id', data.user.id)
                 .maybeSingle();
+            
+            if (ownerError) {
+                throw handleSupabaseError(ownerError);
+            }
             
             if (ownerSuc) {
                 sucursalId = ownerSuc.id;
@@ -87,11 +90,15 @@ export async function POST(req: Request) {
 
         // If user has a sucursal, resolve its slug for redirect
         if (sucursalId && !tenantSlug) {
-            const { data: sucData } = await supabaseAdmin
+            const { data: sucData, error: sucError } = await supabaseAdmin
                 .from('sucursales')
                 .select('slug')
                 .eq('id', sucursalId)
                 .single();
+            
+            if (sucError) {
+                throw handleSupabaseError(sucError);
+            }
             
             if (sucData?.slug) {
                 tenantSlug = sucData.slug;
@@ -109,10 +116,7 @@ export async function POST(req: Request) {
             session: data.session,
         });
     } catch (err: any) {
-        console.error('Login error:', err);
-        return NextResponse.json(
-            { error: 'Error interno del servidor' },
-            { status: 500 }
-        );
+        return handleApiError(err);
     }
 }
+

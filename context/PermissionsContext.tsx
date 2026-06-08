@@ -5,10 +5,18 @@ import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 import { useAuth } from "@/components/admin/AuthProvider";
 
-// Permission levels: "none" | "view" | "edit"
-// - "none": No access at all (section hidden)
-// - "view": Can see the section but cannot modify data (buttons disabled, forms read-only)
-// - "edit": Full access to view and modify data
+/**
+ * @typedef {string} PermissionLevel - "none" | "view" | "edit"
+ */
+
+/**
+ * @typedef {Object} PermissionsContextType
+ * @property {Record<string, Record<string, PermissionLevel>>} permisos - Mapa estructurado de permisos por rol y sección.
+ * @property {boolean} loading - Indica si se están cargando los permisos desde la configuración de sucursal.
+ * @property {function} canView - Retorna true si el usuario actual tiene permisos de visualización ("view" o "edit") para la sección especificada.
+ * @property {function} canEdit - Retorna true si el usuario actual tiene permisos de edición/escritura ("edit") para la sección especificada.
+ * @property {function} getPermissionLevel - Retorna el nivel de acceso directo ("none", "view", "edit") para la sección.
+ */
 
 type PermissionLevel = "none" | "view" | "edit";
 type PermissionsMap = Record<string, Record<string, PermissionLevel>>;
@@ -29,11 +37,27 @@ const PermissionsContext = createContext<PermissionsContextType>({
     getPermissionLevel: () => "edit",
 });
 
+/**
+ * Hook para consumir las validaciones de permisos y control de acceso del panel.
+ * 
+ * @returns {PermissionsContextType} Las utilidades de chequeo de visualización y edición.
+ */
 export function usePermissions() {
     return useContext(PermissionsContext);
 }
 
+/**
+ * Proveedor del sistema de autorización fina por roles.
+ * Consulta la tabla `config_sucursal` y mapea los niveles de acceso dinámicos
+ * para camareros, empleados, repartidores, etc. Los roles `admin` y `super_admin`
+ * omiten estas restricciones por defecto.
+ * 
+ * @provider PermissionsProvider
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a renderizar.
+ */
 export function PermissionsProvider({ children }: { children: ReactNode }) {
+
     const { sucursalId } = useTenant();
     const { user } = useAuth();
     const [permisos, setPermisos] = useState<PermissionsMap>({});

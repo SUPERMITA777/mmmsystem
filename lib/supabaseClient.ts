@@ -1,3 +1,14 @@
+/**
+ * CLIENT-SIDE SUPABASE CLIENT
+ * 
+ * Este cliente utiliza la clave pública anónima de Supabase.
+ * Está diseñado para ser utilizado exclusivamente en el lado del cliente:
+ * - Componentes de React (Client Components)
+ * - Hooks personalizados
+ * - Contextos de React
+ * 
+ * Aplica políticas RLS (Row Level Security) configuradas en Supabase.
+ */
 import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -11,5 +22,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
 console.log("[supabaseClient] Initialized with createBrowserClient");
+
 
 

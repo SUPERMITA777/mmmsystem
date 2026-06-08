@@ -4,6 +4,15 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
 
+/**
+ * @typedef {Object} NotificationContextType
+ * @property {function} playNotificationSound - Reproduce la alerta acústica del pedido y sintetiza el mensaje de voz.
+ * @property {function} enableAudio - Solicita permisos de audio y reanuda el AudioContext bloqueado del navegador.
+ * @property {boolean} audioEnabled - Indica si el usuario habilitó el sonido en la aplicación.
+ * @property {boolean} flash - Estado transitorio para generar parpadeos visuales al recibir alertas.
+ * @property {boolean} isAudioContextSuspended - Indica si el AudioContext está suspendido (esperando interacción del usuario).
+ */
+
 interface NotificationContextType {
   playNotificationSound: (force?: boolean, clienteNombre?: string) => void;
   enableAudio: () => void;
@@ -14,7 +23,17 @@ interface NotificationContextType {
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
+/**
+ * Proveedor de alertas sonoras y notificaciones en tiempo real del sistema.
+ * Gestiona el ciclo de vida del AudioContext, reproduce tonos predefinidos o personalizados,
+ * sintetiza texto a voz ante nuevos pedidos (TTS) y se suscribe a los canales Realtime de Supabase.
+ * 
+ * @provider NotificationProvider
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a renderizar.
+ */
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
+
   const { sucursalId } = useTenant();
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -425,6 +444,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   );
 }
 
+/**
+ * Hook para consumir el sistema de alertas sonoras y notificaciones.
+ * Debe utilizarse dentro de un NotificationProvider.
+ * 
+ * @returns {NotificationContextType} La interfaz de reproducción de alertas e información acústica.
+ * @throws {Error} Si se utiliza fuera de un NotificationProvider.
+ */
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
   if (context === undefined) {
@@ -432,3 +458,4 @@ export const useNotifications = () => {
   }
   return context;
 };
+

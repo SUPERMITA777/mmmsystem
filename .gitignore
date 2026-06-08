@@ -53,3 +53,15 @@ local-agent/dist/
 local-agent/auth_whatsapp/  
 local-agent/mmm-agent-config.json  
 local-agent/*.exe 
+
+# Temporary development files and test/seed scripts
+test_*.js
+test_*.mjs
+check_*.js
+seed_*.js
+backup_*.json
+*.xlsx
+temp_*.sql
+agent-transcripts/
+scratch/
+

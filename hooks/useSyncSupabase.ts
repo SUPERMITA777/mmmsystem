@@ -47,7 +47,17 @@ interface SyncState {
 const SYNC_INTERVAL_MS = 30_000; // 30 segundos
 const MAX_BATCH_SIZE = 50; // Máximo de registros por batch
 
+/**
+ * Hook de sincronización bidireccional local-nube.
+ * Detecta cambios en la conectividad del dispositivo y sincroniza automáticamente el catálogo
+ * (Supabase -> Dexie) y sube los pedidos locales pendientes de sincronización (Dexie -> Supabase)
+ * con reintentos automáticos, backoff exponencial y de-duplicación de claves.
+ * 
+ * @param {string|null} sucursalId - El identificador UUID de la sucursal activa.
+ * @returns {SyncState} El estado actual de la sincronización y conectividad de red.
+ */
 export function useSyncSupabase(sucursalId: string | null): SyncState {
+
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);

@@ -2,6 +2,22 @@
 
 import { createContext, useContext, useState, ReactNode } from "react";
 
+/**
+ * @typedef {Object} CartItem
+ * @property {string} id - Identificador único de este item en el carrito (autogenerado).
+ * @property {string} productoId - ID del producto (referencia a base de datos).
+ * @property {string} nombre - Nombre del producto.
+ * @property {number} precio - Precio unitario del producto base.
+ * @property {number} cantidad - Cantidad agregada.
+ * @property {string} [imagen_url] - URL de la imagen del producto.
+ * @property {Array} [adicionales] - Adicionales seleccionados (nombre, precio, grupo, impresora).
+ * @property {string} [opciones] - Descripción textual de opciones.
+ * @property {string} [notas] - Notas o aclaraciones adicionales del cliente.
+ * @property {string} [categoriaNombre] - Nombre de la categoría a la que pertenece.
+ * @property {boolean} [isComandado] - Indica si el item ya fue impreso/comandado.
+ * @property {Object} [descuentoInfo] - Información de descuentos aplicados (id, porcentaje, no_acumulable).
+ */
+
 export type CartItem = {
     id: string;
     productoId: string;
@@ -34,7 +50,17 @@ type CartContextType = {
 
 const CartContext = createContext<CartContextType | null>(null);
 
+/**
+ * Proveedor del carrito de compras.
+ * Gestiona la adición, remoción, actualización de cantidades y cómputo de totales.
+ * Mantiene la persistencia en memoria durante el flujo de pedido.
+ * 
+ * @provider CartProvider
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a renderizar.
+ */
 export function CartProvider({ children }: { children: ReactNode }) {
+
     const [items, setItems] = useState<CartItem[]>([]);
 
     const addItem = (item: Omit<CartItem, "id">) => {
@@ -84,8 +110,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
 }
 
+/**
+ * Hook para consumir el estado del carrito de compras.
+ * Debe utilizarse dentro de un CartProvider.
+ * 
+ * @returns {CartContextType} La interfaz interactiva del carrito de compras.
+ * @throws {Error} Si se utiliza fuera de un CartProvider.
+ */
 export function useCart() {
     const ctx = useContext(CartContext);
     if (!ctx) throw new Error("useCart must be used inside CartProvider");
     return ctx;
 }
+

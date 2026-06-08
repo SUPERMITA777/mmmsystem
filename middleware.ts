@@ -38,12 +38,29 @@ export async function middleware(request: NextRequest) {
         }
     );
 
+    // Helper para redirigir conservando las cookies actualizadas de Supabase
+    const redirectWithCookies = (url: URL | string) => {
+        const redirectResponse = NextResponse.redirect(url);
+        response.cookies.getAll().forEach((cookie) => {
+            redirectResponse.cookies.set(cookie.name, cookie.value, {
+                path: cookie.path,
+                domain: cookie.domain,
+                maxAge: cookie.maxAge,
+                expires: cookie.expires,
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly,
+                sameSite: cookie.sameSite,
+            });
+        });
+        return redirectResponse;
+    };
+
     const { pathname } = request.nextUrl;
 
 
     // 2. Handle /admin legacy root redirect to /mmm/admin
     if (pathname === '/admin') {
-        return NextResponse.redirect(new URL('/mmm/admin', request.url));
+        return redirectWithCookies(new URL('/mmm/admin', request.url));
     }
 
     // 3. Protect all /[tenant]/admin and /[tenant]/camarero routes (except login)
@@ -61,7 +78,7 @@ export async function middleware(request: NextRequest) {
         // Only enforce login for admin section
         if (section === 'admin' && !user) {
             const loginUrl = new URL(`/${urlTenant}/admin/login`, request.url);
-            return NextResponse.redirect(loginUrl);
+            return redirectWithCookies(loginUrl);
         }
 
         if (user) {
@@ -94,7 +111,7 @@ export async function middleware(request: NextRequest) {
             // 2. Role Authorization: 'camarero' cannot access '/admin'
             if (section === 'admin' && userRol === 'camarero') {
                 const waiterUrl = new URL(`/${urlTenant}/camarero/pedir`, request.url);
-                return NextResponse.redirect(waiterUrl);
+                return redirectWithCookies(waiterUrl);
             }
 
             // 3. Super admins bypass tenant enforcement
@@ -113,7 +130,7 @@ export async function middleware(request: NextRequest) {
                 if (sucData?.slug && sucData.slug !== urlTenant) {
                     // Redirect to their correct tenant, preserving the section (admin/camarero) and sub-path
                     const correctUrl = new URL(`/${sucData.slug}/${section}${subPath}`, request.url);
-                    return NextResponse.redirect(correctUrl);
+                    return redirectWithCookies(correctUrl);
                 }
             }
         }

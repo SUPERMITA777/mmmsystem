@@ -2,6 +2,15 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 
+/**
+ * @typedef {Object} AdminUIContextType
+ * @property {boolean} isSidebarCollapsed - Indica si la barra lateral está colapsada en vistas de escritorio.
+ * @property {function} toggleSidebar - Alterna el colapso de la barra lateral de escritorio.
+ * @property {boolean} isMobileSidebarOpen - Indica si el menú lateral de móvil está abierto.
+ * @property {function} toggleMobileSidebar - Alterna la apertura de la barra lateral móvil.
+ * @property {function} closeMobileSidebar - Cierra la barra lateral móvil.
+ */
+
 type AdminUIContextType = {
   isSidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -12,7 +21,16 @@ type AdminUIContextType = {
 
 const AdminUIContext = createContext<AdminUIContextType | undefined>(undefined);
 
+/**
+ * Proveedor del contexto de la interfaz de administración (Admin UI).
+ * Maneja el estado responsivo de colapso y visibilidad de los paneles laterales.
+ * 
+ * @provider AdminUIProvider
+ * @param {Object} props - Propiedades del componente.
+ * @param {React.ReactNode} props.children - Nodos hijos a renderizar.
+ */
 export function AdminUIProvider({ children }: { children: React.ReactNode }) {
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -54,6 +72,13 @@ export function AdminUIProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Hook para consumir los estados de la interfaz de administración (Admin UI).
+ * Debe utilizarse dentro de un AdminUIProvider.
+ * 
+ * @returns {AdminUIContextType} El contexto de estados e interactividad lateral.
+ * @throws {Error} Si se utiliza fuera de un AdminUIProvider.
+ */
 export function useAdminUI() {
   const context = useContext(AdminUIContext);
   if (context === undefined) {
@@ -61,3 +86,4 @@ export function useAdminUI() {
   }
   return context;
 }
+

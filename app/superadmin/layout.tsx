@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "MMM SUPERADMIN",
-  description: "Panel de Control Global - MMM System"
+  description: "Panel de Control Global - MMM System",
+  manifest: "/manifest.json"
 };
 
 export default function SuperAdminLayout({
