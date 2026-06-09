@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useTenant } from "@/context/TenantContext";
-import { Plus, Save, Edit3, Trash2, X, ExternalLink, User, QrCode } from "lucide-react";
+import { Plus, Save, Edit3, Trash2, X, ExternalLink, User, QrCode, Maximize, Minimize } from "lucide-react";
 // @ts-ignore - WidthProvider may not be in the ESM export
 import RGL from "react-grid-layout";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -47,6 +47,29 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
     const [staff, setStaff] = useState<any[]>([]);
     const [selectedWaiterId, setSelectedWaiterId] = useState("");
     const [terminalId, setTerminalId] = useState("1");
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        return () => {
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+        };
+    }, []);
+
+    const toggleFullScreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error enabling fullscreen: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    };
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -404,6 +427,12 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 <div className="flex items-center gap-3">
                     {!isCamareroMode && (
                         <>
+                            <button
+                                onClick={toggleFullScreen}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-slate-700 text-white hover:bg-slate-800 rounded-lg text-sm font-medium transition-colors shadow-sm mr-2"
+                            >
+                                {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />} {isFullscreen ? "Pantalla Normal" : "Pantalla Completa"}
+                            </button>
                             <button
                                 onClick={() => window.open(`${window.location.pathname.replace('/admin/salon', '/camarero/salon')}`, '_blank')}
                                 className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors shadow-sm mr-2"
