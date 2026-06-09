@@ -277,6 +277,12 @@ export default function GlobalAutoPrinter() {
           }
         }
       }
+
+      // 3. Guard de Cierre de Mesa / Cobro
+      // Si el pedido tiene formato de cobro directo "COBRO|{timestamp}", lo ignoramos para evitar doble print.
+      if ((pedido.estado === "entregado" || notas.toUpperCase().includes("COBRO")) && !notas.startsWith("COBRO|")) {
+        // Reservado para evitar reimpresiones si se agrega automatización sobre finalizados
+      }
     });
   }, [hybridPedidos, printConfig, sucursalConfig, terminalId]);
 

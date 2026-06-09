@@ -225,9 +225,10 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
   });
   const horaCreado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 
-  // Agrupar items por categoría
+  // Agrupar items por categoría, consolidando duplicados primero
+  const consolidated = consolidarItemsPedido(pedido.pedido_items ?? []);
   const groupedItems: Record<string, any[]> = {};
-  (pedido.pedido_items ?? []).forEach((item: any) => {
+  consolidated.forEach((item: any) => {
     let catName = "PRODUCTOS";
     if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
       catName = item.productos.categorias.nombre.toUpperCase();

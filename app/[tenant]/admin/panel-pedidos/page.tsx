@@ -528,7 +528,7 @@ export default function PanelPedidosPage() {
 
       const { data: itemsActuales } = await supabase
         .from("pedido_items")
-        .select("precio_unitario, cantidad, adicionales")
+        .select("id, nombre_producto, cantidad, precio_unitario, notas, adicionales, producto_id")
         .eq("pedido_id", id);
 
       const subtotalDB = (itemsActuales || []).reduce((sum: number, item: any) => {
@@ -540,11 +540,29 @@ export default function PanelPedidosPage() {
       const cubiertoTotalActual = Number(mainOrder.cubierto_total || 0);
       const totalReal = subtotalDB + costoEnvioActual + recargoActual + cubiertoTotalActual - descuentoActual;
 
+      const notasInternasVal = `COBRO|${Date.now()}`;
+
       await supabase.from("pedidos").update({
         estado: "entregado",
         subtotal: subtotalDB,
         total: totalReal,
+        notas_internas: notasInternasVal
       }).eq("id", id);
+
+      const printedPedido = {
+        ...pedido,
+        estado: "entregado",
+        subtotal: subtotalDB,
+        total: totalReal,
+        notas_internas: notasInternasVal,
+        pedido_items: (itemsActuales as any) || pedido.pedido_items
+      };
+
+      try {
+        await printComanda(printedPedido, printConfig);
+      } catch (err) {
+        console.error("[PanelPedidos] Error direct printing comanda on table close:", err);
+      }
     }
 
     if ((pedido as any).mesa_id) {
