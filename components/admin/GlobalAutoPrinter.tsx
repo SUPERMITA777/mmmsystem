@@ -262,11 +262,14 @@ export default function GlobalAutoPrinter() {
       }
 
       // 2. Auto-impresión de Pre-cuenta solicitada desde celulares
+      // IMPORTANTE: si notas_internas tiene formato "PRECUENTA|{timestamp}", significa que
+      // panel-pedidos ya la imprimió directamente — GlobalAutoPrinter debe ignorarla
+      // para evitar doble impresión. Solo procesa el formato legado "PRECUENTA" plano (desde QR).
       const notas = pedido.notas_internas || "";
-      if (notas.toUpperCase().includes("PRECUENTA")) {
+      if (notas.toUpperCase().includes("PRECUENTA") && !notas.startsWith("PRECUENTA|")) {
         const lastPrintedValue = printedPrecuentasRef.current.get(pedido.id);
         if (lastPrintedValue !== notas) {
-          console.log(`[GlobalAutoPrint] Solicitud de Pre-Cuenta detectada para pedido:`, pedido.numero_pedido);
+          console.log(`[GlobalAutoPrint] Solicitud de Pre-Cuenta QR detectada para pedido:`, pedido.numero_pedido);
           printedPrecuentasRef.current.set(pedido.id, notas);
           
           if (pedido.metodo_pago_id || notas.toUpperCase().includes("MIXTO")) {
