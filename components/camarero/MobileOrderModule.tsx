@@ -478,6 +478,7 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                 id: localId,
                 sucursal_id: sucursalId,
                 mesa_id: selectedMesaId,
+                mesa_numero: mesas.find(m => m.id === selectedMesaId)?.numero ?? null,
                 comensales: comensales,
                 camarero_id: activeWaiter?.id || user?.id,
                 camarero_nombre: activeWaiter?.nombre || user?.nombre || "Mozo",

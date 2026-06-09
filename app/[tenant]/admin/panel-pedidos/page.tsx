@@ -393,26 +393,40 @@ export default function PanelPedidosPage() {
     const recargo = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
     const mainTotal = mainSubtotal + mainCostoEnvio + recargo + mainCubiertoTotal - mainDescuento;
     
+    const notasInternasVal = `PRECUENTA|${Date.now()}`;
+
     // Update the database
     await supabase.from("pedidos").update({ 
       metodo_pago_id: metodoId,
       metodo_pago_nombre: metodo.nombre,
-      notas_internas: (pedido.notas_internas || "").includes("PRECUENTA") 
-        ? pedido.notas_internas 
-        : (pedido.notas_internas ? `${pedido.notas_internas} | PRECUENTA` : "PRECUENTA"),
+      notas_internas: notasInternasVal,
       recargo: recargo,
       total: mainTotal
     }).eq("id", pedido.id);
     
+    // Fetch updated pedido_items from database to ensure they are up to date
+    const { data: updatedItems } = await supabase
+      .from("pedido_items")
+      .select("id, nombre_producto, cantidad, precio_unitario, notas, adicionales")
+      .eq("pedido_id", pedido.id);
+
     // Print the pre-cuenta with the updated details
     const printedPedido = {
       ...pedido,
       metodo_pago_id: metodoId,
       metodo_pago_nombre: metodo.nombre,
+      notas_internas: notasInternasVal,
       recargo: recargo,
-      total: (pedido.total - Number(pedido.recargo || 0)) + recargo,
-      recargo_porcentaje: recargoPorcentaje
+      total: mainTotal,
+      recargo_porcentaje: recargoPorcentaje,
+      pedido_items: (updatedItems as any) || pedido.pedido_items
     };
+    
+    try {
+      await printPreCuenta(printedPedido, printConfig);
+    } catch (err) {
+      console.error("[PanelPedidos] Error direct printing pre-cuenta:", err);
+    }
     
     setPreCuentaPedido(null);
     fetchPedidos();

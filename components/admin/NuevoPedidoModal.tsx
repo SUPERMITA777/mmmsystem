@@ -1305,6 +1305,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     notas: notasPagoMixto + (notaPedido || (seAbona ? `Abona con: $${seAbona}` : "")),
                     cliente_lng: direccionGeocoded?.lng,
                     mesa_id: tipo === "salon" ? (mesaId || null) : null,
+                    mesa_numero: tipo === "salon" ? (mesas.find(m => m.id === mesaId)?.numero ?? null) : null,
                     camarero_id: tipo === "salon" ? (camareroId || null) : null,
                     camarero_nombre: tipo === "salon" ? (camareros.find(c => c.id === camareroId)?.nombre || null) : null,
                     comensales: tipo === "salon" ? comensales : null,

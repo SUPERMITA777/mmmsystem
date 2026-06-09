@@ -117,11 +117,19 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
           }
         }
 
-        // 2. Insertar los items del pedido
+        // 2. Insertar los items del pedido limpiando propiedades virtuales no existentes en BD
         if (pedido.payload_items && pedido.payload_items.length > 0) {
           const itemsPayload = pedido.payload_items.map((item) => ({
-            ...item,
+            id: item.id || crypto.randomUUID(),
             pedido_id: pedido.id,
+            producto_id: item.producto_id,
+            nombre_producto: item.nombre_producto || item.nombre,
+            cantidad: item.cantidad,
+            precio_unitario: item.precio_unitario || item.precio,
+            descuento: item.descuento || 0,
+            notas: item.notas || item.nota || "",
+            adicionales: item.adicionales || [],
+            estado: item.estado || "pendiente"
           }));
 
           const { error: itemsError } = await supabase

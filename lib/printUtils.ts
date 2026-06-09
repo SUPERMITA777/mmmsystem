@@ -416,7 +416,7 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
         : "SALÓN";
 
   const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
-  const mesaNum = pedido.mesas?.numero || pedido.mesa_numero;
+  const mesaNum = pedido.mesas?.numero ?? pedido.mesa_numero ?? "S/N";
 
   const createdAt = new Date(pedido.created_at || new Date());
   const horaComandado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -672,6 +672,23 @@ export function printCocinaIncremental(pedido: any, newItems: any[], config: Par
   printCocina(pedido, config, newItems);
 }
 
+function consolidarItemsPedido(items: any[]): any[] {
+  const map = new Map<string, any>()
+  items.forEach(item => {
+    const adsKey = (item.adicionales || [])
+      .map((a: any) => `${a.nombre}:${a.cantidad}`)
+      .sort().join(",")
+    const notas = (item.notas || item.nota || "").trim()
+    const key = `${item.producto_id}-${item.precio_unitario}-${adsKey}-${notas}`
+    if (map.has(key)) {
+      map.get(key).cantidad += item.cantidad
+    } else {
+      map.set(key, { ...item })
+    }
+  })
+  return Array.from(map.values())
+}
+
 /* ──────────────────────────────────────────────────────
    PRE-CUENTA – Ticket de pre-cuenta para mesa de salón
    ────────────────────────────────────────────────────── */
@@ -691,13 +708,14 @@ export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> =
     weekday: "long", day: "numeric", month: "long", year: "numeric"
   });
 
-  const itemsRows = (pedido.pedido_items ?? []).map((item: any) => {
+  const items = consolidarItemsPedido(pedido.pedido_items ?? []);
+  const itemsRows = items.map((item: any) => {
     const subtotal = item.precio_unitario * item.cantidad;
     const aggregated = aggregateAdicionales(item.adicionales ?? []);
     const ads = aggregated.map((a: any) =>
       `<tr>
         <td style="padding-left:10px;font-size:${c.fuente_adicionales || c.fuente_footer}px">+ ${a.nombre}</td>
-        <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px">+${fmtARS(a.precio ?? 0)}</td>
+        <td style="text-align:right;font-size:${c.fuente_adicionales || c.fuente_footer}px;color:#666;font-style:italic">(incl.)</td>
       </tr>`
     ).join("");
 

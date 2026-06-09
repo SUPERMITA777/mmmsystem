@@ -98,7 +98,7 @@ export default function GlobalAutoPrinter() {
   }, [sucursalId]);
 
   const autoPrintedIdsRef = useRef<Set<string>>(new Set());
-  const autoPrintedItemIdsRef = useRef<Set<string>>(new Set());
+  const autoPrintedItemQtyRef = useRef<Map<string, number>>(new Map());
   const isFirstLoadRef = useRef<boolean>(true);
   const printedPrecuentasRef = useRef<Map<string, string>>(new Map());
 
@@ -110,8 +110,32 @@ export default function GlobalAutoPrinter() {
       // Cargar desde localStorage para no re-imprimir cosas de pestañas anteriores o reloads
       if (typeof window !== "undefined") {
         try {
-          const storedItemIds = JSON.parse(localStorage.getItem("printed_item_ids") || "[]");
-          storedItemIds.forEach((id: string) => autoPrintedItemIdsRef.current.add(id));
+          const legacyIds = localStorage.getItem("printed_item_ids");
+          const storedItemQtys = localStorage.getItem("printed_item_qtys");
+          
+          if (legacyIds && !storedItemQtys) {
+            try {
+              const idsArray = JSON.parse(legacyIds);
+              const migratedObj: Record<string, number> = {};
+              idsArray.forEach((id: string) => {
+                migratedObj[id] = 1;
+                autoPrintedItemQtyRef.current.set(id, 1);
+              });
+              localStorage.setItem("printed_item_qtys", JSON.stringify(migratedObj));
+              localStorage.removeItem("printed_item_ids");
+            } catch (e) {
+              console.error("Error migrating printed_item_ids", e);
+            }
+          } else if (storedItemQtys) {
+            try {
+              const obj = JSON.parse(storedItemQtys);
+              Object.entries(obj).forEach(([id, qty]) => {
+                autoPrintedItemQtyRef.current.set(id, Number(qty));
+              });
+            } catch (e) {
+              console.error("Error parsing printed_item_qtys", e);
+            }
+          }
 
           const storedOrderIds = JSON.parse(localStorage.getItem("printed_order_ids") || "[]");
           storedOrderIds.forEach((id: string) => autoPrintedIdsRef.current.add(id));
@@ -127,7 +151,7 @@ export default function GlobalAutoPrinter() {
         items.forEach((it: any) => {
           const itemCreatedAt = it.created_at ? new Date(it.created_at) : new Date(p.created_at);
           if (itemCreatedAt < dosMinutosAtras) {
-            autoPrintedItemIdsRef.current.add(it.id);
+            autoPrintedItemQtyRef.current.set(it.id, it.cantidad || 1);
           }
         });
 
@@ -143,7 +167,11 @@ export default function GlobalAutoPrinter() {
       // Guardar de vuelta en localStorage los inicializados
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("printed_item_ids", JSON.stringify(Array.from(autoPrintedItemIdsRef.current).slice(-1000)));
+          const obj: Record<string, number> = {};
+          autoPrintedItemQtyRef.current.forEach((val, key) => {
+            obj[key] = val;
+          });
+          localStorage.setItem("printed_item_qtys", JSON.stringify(obj));
           localStorage.setItem("printed_order_ids", JSON.stringify(Array.from(autoPrintedIdsRef.current).slice(-1000)));
         } catch (e) {}
       }
@@ -180,22 +208,46 @@ export default function GlobalAutoPrinter() {
           // Primero recargamos de localStorage por si otra pestaña ya los marcó
           if (typeof window !== "undefined") {
             try {
-              const storedItemIds = JSON.parse(localStorage.getItem("printed_item_ids") || "[]");
-              storedItemIds.forEach((id: string) => autoPrintedItemIdsRef.current.add(id));
+              const storedItemQtys = JSON.parse(localStorage.getItem("printed_item_qtys") || "{}");
+              Object.entries(storedItemQtys).forEach(([id, qty]) => {
+                autoPrintedItemQtyRef.current.set(id, Number(qty));
+              });
             } catch (e) {}
           }
 
-          const newItemsToPrint = allItems.filter((item: any) => !autoPrintedItemIdsRef.current.has(item.id));
+          // Identificar ítems nuevos o con incremento de cantidad
+          const newItemsToPrint: any[] = [];
+          allItems.forEach((item: any) => {
+            const printedQty = autoPrintedItemQtyRef.current.get(item.id) || 0;
+            if (item.cantidad > printedQty) {
+              const diffQty = item.cantidad - printedQty;
+              newItemsToPrint.push({
+                ...item,
+                cantidad: diffQty // Mandar a imprimir solo la diferencia
+              });
+            }
+          });
+
           if (newItemsToPrint.length > 0) {
-            console.log(`[GlobalAutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos en pedido:`, pedido.numero_pedido);
+            console.log(`[GlobalAutoPrint] Detectados ${newItemsToPrint.length} ítems nuevos o incrementados en pedido:`, pedido.numero_pedido);
             
             // Marcar inmediatamente en el Ref e intentar guardar en localStorage
-            newItemsToPrint.forEach((item: any) => autoPrintedItemIdsRef.current.add(item.id));
+            newItemsToPrint.forEach((item: any) => {
+              const currentPrinted = autoPrintedItemQtyRef.current.get(item.id) || 0;
+              autoPrintedItemQtyRef.current.set(item.id, currentPrinted + item.cantidad);
+            });
             autoPrintedIdsRef.current.add(pedido.id);
 
             if (typeof window !== "undefined") {
               try {
-                localStorage.setItem("printed_item_ids", JSON.stringify(Array.from(autoPrintedItemIdsRef.current).slice(-1000)));
+                const obj: Record<string, number> = {};
+                autoPrintedItemQtyRef.current.forEach((val, key) => {
+                  obj[key] = val;
+                });
+                const keys = Object.keys(obj).slice(-1000);
+                const slicedObj: Record<string, number> = {};
+                keys.forEach(k => { slicedObj[k] = obj[k]; });
+                localStorage.setItem("printed_item_qtys", JSON.stringify(slicedObj));
                 localStorage.setItem("printed_order_ids", JSON.stringify(Array.from(autoPrintedIdsRef.current).slice(-1000)));
               } catch (e) {}
             }
