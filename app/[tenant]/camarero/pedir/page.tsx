@@ -1,6 +1,4 @@
 import MobileOrderModule from "@/components/camarero/MobileOrderModule";
-import { TenantProvider } from "@/context/TenantContext";
-import { AuthProvider } from "@/components/admin/AuthProvider";
 
 export const metadata = {
   title: "Carga de Pedido | MMM System",
@@ -13,12 +11,8 @@ export default async function PedirPage({ searchParams }: { searchParams: Promis
     const terminal = resolvedSearchParams.terminal || "";
 
     return (
-        <TenantProvider>
-            <AuthProvider>
-                <div className="h-screen bg-slate-50">
-                    <MobileOrderModule mesaId={mesaId} terminal={terminal} />
-                </div>
-            </AuthProvider>
-        </TenantProvider>
+        <div className="h-screen bg-slate-50">
+            <MobileOrderModule mesaId={mesaId} terminal={terminal} />
+        </div>
     );
 }
