@@ -83,10 +83,9 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
   const syncPedido = useCallback(
     async (pedido: PedidoLocal): Promise<boolean> => {
       try {
-        // 1. Insertar el pedido en la tabla `pedidos` de Supabase
-        //    Usar el ID local como ID de Supabase (UUID)
+        const { mesa_numero, ...cleanPayload } = pedido.payload_pedido || {};
         const payload: Record<string, any> = {
-          ...pedido.payload_pedido,
+          ...cleanPayload,
           id: pedido.id, // Usar el UUID local
         };
 

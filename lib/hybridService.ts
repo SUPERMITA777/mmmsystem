@@ -32,8 +32,9 @@ export async function persistirPedidoHibrido(
     // 2. Intentar Supabase (Cloud)
     if (navigator.onLine) {
         try {
+            const { mesa_numero, ...cleanPedidoPayload } = pedidoPayload;
             const { error: pError } = await supabase.from("pedidos").upsert({
-                ...pedidoPayload,
+                ...cleanPedidoPayload,
                 id: localId
             });
             if (pError) throw pError;
