@@ -75,6 +75,53 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
     const [metodosPago, setMetodosPago] = useState<any[]>([]);
     const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
     const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState("");
+    const [orderSentSource, setOrderSentSource] = useState<"supabase" | "bridge" | "local" | "error" | null>(null);
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+    const [failedSyncOrders, setFailedSyncOrders] = useState<any[]>([]);
+
+    const updatePendingCount = async () => {
+        if (!sucursalId) return;
+        try {
+            // Mark orders older than 24 hours as sync_fallido
+            const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const stuckOrders = await db.pedidos
+                .where("sincronizado")
+                .equals(0)
+                .filter(p => p.created_at < threshold && p.estado !== "sync_fallido")
+                .toArray();
+            
+            if (stuckOrders.length > 0) {
+                for (const order of stuckOrders) {
+                    await db.pedidos.update(order.id, { estado: "sync_fallido" });
+                }
+            }
+
+            // Count unsynced orders that are not marked as sync_fallido
+            const pending = await db.pedidos
+                .where("sincronizado")
+                .equals(0)
+                .filter(p => p.sucursal_id === sucursalId && p.estado !== "sync_fallido")
+                .toArray();
+            setPendingSyncCount(pending.length);
+
+            // Fetch failed sync orders to show to the waiter
+            const failed = await db.pedidos
+                .where("sincronizado")
+                .equals(0)
+                .filter(p => p.sucursal_id === sucursalId && p.estado === "sync_fallido")
+                .toArray();
+            setFailedSyncOrders(failed);
+        } catch (err) {
+            console.error("Error updating pending sync status:", err);
+        }
+    };
+
+    useEffect(() => {
+        if (!sucursalId) return;
+        updatePendingCount();
+        const interval = setInterval(updatePendingCount, 5000);
+        return () => clearInterval(interval);
+    }, [sucursalId]);
 
     useEffect(() => {
         if (!sucursalId) return;
@@ -529,18 +576,29 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                     console.error("[MobileOrder] Error al marcar mesa como ocupada:", tableErr);
                 }
 
+                setOrderSentSource(result.source === "supabase" || result.source === "bridge" ? "supabase" : "local");
                 setOrderSent(true);
                 setCarrito([]);
                 setActiveOrder(null);
                 setSelectedMesaId("");
                 setMesa(null);
+                
+                // Refresh pending count immediately
+                updatePendingCount();
+
                 setTimeout(() => {
                     setOrderSent(false);
+                    setOrderSentSource(null);
                     setIsCartOpen(false);
                     setStep("setup"); // Volver al inicio para la siguiente mesa
-                }, 3000);
+                }, result.source === "local" ? 6000 : 3000);
             } else {
-                throw new Error("No se pudo guardar el pedido");
+                setOrderSentSource("error");
+                setOrderSent(true);
+                setTimeout(() => {
+                    setOrderSent(false);
+                    setOrderSentSource(null);
+                }, 4000);
             }
         } catch (err: any) {
             console.error("Error sending order:", err);
@@ -800,6 +858,41 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
                             {isSending ? "Solicitando..." : "🖨️ Imprimir Pre-cuenta"}
                         </button>
                     </div>
+
+                    {failedSyncOrders.length > 0 && (
+                        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-3 max-h-[40vh] overflow-y-auto shrink-0 shadow-lg animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-xs font-black text-red-950 uppercase tracking-wide">⚠️ Pedidos Atascados (+24h)</h4>
+                                    <p className="text-[10px] text-red-700 mt-0.5 font-medium leading-normal">
+                                        Hay {failedSyncOrders.length} pedido(s) que no se pudieron sincronizar. Notificá al administrador.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                {failedSyncOrders.map(order => (
+                                    <div key={order.id} className="flex items-center justify-between bg-white border border-red-100 rounded-xl p-3 text-xs shadow-sm">
+                                        <div className="flex-1 min-w-0">
+                                            <span className="font-bold text-slate-800">Mesa {order.mesa || "S/N"}</span>
+                                            <span className="text-slate-400 block text-[9px] truncate">
+                                                Total: ${new Intl.NumberFormat("es-AR").format(order.total)} | {new Date(order.created_at).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                await db.pedidos.update(order.id, { estado: "pendiente" });
+                                                updatePendingCount();
+                                            }}
+                                            className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-lg text-[9px] uppercase active:scale-95 transition-all shadow-sm shrink-0 ml-2"
+                                        >
+                                            Reintentar
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <style jsx>{`
@@ -821,6 +914,11 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
 
     return (
         <div className="flex flex-col h-[100dvh] bg-slate-50 overflow-hidden">
+            {pendingSyncCount > 0 && (
+                <div className="bg-yellow-500 text-slate-950 px-4 py-2 text-[10px] md:text-xs font-bold text-center flex items-center justify-center gap-2 border-b border-yellow-600 animate-pulse shrink-0">
+                    <span>⚡ Sin conexión — Hay {pendingSyncCount} pedido(s) guardado(s) localmente en espera de red. No cierres esta pantalla.</span>
+                </div>
+            )}
             {/* Consolidated Sticky Top Section */}
             <div className="sticky top-0 z-20 bg-white shadow-md">
                 {/* Header */}
@@ -1513,12 +1611,36 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
             {orderSent && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
                     <div className="absolute inset-0 bg-indigo-600/90 backdrop-blur-md" />
-                    <div className="relative bg-white p-8 rounded-[40px] text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-300">
-                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <CheckCircle2 className="w-12 h-12 text-green-500" />
-                        </div>
-                        <h2 className="text-2xl font-black text-slate-900">¡Pedido Enviado!</h2>
-                        <p className="text-slate-500 font-medium">La comanda se está imprimiendo en cocina.</p>
+                    <div className="relative bg-white p-8 rounded-[40px] text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-300 max-w-sm w-full">
+                        {orderSentSource === "supabase" && (
+                            <>
+                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <CheckCircle2 className="w-12 h-12 text-green-500" />
+                                </div>
+                                <h2 className="text-2xl font-black text-slate-900">✓ Pedido enviado a cocina</h2>
+                                <p className="text-slate-500 font-medium text-sm">La comanda se está imprimiendo en cocina.</p>
+                            </>
+                        )}
+                        {orderSentSource === "local" && (
+                            <>
+                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
+                                    <AlertCircle className="w-12 h-12 text-yellow-600" />
+                                </div>
+                                <h2 className="text-xl font-black text-slate-900">⚡ Sin conexión</h2>
+                                <p className="text-slate-600 font-medium text-xs leading-relaxed">
+                                    El pedido se enviará cuando se restaure la red. No cerrés esta pantalla.
+                                </p>
+                            </>
+                        )}
+                        {orderSentSource === "error" && (
+                            <>
+                                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <AlertCircle className="w-12 h-12 text-red-500" />
+                                </div>
+                                <h2 className="text-2xl font-black text-slate-900">✗ Error al enviar</h2>
+                                <p className="text-slate-500 font-medium text-sm">Intentá de nuevo.</p>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

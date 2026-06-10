@@ -83,9 +83,8 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
   const syncPedido = useCallback(
     async (pedido: PedidoLocal): Promise<boolean> => {
       try {
-        const { mesa_numero, ...cleanPayload } = pedido.payload_pedido || {};
         const payload: Record<string, any> = {
-          ...cleanPayload,
+          ...pedido.payload_pedido,
           id: pedido.id, // Usar el UUID local
         };
 
@@ -238,7 +237,9 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
       // Primero asegurar que el catálogo esté al día
       await syncCatalog();
 
-      const pendientes = await getPedidosPendientes(sucursalId);
+      const pendientes = (await getPedidosPendientes(sucursalId)).filter(
+        (p) => p.estado !== "sync_fallido"
+      );
 
       if (pendientes.length === 0) {
         setIsSyncing(false);

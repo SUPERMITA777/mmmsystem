@@ -27,6 +27,9 @@ yarn-error.log*
 
 # Local env files
 .env
+.env.local
+.env.production
+*.env
 .env*.local
 .env.development.local
 .env.test.local
@@ -55,6 +58,7 @@ local-agent/mmm-agent-config.json
 local-agent/*.exe 
 
 # Temporary development files and test/seed scripts
+scripts/diagnos*
 test_*.js
 test_*.mjs
 check_*.js
