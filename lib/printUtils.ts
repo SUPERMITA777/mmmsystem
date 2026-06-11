@@ -127,12 +127,16 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
     }
 
     // Probar primero el último puerto que funcionó para ganar velocidad
-    const portsToTry = lastWorkingPort ? [lastWorkingPort, ...BRIDGE_PORTS.filter(p => p !== lastWorkingPort)] : BRIDGE_PORTS;
+    const portsToTry = lastWorkingPort
+      ? [lastWorkingPort, ...BRIDGE_PORTS.filter(p => p !== lastWorkingPort)]
+      : BRIDGE_PORTS;
 
     for (const port of portsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Aumentado a 5s para mayor estabilidad en redes locales
+        // Timeout más corto si ya tenemos un puerto que funcionó antes
+        const timeoutMs = lastWorkingPort === port ? 1500 : 3000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         const res = await fetch(`http://${resolvedBridgeIp}:${port}/print`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -594,38 +598,39 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
   const facturacionPrinterName = facturacionConf?.printerName;
   const facturacionPrinterIp = facturacionConf?.ip;
 
-  for (const { printerName, printerIp, items, pKeys } of Object.values(physicalPrinters)) {
-    if (pedido.tipo === "delivery" || pedido.tipo === "takeaway") {
-      const isSameAsFacturacion = 
-        (printerIp && printerIp === facturacionPrinterIp) ||
-        (printerName && printerName === facturacionPrinterName);
-      if (isSameAsFacturacion) {
-        console.log(`[Printer] Saltando ticket de cocina en hardware compartido de FACTURACION para el pedido ${pedido.tipo}: ${printerName || printerIp}`);
-        continue;
+  await Promise.all(
+    Object.values(physicalPrinters).map(async ({ printerName, printerIp, items, pKeys }) => {
+      if (pedido.tipo === "delivery" || pedido.tipo === "takeaway") {
+        const isSameAsFacturacion = 
+          (printerIp && printerIp === facturacionPrinterIp) ||
+          (printerName && printerName === facturacionPrinterName);
+        if (isSameAsFacturacion) {
+          console.log(`[Printer] Saltando ticket de cocina en hardware compartido de FACTURACION para el pedido ${pedido.tipo}: ${printerName || printerIp}`);
+          return;
+        }
       }
-    }
 
-    const itemsHtml = items.map(item => {
-      const aggregated = aggregateAdicionales(item.adicionales ?? []);
-      const ads = aggregated.map((a: any) =>
-        `<div style="font-size:18px;margin-left:12px;font-weight:bold">+ ${a.nombre}</div>`
-      ).join("");
-      const itemNotas = item.notas ? `<div style="font-size:16px;font-weight:bold;margin-left:12px;font-style:italic;background:#eee;padding:2px">📝 ${item.notas}</div>` : "";
-      return `
-        <div style="margin-bottom:8px">
-          <div style="font-size:24px;font-weight:900">${item.cantidad} x ${item.nombre_producto || item.nombre}</div>
-          ${ads}${itemNotas}
-        </div>`;
-    }).join("");
+      const itemsHtml = items.map(item => {
+        const aggregated = aggregateAdicionales(item.adicionales ?? []);
+        const ads = aggregated.map((a: any) =>
+          `<div style="font-size:18px;margin-left:12px;font-weight:bold">+ ${a.nombre}</div>`
+        ).join("");
+        const itemNotas = item.notas ? `<div style="font-size:16px;font-weight:bold;margin-left:12px;font-style:italic;background:#eee;padding:2px">📝 ${item.notas}</div>` : "";
+        return `
+          <div style="margin-bottom:8px">
+            <div style="font-size:24px;font-weight:900">${item.cantidad} x ${item.nombre_producto || item.nombre}</div>
+            ${ads}${itemNotas}
+          </div>`;
+      }).join("");
 
-    // Título simplificado para Salón
-    const mainTitle = (pedido.tipo === "salon" || pedido.tipo === "mesa") && mesaNum 
-      ? `MESA ${mesaNum}` 
-      : `N° ${numCorto}`;
+      // Título simplificado para Salón
+      const mainTitle = (pedido.tipo === "salon" || pedido.tipo === "mesa") && mesaNum 
+        ? `MESA ${mesaNum}` 
+        : `N° ${numCorto}`;
 
-    const printHeaderLabel = pKeys.join(" + ").toUpperCase();
+      const printHeaderLabel = pKeys.join(" + ").toUpperCase();
 
-    const html = `<!DOCTYPE html>
+      const html = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <style>
@@ -676,8 +681,9 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
 
 </body></html>`;
 
-    await doPrint(html, printerName, c.bridge_ip, printerIp, true);
-  }
+      await doPrint(html, printerName, c.bridge_ip, printerIp, true);
+    })
+  );
 }
 
 /* ──────────────────────────────────────────────────────
@@ -772,11 +778,15 @@ export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> =
   let logsEliminados = pedido.logs_eliminacion || [];
   if (logsEliminados.length === 0 && pedido.id) {
     try {
-      const { data } = await supabase
+      const fetchLogs = supabase
         .from("logs_eliminacion_pedidos")
         .select("producto_nombre, cantidad, motivo")
-        .eq("pedido_id", pedido.id);
-      if (data) logsEliminados = data;
+        .eq("pedido_id", pedido.id)
+        .then(({ data }) => data || []);
+
+      const timeout = new Promise<[]>((resolve) => setTimeout(() => resolve([]), 1500));
+
+      logsEliminados = await Promise.race([fetchLogs, timeout]);
     } catch (e) {
       console.error("Error fetching logs_eliminacion_pedidos inside printPreCuenta:", e);
     }

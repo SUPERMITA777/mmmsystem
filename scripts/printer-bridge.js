@@ -80,52 +80,66 @@ function htmlToEscPos(html) {
 const printQueue = [];
 let isPrinting = false;
 
+function printToIp(job, attempt = 1) {
+  const client = new net.Socket();
+  client.setTimeout(4000); // reducido de 5000 a 4000ms
+
+  client.connect(9100, job.printerIp, () => {
+    const data = htmlToEscPos(job.html);
+    client.write(data, 'binary', () => {
+      client.destroy();
+      console.log(`>>> Impresion IP completada OK (intento ${attempt})`);
+      if (job.res && !job.res.writableEnded) {
+        job.res.writeHead(200, { 'Content-Type': 'application/json' });
+        job.res.end(JSON.stringify({ success: true, mode: 'direct-ip' }));
+      }
+      isPrinting = false;
+      processQueue();
+    });
+  });
+
+  client.on('error', (err) => {
+    client.destroy();
+    if (attempt < 2) {
+      console.warn(`*** Error IP intento ${attempt}, reintentando en 500ms: ${err.message}`);
+      setTimeout(() => printToIp(job, attempt + 1), 500);
+    } else {
+      console.error(`*** Error final imprimiendo a IP ${job.printerIp}: ${err.message}`);
+      if (job.res && !job.res.writableEnded) {
+        job.res.writeHead(500);
+        job.res.end(JSON.stringify({ error: 'Error de conexión: ' + err.message }));
+      }
+      isPrinting = false;
+      processQueue();
+    }
+  });
+
+  client.on('timeout', () => {
+    client.destroy();
+    if (attempt < 2) {
+      console.warn(`*** Timeout IP intento ${attempt}, reintentando...`);
+      setTimeout(() => printToIp(job, attempt + 1), 500);
+    } else {
+      console.error(`*** Timeout final conectando a IP ${job.printerIp}`);
+      if (job.res && !job.res.writableEnded) {
+        job.res.writeHead(500);
+        job.res.end(JSON.stringify({ error: 'Timeout de conexión con impresora IP' }));
+      }
+      isPrinting = false;
+      processQueue();
+    }
+  });
+}
+
 function processQueue() {
     if (isPrinting || printQueue.length === 0) return;
     isPrinting = true;
     const job = printQueue.shift();
 
     if (job.printerIp) {
-        console.log(`\n>>> IMPRIMIENDO DIRECTO A IP: ${job.printerIp}`);
-        const client = new net.Socket();
-        client.setTimeout(5000);
-
-        client.connect(9100, job.printerIp, () => {
-            const data = htmlToEscPos(job.html);
-            client.write(data, 'binary', () => {
-                client.destroy();
-                console.log('>>> Impresion IP completada OK');
-                if (job.res && !job.res.writableEnded) {
-                    job.res.writeHead(200, { 'Content-Type': 'application/json' });
-                    job.res.end(JSON.stringify({ success: true, mode: 'direct-ip' }));
-                }
-                isPrinting = false;
-                processQueue();
-            });
-        });
-
-        client.on('error', (err) => {
-            console.error(`*** Error imprimiendo a IP ${job.printerIp}:`, err.message);
-            if (job.res && !job.res.writableEnded) {
-                job.res.writeHead(500);
-                job.res.end(JSON.stringify({ error: 'Error de conexión con impresora IP: ' + err.message }));
-            }
-            client.destroy();
-            isPrinting = false;
-            processQueue();
-        });
-
-        client.on('timeout', () => {
-            console.error(`*** Timeout conectando a IP ${job.printerIp}`);
-            if (job.res && !job.res.writableEnded) {
-                job.res.writeHead(500);
-                job.res.end(JSON.stringify({ error: 'Timeout de conexión con impresora IP' }));
-            }
-            client.destroy();
-            isPrinting = false;
-            processQueue();
-        });
-        return;
+      console.log(`\n>>> IMPRIMIENDO DIRECTO A IP: ${job.printerIp}`);
+      printToIp(job);
+      return;
     }
 
     // Impresión vía PowerShell (Windows Driver)
@@ -141,7 +155,14 @@ function processQueue() {
 
     const child = spawn('powershell', ['-STA', '-ExecutionPolicy', 'Bypass', '-File', psFile]);
 
+    // Timeout global de seguridad: matar el proceso si tarda más de 15 segundos
+    const killTimeout = setTimeout(() => {
+      console.error('*** Timeout global de PowerShell — matando proceso');
+      child.kill('SIGTERM');
+    }, 15000);
+
     child.on('close', (code) => {
+        clearTimeout(killTimeout); // cancelar el timeout si terminó bien
         setTimeout(() => {
             try { fs.unlinkSync(tempFile); } catch(e) {}
             try { fs.unlinkSync(psFile); } catch(e) {}
