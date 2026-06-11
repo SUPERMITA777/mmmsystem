@@ -199,7 +199,9 @@ export default function GlobalAutoPrinter() {
       }
 
       // 1. Auto-impresión de comanda de cocina para nuevos ítems
+      const isSalonOrQR = pedido.tipo === "salon" || pedido.origen === "qr" || pedido.camarero_id;
       const printForCurrentState = 
+        isSalonOrQR ||
         (pedido.estado === "pendiente" && autoPrintEnabled) ||
         ((pedido.estado === "confirmado" || pedido.estado === "preparando") && (autoPrintEnabled || printOnConfirm));
 
