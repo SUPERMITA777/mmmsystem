@@ -1185,7 +1185,7 @@ export default function PanelPedidosPage() {
                         }} className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors">Cerrar Mesa</button>
                       </>
                     )}
-                    {printConfig.fiscal?.habilitado && (
+                    {printConfig?.fiscal?.habilitado && (
                       <button onClick={() => printFacturaFiscal(selectedPedido, printConfig)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-100 mt-1">🖨️ Factura Fiscal</button>
                     )}
                   </div>

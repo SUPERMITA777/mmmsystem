@@ -219,20 +219,28 @@ export function printComanda(pedido: any, config: Partial<PrintConfig> = {}) {
 
   const numCorto = pedido.numero_pedido?.split("-").pop() ?? pedido.numero_pedido;
 
-  const createdAt = new Date(pedido.created_at);
-  const fechaLarga = createdAt.toLocaleDateString("es-AR", {
+  const dateRaw = pedido.created_at || new Date();
+  const createdAt = new Date(dateRaw);
+  const isValidDate = !isNaN(createdAt.getTime());
+  const dateToUse = isValidDate ? createdAt : new Date();
+  const fechaLarga = dateToUse.toLocaleDateString("es-AR", {
     weekday: "long", day: "numeric", month: "long", year: "numeric"
   });
-  const horaCreado = createdAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  const horaCreado = dateToUse.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 
   // Agrupar items por categoría, consolidando duplicados primero
   const consolidated = consolidarItemsPedido(pedido.pedido_items ?? []);
   const groupedItems: Record<string, any[]> = {};
   consolidated.forEach((item: any) => {
     let catName = "PRODUCTOS";
-    if (item.productos && item.productos.categorias && item.productos.categorias.nombre) {
-      catName = item.productos.categorias.nombre.toUpperCase();
+    const mainProdObj = Array.isArray(item.productos) ? item.productos[0] : item.productos;
+    const finalMainProd = mainProdObj || {};
+    
+    const catNameRaw = finalMainProd.categorias?.nombre || item.categoria_nombre || finalMainProd.categoria_nombre;
+    if (catNameRaw) {
+      catName = String(catNameRaw).toUpperCase();
     }
+    
     if (!groupedItems[catName]) groupedItems[catName] = [];
     groupedItems[catName].push(item);
   });
