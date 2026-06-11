@@ -449,26 +449,22 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
 
   // Agrupar items por impresora según configuración
   const itemsByPrinter: Record<string, any[]> = {};
-  
-  let defaultPrinterKey = "COCINA 1";
-  if (c.impresoras && Object.keys(c.impresoras).length > 0) {
-    if (!c.impresoras["COCINA 1"] && !c.impresoras["COCINA1"]) {
-      const cocinaKey = Object.keys(c.impresoras).find(k => k.toUpperCase().includes("COCINA"));
-      if (cocinaKey) {
-        defaultPrinterKey = cocinaKey;
-      } else {
-        defaultPrinterKey = Object.keys(c.impresoras)[0];
-      }
-    }
-  }
+  const defaultPrinterKey = "COCINA 1";
 
   const isValidPrinter = (printerKey: string) => {
     if (!printerKey) return false;
-    return !!(c.impresoras?.[printerKey] || Object.values(c.impresoras || {}).some((p: any) => p.printerName === printerKey));
+    const cleanKey = printerKey.replace(" ", "");
+    return !!(
+      c.impresoras?.[printerKey] || 
+      c.impresoras?.[cleanKey] || 
+      Object.values(c.impresoras || {}).some((p: any) => p.printerName === printerKey)
+    );
   };
 
   const getResolvedPrinterKey = (printerKey: string) => {
     if (c.impresoras?.[printerKey]) return printerKey;
+    const cleanKey = printerKey.replace(" ", "");
+    if (c.impresoras?.[cleanKey]) return cleanKey;
     return Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === printerKey) || defaultPrinterKey;
   };
   
