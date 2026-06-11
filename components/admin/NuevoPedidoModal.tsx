@@ -2352,6 +2352,11 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                             comensales: comensales,
                                             descuento: codigoDescuento + promoDescuento
                                         };
+                                        try {
+                                            printPreCuenta(patchedPedido, printConfig);
+                                        } catch (err) {
+                                            console.error("[NuevoPedidoModal] Error al imprimir pre-cuenta:", err);
+                                        }
                                         setShowPreCuentaModal(false);
                                         onClose();
                                     }}
