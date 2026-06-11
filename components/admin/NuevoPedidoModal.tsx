@@ -2323,8 +2323,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                                                 metodo_pago_id: isMixto ? null : (metodoPagoId || null),
                                                 metodo_pago_nombre: metodoPagoNombre,
                                                 notas_internas: isMixto
-                                                    ? `MIXTO | PRECUENTA | ${JSON.stringify({ id1: metodoPagoId, id2: metodoPago2Id, monto1: montoMixto1 })}`
-                                                    : " | PRECUENTA",
+                                                    ? `PRECUENTA|MIXTO|${Date.now()}|${JSON.stringify({ id1: metodoPagoId, id2: metodoPago2Id, monto1: montoMixto1 })}`
+                                                    : `PRECUENTA|${Date.now()}`,
                                                 notas: notasPagoMixto + (notaPedido || ""),
                                                 recargo: recargoTotal,
                                                 total: total

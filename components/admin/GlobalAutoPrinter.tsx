@@ -42,7 +42,8 @@ export default function GlobalAutoPrinter() {
       const bridge_enabled = suc?.panel_settings?.bridge_enabled !== false;
       const nombre_local = infoSuc?.nombre || "MMM Pizza Artesanal";
       const fiscal = suc?.panel_settings?.fiscal || {};
-      setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+      if (data) setPrintConfig({ ...data, boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
+      else setPrintConfig({ boldMap, fuente_adicionales, impresoras, bridge_ip, nombre_local, bridge_enabled, fiscal });
     } catch (err) {
       console.warn("[GlobalAutoPrinter] Error cargando config desde Supabase, intentando Dexie...", err);
       try {
@@ -274,6 +275,9 @@ export default function GlobalAutoPrinter() {
           
           if (pedido.metodo_pago_id || notas.toUpperCase().includes("MIXTO")) {
             printPreCuenta(pedido, printConfig);
+            // Marcar como impresa en la base de datos para evitar duplicados al recargar o en multiples terminales
+            const markedNotas = `PRECUENTA|${Date.now()}|${notas}`;
+            supabase.from("pedidos").update({ notas_internas: markedNotas }).eq("id", pedido.id).then();
           }
         }
       }
