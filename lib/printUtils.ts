@@ -701,7 +701,7 @@ function consolidarItemsPedido(items: any[]): any[] {
       .map((a: any) => `${a.nombre}:${a.cantidad}`)
       .sort().join(",")
     const notas = (item.notas || item.nota || "").trim()
-    const key = `${item.producto_id}-${item.precio_unitario}-${adsKey}-${notas}`
+    const key = `${item.producto_id}-${item.nombre_producto}-${item.precio_unitario}-${adsKey}-${notas}`
     if (map.has(key)) {
       map.get(key).cantidad += item.cantidad
     } else {
