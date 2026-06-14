@@ -418,10 +418,8 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
 
   const c: PrintConfig = { ...DEFAULT_CONFIG, ...config };
 
-  if (c.bridge_enabled === false) {
-    console.log(`[Printer] Impresión en cocina anulada porque el puente de impresión está desactivado.`);
-    return;
-  }
+  // Nota: si el bridge está desactivado, doPrint() hará fallback al diálogo del navegador,
+  // igual que printComanda. No se cancela la impresión de cocina en ningún caso.
 
   const tipoLabel =
     pedido.tipo === "delivery" ? "DELIVERY"
@@ -465,7 +463,7 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
 
   const isValidPrinter = (printerKey: string) => {
     if (!printerKey) return false;
-    const cleanKey = printerKey.replace(" ", "");
+    const cleanKey = printerKey.replace(/ /g, "");
     return !!(
       c.impresoras?.[printerKey] || 
       c.impresoras?.[cleanKey] || 
@@ -475,7 +473,7 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
 
   const getResolvedPrinterKey = (printerKey: string) => {
     if (c.impresoras?.[printerKey]) return printerKey;
-    const cleanKey = printerKey.replace(" ", "");
+    const cleanKey = printerKey.replace(/ /g, "");
     if (c.impresoras?.[cleanKey]) return cleanKey;
     return Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === printerKey) || defaultPrinterKey;
   };
