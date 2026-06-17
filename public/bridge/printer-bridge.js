@@ -212,7 +212,7 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    }\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
-    // Sin Start-Sleep — el spooler maneja la cola solo
+    ps += '    Start-Sleep -Seconds 3\r\n';
     ps += '    if ($currentDefault) {\r\n';
     ps += '        $wnet.SetDefaultPrinter($currentDefault)\r\n';
     ps += '    }\r\n';
