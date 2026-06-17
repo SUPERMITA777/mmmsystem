@@ -469,7 +469,7 @@ export function ImpresorasTab() {
                     </div>
                     <div>
                         <h4 className="font-bold text-gray-900">Centro de Descargas</h4>
-                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mt-0.5">Versión v3.1 – Direct IP Ready</p>
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mt-0.5">Versión v4.0 – Solo Impresión (Sin credenciales)</p>
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
