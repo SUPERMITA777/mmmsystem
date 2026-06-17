@@ -1,20 +1,23 @@
 import { supabase } from "./supabaseClient";
-import { db, type PedidoLocal, marcarSincronizado } from "./db";
-import { doBridgePost } from "./printUtils";
+import { db, marcarSincronizado } from "./db";
 
 /**
- * Servicio híbrido para gestionar la persistencia y sincronización de pedidos.
- * Intenta Supabase -> Local Hub -> IndexedDB (Solo local).
+ * Servicio híbrido para gestionar la persistencia de pedidos.
+ * Flujo: IndexedDB (respaldo local) → Supabase (cloud).
+ *
+ * El bridge de impresión ya NO participa en la persistencia de pedidos —
+ * solo se usa para enviar trabajos de impresión. Toda la lógica de
+ * persistencia offline queda cubierta por IndexedDB + sync background.
  */
 export async function persistirPedidoHibrido(
-    pedidoPayload: any, 
-    itemsPayload: any[], 
-    bridgeIp: string = "127.0.0.1",
+    pedidoPayload: any,
+    itemsPayload: any[],
+    bridgeIp: string = "127.0.0.1", // Mantenido por compatibilidad de firma, ya no se usa aquí
     sucursalId: string
 ) {
     const localId = pedidoPayload.id || crypto.randomUUID();
-    
-    // 1. Siempre guardar en IndexedDB primero (Respaldo total)
+
+    // 1. Siempre guardar en IndexedDB primero (respaldo total, funciona offline)
     await db.pedidos.put({
         id: localId,
         mesa: pedidoPayload.mesa_id || null,
@@ -29,7 +32,7 @@ export async function persistirPedidoHibrido(
         created_at: new Date().toISOString()
     } as any);
 
-    // 2. Intentar Supabase (Cloud)
+    // 2. Intentar sincronizar con Supabase (requiere internet)
     if (navigator.onLine) {
         try {
             const { error: pError } = await supabase.from("pedidos").upsert({
@@ -53,34 +56,15 @@ export async function persistirPedidoHibrido(
             const { error: iError } = await supabase.from("pedido_items").upsert(items);
             if (iError) throw iError;
 
-            // Éxito en Supabase
             await marcarSincronizado(localId);
             console.log("[Hybrid] Sincronizado con Supabase OK");
             return { success: true, source: "supabase" };
         } catch (err) {
-            console.warn("[Hybrid] Fallo Supabase, intentando Local Hub...", err);
+            console.warn("[Hybrid] Fallo Supabase, pedido guardado en IndexedDB para sync posterior:", err);
         }
     }
 
-    // 3. Fallback a Local Hub (LAN)
-    try {
-        const res = await doBridgePost("/api/save-order", {
-            pedido: pedidoPayload,
-            items: itemsPayload,
-            tenantId: sucursalId
-        }, bridgeIp);
-        
-        if (res && res.success) {
-            // El Local Hub se encargará de subirlo a Supabase después
-            // Lo marcamos como sincronizado en el cliente para no duplicar
-            await marcarSincronizado(localId);
-            console.log("[Hybrid] Sincronizado con Local Hub OK");
-            return { success: true, source: "bridge" };
-        }
-    } catch (err) {
-        console.warn("[Hybrid] Fallo Local Hub, queda en IndexedDB para luego", err);
-    }
-
-    // Si llegamos acá, solo quedó en IndexedDB
+    // Sin internet o Supabase falló → quedó en IndexedDB, se sincronizará automáticamente
+    // cuando se recupere la conexión via el hook useHybridPedidos
     return { success: true, source: "local" };
 }

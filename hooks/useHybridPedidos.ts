@@ -1,27 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { db } from "@/lib/db";
-import { doBridgePost } from "@/lib/printUtils";
 
 /**
- * Hook para obtener y unificar pedidos desde tres orígenes posibles (Sincronización Híbrida):
- * 1. Nube: Consulta la tabla de `pedidos` en Supabase (si hay conexión a internet).
- * 2. Puente Local (Bridge): Si Supabase falla, consulta el almacenamiento en red local del Bridge.
- * 3. Almacenamiento Local (Dexie): Mezcla los pedidos pendientes generados localmente y aún no sincronizados.
- * 
+ * Hook para obtener y unificar pedidos desde dos orígenes (Supabase + IndexedDB local).
+ * 1. Nube: Consulta la tabla `pedidos` en Supabase (requiere internet).
+ * 2. Almacenamiento Local (Dexie): Mezcla los pedidos pendientes aún no sincronizados.
+ *
+ * El bridge de impresión ya NO se usa para obtener pedidos — solo para imprimir.
+ *
  * @param {string|null} sucursalId - El UUID de la sucursal activa.
- * @param {string} [bridgeIp="127.0.0.1"] - Dirección IP del puente local para mandar comisiones/impresiones.
- * @returns {Object} El estado del hook.
- * @returns {Array<Object>} return.pedidos - Listado combinado y ordenado cronológicamente de pedidos.
- * @returns {boolean} return.loading - Indica si el primer fetch está en progreso.
- * @returns {string} return.lastSyncSource - Identifica el último origen exitoso ("supabase" | "bridge" | "local").
- * @returns {function} return.refresh - Callback para disparar la actualización de la lista de pedidos manualmente.
+ * @param {string} [bridgeIp="127.0.0.1"] - IP del bridge (mantenido por compatibilidad, solo se usa para impresión).
  */
 export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "127.0.0.1") {
 
     const [pedidos, setPedidos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [lastSyncSource, setLastSyncSource] = useState<"supabase" | "bridge" | "local">("local");
+    const [lastSyncSource, setLastSyncSource] = useState<"supabase" | "local">("local");
 
     const fetchPedidos = useCallback(async () => {
         if (!sucursalId) return;
@@ -50,23 +45,8 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
             }
         }
 
-        // 2. Si Supabase falló o no hay internet, intentar Local Hub (Bridge)
-        if (source === "local") {
-            try {
-                // El bridge devuelve lo que tiene en su JSON local
-                const res = await fetch(`http://${bridgeIp}:9100/api/get-orders`, {
-                    headers: { 'X-Tenant-ID': sucursalId }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    // Normalizar formato si es necesario (el bridge guarda el payload completo)
-                    remotePedidos = data.map((o: any) => o.pedido || o); 
-                    source = "bridge";
-                }
-            } catch (err) {
-                console.warn("[HybridHook] Bridge falló, usando solo local", err);
-            }
-        }
+        // 2. Si Supabase falló o no hay internet, los pedidos locales de Dexie
+        // actuarán como respaldo (se combinan abajo).
 
         // 3. Obtener pedidos locales de Dexie (que aún no se sincronizaron)
         const localPendientes = await db.pedidos.where("sincronizado").equals(0).toArray();

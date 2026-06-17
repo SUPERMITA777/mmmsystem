@@ -649,18 +649,15 @@ export default function PanelPedidosPage() {
         <div className="px-6 py-2 flex items-center justify-between border-b border-gray-100 bg-slate-50/80">
           <div className="flex items-center gap-2">
              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold ${
-               lastSyncSource === 'supabase' ? 'bg-green-100 text-green-700' :
-               lastSyncSource === 'bridge' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+               lastSyncSource === 'supabase' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
              }`}>
                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                 lastSyncSource === 'supabase' ? 'bg-green-500' :
-                 lastSyncSource === 'bridge' ? 'bg-blue-500' : 'bg-orange-500'
+                 lastSyncSource === 'supabase' ? 'bg-green-500' : 'bg-orange-500'
                }`} />
-               {lastSyncSource === 'supabase' ? 'CONECTADO (CLOUD)' : 
-                lastSyncSource === 'bridge' ? 'MODO LOCAL (LAN)' : 'SIN CONEXIÓN'}
+               {lastSyncSource === 'supabase' ? 'CONECTADO (CLOUD)' : 'SIN CONEXIÓN (LOCAL)'}
              </div>
              {lastSyncSource !== 'supabase' && (
-               <span className="text-[10px] text-gray-400 italic">Usando Hub Local en {printConfig?.bridge_ip}</span>
+               <span className="text-[10px] text-gray-400 italic">Datos locales — reconectando...</span>
              )}
 
              {/* Selector de Terminal */}

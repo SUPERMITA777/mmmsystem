@@ -135,7 +135,7 @@ async function doPrint(html: string, printerName?: string, bridgeIp: string = '1
       try {
         const controller = new AbortController();
         // Timeout más corto si ya tenemos un puerto que funcionó antes
-        const timeoutMs = lastWorkingPort === port ? 1500 : 3000;
+        const timeoutMs = lastWorkingPort === port ? 800 : 1500;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         const res = await fetch(`http://${resolvedBridgeIp}:${port}/print`, {
           method: 'POST',

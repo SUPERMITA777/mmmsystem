@@ -57,6 +57,10 @@ local-agent/auth_whatsapp/
 local-agent/mmm-agent-config.json  
 local-agent/*.exe 
 
+# Bridge de impresión — credenciales locales (NUNCA subir al repo)
+bridge-config.json
+public/bridge/bridge-config.json
+
 # Temporary development files and test/seed scripts
 scripts/diagnos*
 test_*.js
