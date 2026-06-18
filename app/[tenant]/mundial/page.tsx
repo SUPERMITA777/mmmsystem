@@ -126,15 +126,23 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
                     <div className="p-6 relative z-10">
                       <div className="flex justify-between items-center mb-6">
                         <div className="text-center flex-1">
-                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5">
-                            <span className="text-2xl">ðŸ³ï¸</span>
+                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5 overflow-hidden">
+                            {partido.escudo_local ? (
+                              <img src={partido.escudo_local} alt={partido.equipo_local} className="w-full h-full object-cover p-2" />
+                            ) : (
+                              <span className="text-2xl">🏳️</span>
+                            )}
                           </div>
                           <p className="font-black text-lg text-white leading-tight">{partido.equipo_local}</p>
                         </div>
                         <div className="px-4 text-yellow-500/50 font-black text-2xl italic tracking-tighter">VS</div>
                         <div className="text-center flex-1">
-                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5">
-                            <span className="text-2xl">ðŸ³ï¸</span>
+                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5 overflow-hidden">
+                            {partido.escudo_visitante ? (
+                              <img src={partido.escudo_visitante} alt={partido.equipo_visitante} className="w-full h-full object-cover p-2" />
+                            ) : (
+                              <span className="text-2xl">🏳️</span>
+                            )}
                           </div>
                           <p className="font-black text-lg text-white leading-tight">{partido.equipo_visitante}</p>
                         </div>
@@ -169,10 +177,6 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
           <a href={`/${tenant}/mundial/ranking`} className="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white transition-colors">
             <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             <span className="text-[10px] font-bold uppercase tracking-wider">Ranking</span>
-          </a>
-          <a href={`/${tenant}/mundial/canjear`} className="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white transition-colors">
-            <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></svg>
-            <span className="text-[10px] font-bold uppercase tracking-wider">Canjear</span>
           </a>
         </div>
       </nav>

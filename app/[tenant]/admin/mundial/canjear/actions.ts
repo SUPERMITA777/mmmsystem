@@ -29,13 +29,12 @@ export async function canjearCodigo(formData: FormData) {
     .select(`
       id, 
       codigo_alfanumerico, 
+      nombre_cliente,
+      whatsapp,
       es_acierto_exacto, 
       es_acierto_parcial, 
       premio_canjeado,
-      partido_id,
-      mundial_partidos (
-        fecha_hora
-      )
+      partido_id
     `)
     .eq('sucursal_id', sucursal_id)
     .eq('codigo_alfanumerico', codigo.toUpperCase())
@@ -52,24 +51,18 @@ export async function canjearCodigo(formData: FormData) {
   if (prediccion.premio_canjeado) {
     return { success: false, error: 'Este premio ya ha sido canjeado anteriormente.' };
   }
-
-  // 2. Determine daily prize based on match date
-  // For simplicity, we just use the date of the match.
-  const partidoData: any = prediccion.mundial_partidos;
-  const fechaHora = Array.isArray(partidoData) ? partidoData[0].fecha_hora : partidoData.fecha_hora;
-  const matchDate = new Date(fechaHora).toISOString().split('T')[0];
   
+  // 2. Fetch the prize assigned to this match
   const { data: premios, error: premiosError } = await supabase
     .from('mundial_premios')
     .select('*')
     .eq('sucursal_id', sucursal_id)
-    .lte('fecha', matchDate) // Find the prize for that date or the latest one before it
-    .order('fecha', { ascending: false })
+    .eq('partido_id', prediccion.partido_id)
     .limit(1);
 
   const premio = premios?.[0];
   if (!premio) {
-    return { success: false, error: 'No hay premios configurados para esta fecha en esta sucursal.' };
+    return { success: false, error: 'No hay premios configurados para este partido en esta sucursal.' };
   }
 
   // 3. Mark as redeemed
@@ -88,6 +81,8 @@ export async function canjearCodigo(formData: FormData) {
   return { 
     success: true, 
     data: {
+      nombre_ganador: prediccion.nombre_cliente,
+      whatsapp: prediccion.whatsapp,
       premio_nombre: premio.nombre,
       premio_descripcion: premio.descripcion
     } 

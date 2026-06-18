@@ -55,15 +55,21 @@ export default async function AdminMundialDashboard({ params }: { params: Promis
       <div className="bg-white shadow-sm border border-gray-200 rounded-3xl mb-8">
         <div className="px-6 py-6 sm:p-8">
           <h3 className="text-lg leading-6 font-bold text-gray-900">Módulos</h3>
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <a href={`/${tenant}/admin/mundial/partidos`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors">
               Gestionar Partidos
             </a>
             <a href={`/${tenant}/admin/mundial/predicciones`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors">
-              Ver y Editar Predicciones
+              Ver Predicciones
             </a>
             <a href={`/${tenant}/admin/mundial/banners`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors">
               Gestionar Banners
+            </a>
+            <a href={`/${tenant}/admin/mundial/premios`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors text-center">
+              Gestionar Premios
+            </a>
+            <a href={`/${tenant}/admin/mundial/canjear`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-green-700 bg-green-50 hover:bg-green-100 transition-colors text-center">
+              Canjear Premio (Sponsor)
             </a>
           </div>
         </div>

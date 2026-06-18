@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { canjearCodigo } from '@/app/[tenant]/mundial/canjear/actions';
+import { canjearCodigo } from '@/app/[tenant]/admin/mundial/canjear/actions';
 
 export default function CanjearForm({ sucursalId, tenant }: { sucursalId: string, tenant: string }) {
   const [loading, setLoading] = useState(false);
@@ -39,13 +39,15 @@ export default function CanjearForm({ sucursalId, tenant }: { sucursalId: string
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
               <h3 className="text-green-800 font-bold text-lg mb-2">¡Canje Exitoso!</h3>
               <p className="text-green-700 font-medium mb-1">
-                Ganaste: {result.data.premio_nombre}
+                <span className="font-bold">Ganador:</span> {result.data.nombre_ganador}
               </p>
-              <p className="text-green-600 text-sm">
-                {result.data.premio_descripcion}
+              <p className="text-green-700 font-medium mb-1">
+                <span className="font-bold">WhatsApp:</span> {result.data.whatsapp}
               </p>
               <div className="mt-4 pt-4 border-t border-green-200">
-                <p className="text-sm text-green-800 font-bold">Acércate a caja o contacta al administrador para retirar tu premio.</p>
+                <p className="text-green-800 font-bold">Premio a entregar:</p>
+                <p className="text-green-700 text-lg font-black">{result.data.premio_nombre}</p>
+                <p className="text-green-600 text-sm mt-1">{result.data.premio_descripcion}</p>
               </div>
             </div>
           ) : (
