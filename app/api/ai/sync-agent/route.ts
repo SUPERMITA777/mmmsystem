@@ -33,7 +33,7 @@ export async function POST(request: Request) {
             const { data: sucursal } = await supabaseAdmin
                 .from("sucursales")
                 .select("id")
-                .eq("slug", tenantId)
+                .ilike("slug", tenantId)
                 .single();
 
             if (!sucursal) {
