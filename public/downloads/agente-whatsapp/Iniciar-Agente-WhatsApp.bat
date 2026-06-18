@@ -9,6 +9,8 @@ echo.
 echo  Iniciando agente...
 echo.
 
+cd /d "%~dp0"
+
 npm install && npm run dev
 
 echo.
