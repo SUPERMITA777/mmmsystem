@@ -70,7 +70,7 @@ export default function PromosPage() {
   const { sucursalId } = useTenant();
   const params = useParams();
   const tenant = params.tenant as string;
-  const [activeTab, setActiveTab] = useState<"qr" | "ruleta">("qr");
+  const [activeTab, setActiveTab] = useState<"qr" | "ruleta" | "mundial">("qr");
 
   // QR State (existing)
   const [config, setConfig] = useState<PromoConfig>({
@@ -215,6 +215,17 @@ export default function PromosPage() {
         >
           <Gift size={18} />
           <span>Ruleta</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("mundial")}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === "mundial"
+              ? "bg-white text-purple-700 shadow-sm"
+              : "text-gray-500 hover:text-gray-800"
+          }`}
+        >
+          <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>Mundial</span>
         </button>
       </div>
 
@@ -380,6 +391,21 @@ export default function PromosPage() {
       {activeTab === "ruleta" && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <RuletaManager sucursalId={sucursalId || ""} tenant={tenant} />
+        </div>
+      )}
+
+      {activeTab === "mundial" && (
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Plataforma de Predicciones del Mundial</h2>
+          <p className="text-gray-600 mb-6">La plataforma de predicciones corre como una aplicación separada. Haz clic en los siguientes botones para acceder (por defecto asume que corre en el puerto 3001 en desarrollo).</p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <a href="http://localhost:3001/admin" target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
+              Panel de Administración
+            </a>
+            <a href="http://localhost:3001/" target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
+              Ver Web Pública
+            </a>
+          </div>
         </div>
       )}
     </section>
