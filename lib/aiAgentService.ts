@@ -1285,8 +1285,8 @@ export async function processWhatsAppMessage(
                 tools: allowedTools.length > 0 ? allowedTools : undefined,
             });
 
-            // Build chat history from recent messages
-            const chatHistory = recentMessages.map(msg => ({
+            // Build chat history from recent messages (reversed to get chronological order)
+            const chatHistory = [...recentMessages].reverse().map(msg => ({
                 role: msg.from_me ? "model" as const : "user" as const,
                 parts: [{ text: msg.from_me ? (msg.reply_text || "") : msg.message_text }],
             })).filter(m => m.parts[0].text);
@@ -1312,7 +1312,7 @@ export async function processWhatsAppMessage(
                     functionResponses.push({
                         functionResponse: {
                             name: fc.name,
-                            response: JSON.parse(toolResult),
+                            response: { result: JSON.parse(toolResult) },
                         },
                     });
 
@@ -1466,7 +1466,7 @@ async function processWithGroq(
 
     let messages: any[] = [
         { role: "system", content: systemPrompt },
-        ...recentMessages.map(msg => ({
+        ...[...recentMessages].reverse().map(msg => ({
             role: msg.from_me ? "assistant" : "user",
             content: msg.from_me ? (msg.reply_text || "") : msg.message_text
         })).filter(m => m.content),
