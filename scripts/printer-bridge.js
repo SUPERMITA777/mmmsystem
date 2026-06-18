@@ -196,10 +196,11 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '        $matched = $allPrinters | Where-Object { $_.Default -eq $true } | Select-Object -First 1\r\n';
     ps += '    }\r\n';
     ps += '    $currentDefault = ($allPrinters | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name\r\n';
-    // WScript.Network.SetDefaultPrinter es más rápido que Invoke-CimMethod
-    ps += '    $wnet = New-Object -ComObject WScript.Network\r\n';
     ps += '    if ($matched) {\r\n';
-    ps += '        $wnet.SetDefaultPrinter($matched.Name)\r\n';
+    ps += '        $cimPrinter = Get-CimInstance -ClassName Win32_Printer -Filter "Name = \'$($matched.Name.Replace([char]39, [char]39 + [char]39))\'"\r\n';
+    ps += '        if ($cimPrinter) {\r\n';
+    ps += '            Invoke-CimMethod -InputObject $cimPrinter -MethodName SetDefaultPrinter | Out-Null\r\n';
+    ps += '        }\r\n';
     ps += '    }\r\n';
     ps += '    $browser = New-Object System.Windows.Forms.WebBrowser\r\n';
     ps += '    $browser.ScrollBarsEnabled = $false\r\n';
@@ -214,7 +215,10 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
     ps += '    Start-Sleep -Seconds 3\r\n';
     ps += '    if ($currentDefault) {\r\n';
-    ps += '        $wnet.SetDefaultPrinter($currentDefault)\r\n';
+    ps += '        $cimDefault = Get-CimInstance -ClassName Win32_Printer -Filter "Name = \'$($currentDefault.Replace([char]39, [char]39 + [char]39))\'"\r\n';
+    ps += '        if ($cimDefault) {\r\n';
+    ps += '            Invoke-CimMethod -InputObject $cimDefault -MethodName SetDefaultPrinter | Out-Null\r\n';
+    ps += '        }\r\n';
     ps += '    }\r\n';
     ps += '} catch { exit 1 }\r\n';
     return ps;
