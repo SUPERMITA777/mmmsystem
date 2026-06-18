@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import BannersForm from '@/components/admin/BannersForm';
 
 export default async function AdminBanners({ params }: { params: Promise<{ tenant: string }> }) {
   const resolvedParams = await params;
@@ -19,7 +20,7 @@ export default async function AdminBanners({ params }: { params: Promise<{ tenan
     .from('mundial_banners')
     .select('*')
     .eq('sucursal_id', sucursalId)
-    .order('created_at', { ascending: false });
+    .order('fecha_creacion', { ascending: false });
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -27,6 +28,8 @@ export default async function AdminBanners({ params }: { params: Promise<{ tenan
         <h1 className="text-2xl font-bold text-gray-900">Gestión de Banners</h1>
         <a href={`/${tenant}/admin/mundial`} className="text-blue-600 hover:text-blue-800 font-medium">Volver al Dashboard</a>
       </div>
+
+      <BannersForm sucursalId={sucursalId} tenant={tenant} />
 
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
