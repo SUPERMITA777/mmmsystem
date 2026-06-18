@@ -191,36 +191,6 @@ const AGENT_TOOLS: any[] = [
                 },
             },
             {
-                name: "create_order",
-                description: "Crear un nuevo pedido. El sistema capturará automáticamente el WhatsApp del remitente y validará la dirección de entrega contra las zonas de cobertura.",
-                parameters: {
-                    type: SchemaType.OBJECT,
-                    properties: {
-                        customer_name: {
-                            type: SchemaType.STRING,
-                            description: "Nombre del cliente",
-                        },
-                        customer_phone: {
-                            type: SchemaType.STRING,
-                            description: "Teléfono del cliente (Opcional, se captura el WhatsApp actual por defecto)",
-                        },
-                        items: {
-                            type: SchemaType.STRING,
-                            description: "Lista de productos y cantidades (Ej: 2 muzzarella, 1 napolitana)",
-                        },
-                        delivery_address: {
-                            type: SchemaType.STRING,
-                            description: "Dirección completa (Calle y Altura). Opcional si es retiro en local. Se verificará automáticamente contra las zonas de entrega.",
-                        },
-                        notes: {
-                            type: SchemaType.STRING,
-                            description: "Notas adicionales (ej: 'sin cebolla', 'tocar timbre B')",
-                        },
-                    },
-                    required: ["customer_name", "items"],
-                },
-            },
-            {
                 name: "get_mesa_by_number",
                 description: "Buscar una mesa por su número para verificar si existe y ver su estado",
                 parameters: {
@@ -235,25 +205,59 @@ const AGENT_TOOLS: any[] = [
                 },
             },
             {
-                name: "create_salon_order",
-                description: "Crear un nuevo pedido para una mesa de salón (comanda de camarero)",
+                name: "preview_cart",
+                description: "Previsualizar el pedido (calcular precios, envío y total) antes de confirmarlo. Genera un carrito temporal en la sesión.",
                 parameters: {
                     type: SchemaType.OBJECT,
                     properties: {
-                        mesa_numero: {
-                            type: SchemaType.NUMBER,
-                            description: "El número de la mesa del salón (ej: 3)",
+                        customer_name: {
+                            type: SchemaType.STRING,
+                            description: "Nombre del cliente (Obligatorio)",
                         },
                         items: {
                             type: SchemaType.STRING,
-                            description: "Lista de productos y cantidades (Ej: 1 muzzarela, 2 cocas)",
+                            description: "Lista de productos y cantidades (Ej: '2 muzzarella, 1 coca de 600')",
+                        },
+                        delivery_type: {
+                            type: SchemaType.STRING,
+                            description: "Modalidad de entrega: 'delivery', 'takeaway' (retiro) o 'salon' (mesa)",
+                        },
+                        delivery_address: {
+                            type: SchemaType.STRING,
+                            description: "Dirección completa (Calle y Altura). Opcional si es retiro o salón.",
+                        },
+                        mesa_numero: {
+                            type: SchemaType.NUMBER,
+                            description: "Número de mesa del salón. Opcional si no es salón.",
                         },
                         notes: {
                             type: SchemaType.STRING,
-                            description: "Notas del pedido (Ej: 'sin cebolla', 'bien cocido')",
+                            description: "Notas del pedido (Ej: 'sin cebolla')",
                         },
                     },
-                    required: ["mesa_numero", "items"],
+                    required: ["customer_name", "items", "delivery_type"],
+                },
+            },
+            {
+                name: "submit_order",
+                description: "Confirmar definitivamente el pedido previsualizado en el carrito y enviarlo a la cocina / panel de pedidos.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {},
+                },
+            },
+            {
+                name: "add_to_existing_order",
+                description: "Agregar productos o cantidades adicionales a un pedido que ya fue comandado a cocina en la sesión activa.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        items: {
+                            type: SchemaType.STRING,
+                            description: "Productos adicionales a agregar (Ej: '1 coca, 1 napolitana')",
+                        },
+                    },
+                    required: ["items"],
                 },
             },
         ],
@@ -431,6 +435,59 @@ async function getRecentMessages(
 // TOOL EXECUTION
 // ═══════════════════════════════════════════
 
+async function matchProductsText(sucursalId: string, itemsText: string) {
+    const { data: products } = await supabaseAdmin
+        .from("productos")
+        .select("id, nombre, precio, activo, visible_en_menu, producto_oculto")
+        .eq("sucursal_id", sucursalId)
+        .eq("activo", true)
+        .eq("visible_en_menu", true)
+        .eq("producto_oculto", false);
+
+    if (!products || products.length === 0) {
+        return { matched: [], unmatched: [itemsText] };
+    }
+
+    const itemsRaw = itemsText.split(/[,;\n]+/).map(i => i.trim()).filter(Boolean);
+    const matched: any[] = [];
+    const unmatched: string[] = [];
+
+    for (const raw of itemsRaw) {
+        const qtyMatch = raw.match(/^(\d+|un|una|uno)\s+(.+)$/i);
+        let qty = 1;
+        let pName = raw;
+
+        if (qtyMatch) {
+            const qtyStr = qtyMatch[1].toLowerCase();
+            if (qtyStr === "un" || qtyStr === "una" || qtyStr === "uno") {
+                qty = 1;
+            } else {
+                qty = parseInt(qtyStr, 10) || 1;
+            }
+            pName = qtyMatch[2].trim();
+        }
+
+        const match = products.find(p => 
+            p.nombre.toLowerCase().includes(pName.toLowerCase()) ||
+            pName.toLowerCase().includes(p.nombre.toLowerCase())
+        );
+
+        if (match) {
+            matched.push({
+                producto_id: match.id,
+                nombre: match.nombre,
+                precio_unitario: Number(match.precio),
+                cantidad: qty,
+                subtotal: Number(match.precio) * qty,
+            });
+        } else {
+            unmatched.push(raw);
+        }
+    }
+
+    return { matched, unmatched };
+}
+
 async function executeTool(
     toolName: string,
     args: Record<string, any>,
@@ -447,14 +504,17 @@ async function executeTool(
                 }
                 let query = supabaseAdmin
                     .from("productos")
-                    .select("nombre, precio, activo, descripcion, categorias(nombre)")
-                    .eq("sucursal_id", sucursalId);
-                if (args.active_only) query = query.eq("activo", true);
+                    .select("nombre, precio, activo, visible_en_menu, producto_oculto, descripcion, categorias(nombre)")
+                    .eq("sucursal_id", sucursalId)
+                    .eq("activo", true)
+                    .eq("visible_en_menu", true)
+                    .eq("producto_oculto", false);
                 if (args.category) {
                     const { data: cats } = await supabaseAdmin
                         .from("categorias")
                         .select("id")
                         .eq("sucursal_id", sucursalId)
+                        .eq("activo", true)
                         .ilike("nombre", `%${args.category}%`);
                     if (cats && cats.length > 0) {
                         query = query.in("categoria_id", cats.map(c => c.id));
@@ -470,8 +530,11 @@ async function executeTool(
                 }
                 const { data } = await supabaseAdmin
                     .from("productos")
-                    .select("nombre, precio, activo, descripcion")
+                    .select("nombre, precio, activo, visible_en_menu, producto_oculto, descripcion")
                     .eq("sucursal_id", sucursalId)
+                    .eq("activo", true)
+                    .eq("visible_en_menu", true)
+                    .eq("producto_oculto", false)
                     .ilike("nombre", `%${args.product_name}%`)
                     .limit(5);
                 return JSON.stringify(data || []);
@@ -484,7 +547,8 @@ async function executeTool(
                 const { data } = await supabaseAdmin
                     .from("categorias")
                     .select("nombre, activo")
-                    .eq("sucursal_id", sucursalId);
+                    .eq("sucursal_id", sucursalId)
+                    .eq("activo", true);
                 return JSON.stringify(data || []);
             }
 
@@ -566,31 +630,49 @@ async function executeTool(
 
                 return JSON.stringify({
                     success: true,
-                    message: `Actualicé el precio de ${products.map(p => p.nombre).join(", ")} a $${args.new_price}`,
+                    message: `Actualicé el precio de ${products.length} producto(s): ${products.map(p => `${p.nombre} a $${args.new_price}`).join(", ")}`,
                 });
             }
 
-            case "create_order": {
+            case "preview_cart": {
                 if (!config.allowed_operations.includes("create_orders")) {
-                    return JSON.stringify({ error: "No tenés permisos para crear pedidos. Contactá al administrador." });
+                    return JSON.stringify({ error: "No tenés permisos para crear pedidos." });
                 }
 
-                const finalPhone = args.customer_phone || senderPhone;
-                const isDelivery = !!args.delivery_address;
+                const finalPhone = senderPhone;
+                const deliveryType = args.delivery_type || "takeaway";
+                const isDelivery = deliveryType === "delivery";
 
+                // 1. Match products
+                const matchResult = await matchProductsText(sucursalId, args.items);
+                if (matchResult.matched.length === 0) {
+                    return JSON.stringify({ 
+                        error: "No pude reconocer ninguno de los productos en tu pedido. Por favor, verificá que los nombres coincidan con los de nuestra carta." 
+                    });
+                }
+
+                // Calculate subtotal
+                let subtotal = 0;
+                for (const m of matchResult.matched) {
+                    subtotal += m.subtotal;
+                }
+
+                // 2. Validate delivery zone & cost
                 let deliveryCost = 0;
                 let zoneName = "";
+                let validatedAddress = args.delivery_address || "";
 
                 if (isDelivery) {
-                    const coords = await geocodeAddress(args.delivery_address);
+                    if (!validatedAddress) {
+                        return JSON.stringify({ error: "Para envíos a domicilio, necesito que ingreses la dirección de entrega." });
+                    }
+                    const coords = await geocodeAddress(validatedAddress);
                     if (!coords) {
                         return JSON.stringify({ 
-                            error: `No pude encontrar la ubicación de "${args.delivery_address}". Por favor, asegúrate de que la dirección sea correcta y completa (calle y número).` 
+                            error: `No pude encontrar la ubicación para "${validatedAddress}". Por favor ingresala de forma completa (calle y altura).` 
                         });
                     }
-
-                    // Validar zona y calcular costo
-                    const validation = await validateAddressInZones(sucursalId, coords, 0); // Total 0 para no aplicar envio gratis aún si no sabemos el total
+                    const validation = await validateAddressInZones(sucursalId, coords, subtotal);
                     if (!validation.valid) {
                         return JSON.stringify({ error: validation.error });
                     }
@@ -598,121 +680,234 @@ async function executeTool(
                     zoneName = validation.zonaName || "";
                 }
 
-                // Generar número de pedido (Simplificado para el bot, el trigger o el código lo hará prolijo)
-                // En el sistema actual, se usa un RPC. Aquí insertamos lo básico.
-                
-                const { data: order, error } = await supabaseAdmin
-                    .from("pedidos")
-                    .insert({
-                        sucursal_id: sucursalId,
-                        cliente_nombre: args.customer_name,
-                        cliente_telefono: finalPhone,
-                        estado: "pendiente",
-                        tipo: isDelivery ? "delivery" : "takeaway",
-                        cliente_direccion: args.delivery_address || null,
-                        costo_envio: deliveryCost,
-                        origen: "whatsapp",
-                        notas: `[IA] Items: ${args.items}${args.notes ? ` | Notas: ${args.notes}` : ""}${zoneName ? ` | Zona: ${zoneName}` : ""}`,
-                        total: 0, // El administrador o un proceso posterior calculará el total real basado en los productos
-                    })
-                    .select("numero_pedido, id")
-                    .single();
+                // 3. Validate Mesa if Salon
+                let mesaId: string | null = null;
+                if (deliveryType === "salon") {
+                    if (!args.mesa_numero) {
+                        return JSON.stringify({ error: "Para pedidos de salón, es obligatorio ingresar el número de mesa." });
+                    }
+                    const { data: mesa } = await supabaseAdmin
+                        .from("mesas")
+                        .select("id, numero")
+                        .eq("sucursal_id", sucursalId)
+                        .eq("numero", args.mesa_numero)
+                        .eq("activa", true)
+                        .maybeSingle();
 
-                if (error) {
-                    return JSON.stringify({ error: "Error al crear el pedido: " + error.message });
+                    if (!mesa) {
+                        return JSON.stringify({ error: `La mesa número ${args.mesa_numero} no existe o no está activa.` });
+                    }
+                    mesaId = mesa.id;
                 }
 
-                await logAgentAction(sucursalId, "create_order", {
-                    order_id: order?.id,
-                    customer: args.customer_name,
-                    phone: finalPhone,
-                    items: args.items,
+                // 4. Save to conversation metadata
+                const conversation = await getOrCreateConversation(sucursalId, finalPhone);
+                const currentMeta = conversation?.metadata || {};
+                const cartData = {
+                    customer_name: args.customer_name,
+                    items: matchResult.matched,
+                    delivery_type: deliveryType,
+                    delivery_address: validatedAddress,
                     delivery_cost: deliveryCost,
-                }, "whatsapp", senderPhone);
+                    zona_name: zoneName,
+                    mesa_numero: args.mesa_numero || null,
+                    mesa_id: mesaId,
+                    notes: args.notes || "",
+                    subtotal,
+                    total: subtotal + deliveryCost,
+                };
 
-                let successMsg = `¡Pedido creado con éxito! (#${order?.numero_pedido || "nuevo"}) para ${args.customer_name}.`;
-                if (isDelivery) {
-                    successMsg += `\n📍 Zona: ${zoneName}\n🚚 Costo de envío: ${deliveryCost === 0 ? "¡GRATIS!" : `$${deliveryCost}`}`;
-                }
+                await supabaseAdmin
+                    .from("whatsapp_conversations")
+                    .update({ metadata: { ...currentMeta, cart: cartData } })
+                    .eq("id", conversation.id);
 
                 return JSON.stringify({
                     success: true,
-                    message: successMsg,
+                    message: "Carrito previsualizado correctamente.",
+                    unmatched: matchResult.unmatched,
+                    cart: cartData
                 });
             }
 
-            case "get_mesa_by_number": {
-                const { data } = await supabaseAdmin
-                    .from("mesas")
-                    .select("id, numero, nombre, estado, capacidad, activa")
-                    .eq("sucursal_id", sucursalId)
-                    .eq("numero", args.mesa_numero)
-                    .maybeSingle();
-                
-                if (!data) {
-                    return JSON.stringify({ error: `La mesa número ${args.mesa_numero} no existe.` });
-                }
-                return JSON.stringify(data);
-            }
+            case "submit_order": {
+                const conversation = await getOrCreateConversation(sucursalId, senderPhone);
+                const cart = conversation?.metadata?.cart;
 
-            case "create_salon_order": {
-                if (!config.allowed_operations.includes("create_orders")) {
-                    return JSON.stringify({ error: "No tenés permisos para crear pedidos." });
+                if (!cart || !cart.items || cart.items.length === 0) {
+                    return JSON.stringify({ error: "No tenés ningún pedido en preparación. Por favor armemos el pedido primero." });
                 }
 
-                // 1. Validate and fetch mesa
-                const { data: mesa } = await supabaseAdmin
-                    .from("mesas")
-                    .select("id, numero, nombre")
-                    .eq("sucursal_id", sucursalId)
-                    .eq("numero", args.mesa_numero)
-                    .eq("activa", true)
-                    .maybeSingle();
-
-                if (!mesa) {
-                    return JSON.stringify({ error: `La mesa número ${args.mesa_numero} no existe o no está activa en este local.` });
-                }
-
-                // 2. Fetch system user to associate with created_by if possible
+                // Fetch system user if it is a waiter
                 const { data: systemUser } = await supabaseAdmin
                     .from("usuarios")
-                    .select("id, nombre")
+                    .select("id")
                     .eq("telefono", senderPhone)
                     .eq("activo", true)
                     .maybeSingle();
 
-                // 3. Create the order
-                const { data: order, error } = await supabaseAdmin
+                // 1. Create order header
+                const { data: order, error: orderError } = await supabaseAdmin
                     .from("pedidos")
                     .insert({
                         sucursal_id: sucursalId,
-                        mesa_id: mesa.id,
-                        mesa_numero: mesa.numero,
-                        cliente_nombre: `Mesa ${mesa.numero}`,
+                        cliente_nombre: cart.customer_name,
                         cliente_telefono: senderPhone,
+                        cliente_direccion: cart.delivery_address || null,
+                        costo_envio: cart.delivery_cost || 0,
+                        subtotal: cart.subtotal,
+                        total: cart.total,
                         estado: "pendiente",
-                        tipo: "salon",
+                        tipo: cart.delivery_type,
+                        mesa_id: cart.mesa_id || null,
+                        mesa_numero: cart.mesa_numero || null,
                         origen: "whatsapp",
-                        notas: `[IA Camarero] Items: ${args.items}${args.notes ? ` | Notas: ${args.notes}` : ""}`,
-                        total: 0,
+                        notas: `[IA WhatsApp] ${cart.notes || ""}`,
                         created_by: systemUser?.id || null,
                     })
-                    .select("numero_pedido, id")
+                    .select("id, numero_pedido")
                     .single();
 
-                if (error) {
-                    return JSON.stringify({ error: "Error al crear el pedido de salón: " + error.message });
+                if (orderError || !order) {
+                    return JSON.stringify({ error: "Error al registrar el pedido: " + orderError?.message });
                 }
 
-                await logAgentAction(sucursalId, "create_salon_order", {
-                    order_id: order?.id,
-                    mesa_numero: mesa.numero,
-                    items: args.items,
+                // 2. Create order items
+                const itemInserts = cart.items.map((it: any) => ({
+                    pedido_id: order.id,
+                    producto_id: it.producto_id,
+                    nombre_producto: it.nombre,
+                    cantidad: it.cantidad,
+                    precio_unitario: it.precio_unitario,
+                    estado: "pendiente",
+                }));
+
+                const { error: itemsError } = await supabaseAdmin
+                    .from("pedido_items")
+                    .insert(itemInserts);
+
+                if (itemsError) {
+                    // Cleanup header
+                    await supabaseAdmin.from("pedidos").delete().eq("id", order.id);
+                    return JSON.stringify({ error: "Error al registrar los productos del pedido: " + itemsError.message });
+                }
+
+                // 3. Clear cart and set last order id in metadata
+                const currentMeta = conversation?.metadata || {};
+                delete currentMeta.cart;
+                await supabaseAdmin
+                    .from("whatsapp_conversations")
+                    .update({ 
+                        metadata: { 
+                            ...currentMeta, 
+                            last_order_id: order.id 
+                        } 
+                    })
+                    .eq("id", conversation.id);
+
+                await logAgentAction(sucursalId, "create_order", {
+                    order_id: order.id,
+                    customer: cart.customer_name,
+                    total: cart.total,
                 }, "whatsapp", senderPhone);
 
                 return JSON.stringify({
                     success: true,
-                    message: `¡Pedido de Salón creado con éxito! (#${order?.numero_pedido}) para la Mesa ${mesa.numero}.`,
+                    message: `¡Pedido ingresado al sistema con éxito! El número de pedido es #${order.numero_pedido}.`,
+                    numero_pedido: order.numero_pedido
+                });
+            }
+
+            case "add_to_existing_order": {
+                const conversation = await getOrCreateConversation(sucursalId, senderPhone);
+                let orderId = conversation?.metadata?.last_order_id;
+
+                // If not in metadata, look up the last active order for this phone
+                if (!orderId) {
+                    const { data: lastOrder } = await supabaseAdmin
+                        .from("pedidos")
+                        .select("id")
+                        .eq("sucursal_id", sucursalId)
+                        .eq("cliente_telefono", senderPhone)
+                        .in("estado", ["pendiente", "confirmado", "preparando"])
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (lastOrder) {
+                        orderId = lastOrder.id;
+                    }
+                }
+
+                if (!orderId) {
+                    return JSON.stringify({ error: "No encontré ningún pedido activo tuyo para agregarle productos." });
+                }
+
+                // 1. Get current order details
+                const { data: order } = await supabaseAdmin
+                    .from("pedidos")
+                    .select("id, subtotal, total, costo_envio, numero_pedido")
+                    .eq("id", orderId)
+                    .single();
+
+                if (!order) {
+                    return JSON.stringify({ error: "El pedido original no pudo ser encontrado en el sistema." });
+                }
+
+                // 2. Match products
+                const matchResult = await matchProductsText(sucursalId, args.items);
+                if (matchResult.matched.length === 0) {
+                    return JSON.stringify({ 
+                        error: "No pude reconocer ninguno de los productos que querés agregar. Por favor verificá los nombres." 
+                    });
+                }
+
+                // 3. Insert items
+                const itemInserts = matchResult.matched.map((it: any) => ({
+                    pedido_id: order.id,
+                    producto_id: it.producto_id,
+                    nombre_producto: it.nombre,
+                    cantidad: it.cantidad,
+                    precio_unitario: it.precio_unitario,
+                    estado: "pendiente",
+                }));
+
+                const { error: itemsError } = await supabaseAdmin
+                    .from("pedido_items")
+                    .insert(itemInserts);
+
+                if (itemsError) {
+                    return JSON.stringify({ error: "Error al agregar productos al pedido: " + itemsError.message });
+                }
+
+                // 4. Calculate new totals
+                let addedSubtotal = 0;
+                for (const m of matchResult.matched) {
+                    addedSubtotal += m.subtotal;
+                }
+
+                const newSubtotal = Number(order.subtotal) + addedSubtotal;
+                const newTotal = newSubtotal + Number(order.costo_envio);
+
+                // 5. Update order header totals
+                await supabaseAdmin
+                    .from("pedidos")
+                    .update({
+                        subtotal: newSubtotal,
+                        total: newTotal,
+                    })
+                    .eq("id", order.id);
+
+                await logAgentAction(sucursalId, "add_to_order", {
+                    order_id: order.id,
+                    added: matchResult.matched,
+                }, "whatsapp", senderPhone);
+
+                return JSON.stringify({
+                    success: true,
+                    message: `¡Productos agregados con éxito al pedido #${order.numero_pedido}!`,
+                    added: matchResult.matched,
+                    new_total: newTotal
                 });
             }
 
@@ -884,13 +1079,18 @@ Tu función es procesar pedidos del salón (comandas para mesas) de forma ágil 
 Sé extremadamente conciso, directo, rápido y profesional. Respondé siempre usando español argentino ("vos").
 No saludes comercialmente, andá directo al grano.
 
-PROTOCOLO PARA COMANDAS DE SALÓN (PERSONAL):
+PROTOCOLO PARA COMANDAS DE SALÓN (PERSONAL - DOS PASOS):
 1. Si te piden hacer un pedido para una mesa (ej: "1 muzzarela para la mesa 3"):
    - Primero validá la mesa usando 'get_mesa_by_number' (ingresando el número de mesa).
-   - Si la mesa existe y es válida, presentale al camarero un resumen súper breve y conciso del pedido y la mesa para que confirme.
-   - En cuanto te confirme (diga "sí", "confirmar", "dale", etc.), llamá inmediatamente a 'create_salon_order' pasando la mesa y los productos.
-2. Si te piden ver comandas activas, usá 'get_active_orders'.
-3. Si te piden cambiar disponibilidad de un producto o precio, usá 'toggle_product_availability' o 'update_product_price'.
+   - Generá una vista previa del pedido usando 'preview_cart' con delivery_type "salon", mesa_numero (y mesa_id si corresponde).
+   - Presentale al camarero un resumen súper breve y conciso del pedido y la mesa para que confirme.
+   - En cuanto te confirme (diga "sí", "confirmar", "dale", etc.), llamá inmediatamente a 'submit_order' para ingresar el pedido al sistema.
+2. AGREGAR A PEDIDO EXISTENTE: Si el personal te solicita agregar productos a un pedido que ya está enviado/activo:
+   - Usá 'add_to_existing_order' con los items nuevos.
+   - Informale la confirmación del agregado y el nuevo total actualizado del pedido.
+   - IMPORTANTE: Está terminantemente PROHIBIDO quitar, disminuir o cambiar productos que ya están comandados. Si te lo piden, respondé que por razones de cocina no podés disminuir cantidades ni quitar productos ya comandados.
+3. Si te piden ver comandas activas, usá 'get_active_orders'.
+4. Si te piden cambiar disponibilidad de un producto o precio, usá 'toggle_product_availability' o 'update_product_price'.
 `;
     } else {
         prompt += `
@@ -907,17 +1107,25 @@ REGLAS FUNDAMENTALES:
 4. NUNCA inventes información sobre productos, precios o disponibilidad. Usá las herramientas disponibles.
 5. Si un cliente pide algo que no podés hacer, explicale amablemente por qué.
 6. Si el cliente pide hablar con un humano, despedite amablemente e indicá que lo vas a derivar.
+7. Interactuá con los clientes y camareros con total naturalidad, empatía y fluidez, como si fueses un empleado real del local.
+8. RESTRICCIÓN DE MENÚ: Tenés acceso a productos y categorías del local. NUNCA des información, menciones, ofrezcas o sugieras productos que estén ocultos, dados de baja (activo = false, visible_en_menu = false o producto_oculto = true) o no disponibles según lo devuelto por tus herramientas. Si un producto no aparece en las herramientas de consulta, para vos no existe.
 
 OPERACIONES PERMITIDAS: ${allowedOps}.
 
-PROTOCOLO DE PEDIDOS PARA CLIENTES (MUY IMPORTANTE):
-Si el cliente quiere hacer un pedido, seguí este flujo:
-1. RECOPILACIÓN: Preguntale su Nombre y su Pedido (items/cantidades).
-2. ENTREGA: Preguntale si prefiere "Delivery" o "Retirar por el local".
-3. DIRECCIÓN (Si es Delivery): Pedile la dirección exacta (Calle y Altura). Informale que vas a verificar si llegamos a su zona.
-4. VALIDACIÓN: Usá 'create_order'. Si la dirección está fuera de zona o hay un error, el sistema te lo dirá. Informale al cliente el resultado.
-5. PRECIOS: Si te preguntan precios, usá 'get_products' o 'get_product_price'. No los inventes.
-6. CONFIRMACIÓN: Una vez que tengas todo, confirmale que el pedido fue ingresado y los detalles del envío si corresponden.
+PROTOCOLO DE PEDIDOS PARA CLIENTES (DOS PASOS - OBLIGATORIO):
+Si el cliente quiere hacer un pedido, seguí estrictamente este flujo:
+1. RECOPILACIÓN: Preguntale su Nombre, los productos y cantidades que desea, y si prefiere "Delivery" o "Retirar por el local". Si elige Delivery, solicitale la dirección exacta (Calle y Altura).
+2. VISTA PREVIA (Paso 1): Llamá a 'preview_cart' pasando los items mapeados y los datos correspondientes (delivery_address si es delivery, delivery_type, etc.).
+3. RESUMEN AL CLIENTE: Presentale al cliente un resumen muy preciso y claro de su pedido:
+   - Detalle de los productos identificados y sus subtotales.
+   - Dirección de entrega y costo de envío (si es Delivery).
+   - El costo total del pedido.
+   - Solicitá explícitamente su confirmación (ej: "¿Está todo correcto para que lo enviemos a la cocina?").
+4. EDICIÓN DEL PEDIDO (Antes de confirmar): Si el cliente te dice que algo no corresponde o quiere cambiar algo del pedido (agregar, quitar o corregir productos/cantidades), debés editarlo llamando nuevamente a 'preview_cart' con los items corregidos y mostrarle el nuevo resumen para que lo confirme.
+5. ENVÍO (Paso 2): Una vez y SOLO cuando el cliente te confirme que el resumen es correcto ("sí", "confirmá", "está bien", etc.), llamá a 'submit_order' para enviar el pedido al panel de pedidos.
+6. TRABAJO POST-ENVÍO: Una vez que el pedido ya fue enviado al panel, seguirás trabajando sobre ese pedido. El cliente te puede consultar el estado o solicitar algún AGREGADO de productos.
+   - Para agregar productos a su pedido activo, usá 'add_to_existing_order'.
+   - IMPORTANTE (RESTRICCIÓN CRÍTICA): Está estrictamente PROHIBIDO reducir cantidades o eliminar productos que ya fueron comandados y enviados al sistema (esto provocaría problemas de coordinación en la cocina). Si el cliente te pide quitar o disminuir un producto del pedido ya enviado, explicale amablemente que no es posible modificar a menos los platos que ya están en preparación en la cocina.
 
 IMPORTANTE: No necesitás pedir el número de teléfono, el sistema lo toma automáticamente del WhatsApp. NUNCA lo preguntes.
 `;
@@ -1193,7 +1401,7 @@ function filterToolsByPermissions(allowedOps: string[]) {
     const readTools = ["get_products", "get_product_price", "get_categories", "get_mesa_by_number"];
     const orderReadTools = ["get_active_orders"];
     const writeTools = ["toggle_product_availability", "update_product_price"];
-    const orderWriteTools = ["create_order", "create_salon_order"];
+    const orderWriteTools = ["preview_cart", "submit_order", "add_to_existing_order"];
 
     const allowed: string[] = [];
     if (allowedOps.includes("view_products")) allowed.push(...readTools);
