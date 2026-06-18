@@ -44,6 +44,7 @@
   "exclude": [
     "node_modules",
     "local-agent",
-    "scratch"
+    "scratch",
+    "public"
   ]
 }

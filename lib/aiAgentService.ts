@@ -32,6 +32,10 @@ export interface AgentConfig {
     handoff_triggers: string[]; // phrases to hand off to human
     resume_triggers: string[]; // phrases to resume the agent
     handoff_timeout_seconds: number; // 0 = disabled
+    // Status fields for web sync
+    whatsapp_status?: 'disconnected' | 'connecting' | 'qr' | 'connected';
+    whatsapp_qr?: string | null;
+    whatsapp_phone?: string | null;
 }
 
 export interface TrainingSnippet {
@@ -216,7 +220,42 @@ const AGENT_TOOLS: any[] = [
                     required: ["customer_name", "items"],
                 },
             },
-
+            {
+                name: "get_mesa_by_number",
+                description: "Buscar una mesa por su número para verificar si existe y ver su estado",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        mesa_numero: {
+                            type: SchemaType.NUMBER,
+                            description: "El número de la mesa a buscar (ej: 3)",
+                        },
+                    },
+                    required: ["mesa_numero"],
+                },
+            },
+            {
+                name: "create_salon_order",
+                description: "Crear un nuevo pedido para una mesa de salón (comanda de camarero)",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        mesa_numero: {
+                            type: SchemaType.NUMBER,
+                            description: "El número de la mesa del salón (ej: 3)",
+                        },
+                        items: {
+                            type: SchemaType.STRING,
+                            description: "Lista de productos y cantidades (Ej: 1 muzzarela, 2 cocas)",
+                        },
+                        notes: {
+                            type: SchemaType.STRING,
+                            description: "Notas del pedido (Ej: 'sin cebolla', 'bien cocido')",
+                        },
+                    },
+                    required: ["mesa_numero", "items"],
+                },
+            },
         ],
     },
 ];
@@ -602,6 +641,81 @@ async function executeTool(
                 });
             }
 
+            case "get_mesa_by_number": {
+                const { data } = await supabaseAdmin
+                    .from("mesas")
+                    .select("id, numero, nombre, estado, capacidad, activa")
+                    .eq("sucursal_id", sucursalId)
+                    .eq("numero", args.mesa_numero)
+                    .maybeSingle();
+                
+                if (!data) {
+                    return JSON.stringify({ error: `La mesa número ${args.mesa_numero} no existe.` });
+                }
+                return JSON.stringify(data);
+            }
+
+            case "create_salon_order": {
+                if (!config.allowed_operations.includes("create_orders")) {
+                    return JSON.stringify({ error: "No tenés permisos para crear pedidos." });
+                }
+
+                // 1. Validate and fetch mesa
+                const { data: mesa } = await supabaseAdmin
+                    .from("mesas")
+                    .select("id, numero, nombre")
+                    .eq("sucursal_id", sucursalId)
+                    .eq("numero", args.mesa_numero)
+                    .eq("activa", true)
+                    .maybeSingle();
+
+                if (!mesa) {
+                    return JSON.stringify({ error: `La mesa número ${args.mesa_numero} no existe o no está activa en este local.` });
+                }
+
+                // 2. Fetch system user to associate with created_by if possible
+                const { data: systemUser } = await supabaseAdmin
+                    .from("usuarios")
+                    .select("id, nombre")
+                    .eq("telefono", senderPhone)
+                    .eq("activo", true)
+                    .maybeSingle();
+
+                // 3. Create the order
+                const { data: order, error } = await supabaseAdmin
+                    .from("pedidos")
+                    .insert({
+                        sucursal_id: sucursalId,
+                        mesa_id: mesa.id,
+                        mesa_numero: mesa.numero,
+                        cliente_nombre: `Mesa ${mesa.numero}`,
+                        cliente_telefono: senderPhone,
+                        estado: "pendiente",
+                        tipo: "salon",
+                        origen: "whatsapp",
+                        notas: `[IA Camarero] Items: ${args.items}${args.notes ? ` | Notas: ${args.notes}` : ""}`,
+                        total: 0,
+                        created_by: systemUser?.id || null,
+                    })
+                    .select("numero_pedido, id")
+                    .single();
+
+                if (error) {
+                    return JSON.stringify({ error: "Error al crear el pedido de salón: " + error.message });
+                }
+
+                await logAgentAction(sucursalId, "create_salon_order", {
+                    order_id: order?.id,
+                    mesa_numero: mesa.numero,
+                    items: args.items,
+                }, "whatsapp", senderPhone);
+
+                return JSON.stringify({
+                    success: true,
+                    message: `¡Pedido de Salón creado con éxito! (#${order?.numero_pedido}) para la Mesa ${mesa.numero}.`,
+                });
+            }
+
 
             default:
                 return JSON.stringify({ error: "Función no reconocida." });
@@ -739,13 +853,13 @@ async function validateAddressInZones(sucursalId: string, clientePt: LatLng, cur
 // ═══════════════════════════════════════════
 
 
-function buildSystemPrompt(config: AgentConfig, sucursalName: string, customerName?: string): string {
+function buildSystemPrompt(config: AgentConfig, sucursalName: string, customerName?: string, userRole: string = 'cliente'): string {
 
     const operationDescriptions: Record<string, string> = {
         view_products: "consultar productos, precios y categorías del menú",
         view_orders: "ver pedidos activos y su estado",
         modify_products: "activar/desactivar productos y cambiar precios",
-        create_orders: "crear nuevos pedidos para clientes",
+        create_orders: "crear nuevos pedidos para clientes o mesas de salón",
         manage_discounts: "gestionar descuentos y promociones",
     };
 
@@ -760,10 +874,28 @@ function buildSystemPrompt(config: AgentConfig, sucursalName: string, customerNa
     const agentName = config.agent_name || "Asistente";
 
     let prompt = `Tu nombre es "${agentName}", sos el asistente virtual de "${sucursalName}". 
-Cuando un cliente te pregunte cómo te llamás o quién sos, presentate como ${agentName}.
-Tu rol es atender a los clientes por WhatsApp.
-${customerName ? `ESTÁS HABLANDO CON: ${customerName}. Salúdalo/a por su nombre de forma natural.` : "No conocemos el nombre de este cliente todavía, pregúntaselo si es necesario para el pedido."}
+Cuando te pregunten cómo te llamás o quién sos, presentate como ${agentName}.
+`;
 
+    if (userRole === 'administrador' || userRole === 'camarero' || userRole === 'cajero') {
+        prompt += `
+ESTÁS HABLANDO CON UN MIEMBRO DEL PERSONAL DEL LOCAL: ${customerName || 'Staff'} (Rol: ${userRole.toUpperCase()}).
+Tu función es procesar pedidos del salón (comandas para mesas) de forma ágil y rápida, y responder consultas sobre stock, precios y pedidos activos.
+Sé extremadamente conciso, directo, rápido y profesional. Respondé siempre usando español argentino ("vos").
+No saludes comercialmente, andá directo al grano.
+
+PROTOCOLO PARA COMANDAS DE SALÓN (PERSONAL):
+1. Si te piden hacer un pedido para una mesa (ej: "1 muzzarela para la mesa 3"):
+   - Primero validá la mesa usando 'get_mesa_by_number' (ingresando el número de mesa).
+   - Si la mesa existe y es válida, presentale al camarero un resumen súper breve y conciso del pedido y la mesa para que confirme.
+   - En cuanto te confirme (diga "sí", "confirmar", "dale", etc.), llamá inmediatamente a 'create_salon_order' pasando la mesa y los productos.
+2. Si te piden ver comandas activas, usá 'get_active_orders'.
+3. Si te piden cambiar disponibilidad de un producto o precio, usá 'toggle_product_availability' o 'update_product_price'.
+`;
+    } else {
+        prompt += `
+Tu rol es atender a los clientes por WhatsApp que quieren pedir a domicilio o para retirar.
+${customerName ? `ESTÁS HABLANDO CON EL CLIENTE: ${customerName}. Salúdalo/a por su nombre de forma natural.` : "No conocemos el nombre de este cliente todavía, pregúntaselo si es necesario para el pedido."}
 
 PERSONALIDAD Y TONO:
 ${personality.tone}
@@ -778,7 +910,7 @@ REGLAS FUNDAMENTALES:
 
 OPERACIONES PERMITIDAS: ${allowedOps}.
 
-PROTOCOLO DE PEDIDOS (MUY IMPORTANTE):
+PROTOCOLO DE PEDIDOS PARA CLIENTES (MUY IMPORTANTE):
 Si el cliente quiere hacer un pedido, seguí este flujo:
 1. RECOPILACIÓN: Preguntale su Nombre y su Pedido (items/cantidades).
 2. ENTREGA: Preguntale si prefiere "Delivery" o "Retirar por el local".
@@ -789,6 +921,7 @@ Si el cliente quiere hacer un pedido, seguí este flujo:
 
 IMPORTANTE: No necesitás pedir el número de teléfono, el sistema lo toma automáticamente del WhatsApp. NUNCA lo preguntes.
 `;
+    }
 
 
 
@@ -896,16 +1029,34 @@ export async function processWhatsAppMessage(
 
     const sucursalName = sucursal?.nombre || "Nuestro Negocio";
 
-    // 5. Check if customer exists to greet by name
-    const { data: customer } = await supabaseAdmin
-        .from("clientes")
-        .select("nombre")
-        .eq("sucursal_id", sucursalId)
+    // 5. Check if sender is a system user (waiter, admin, cashier, etc.)
+    const { data: systemUser } = await supabaseAdmin
+        .from("usuarios")
+        .select("id, nombre, rol")
         .eq("telefono", senderPhone)
+        .eq("activo", true)
         .maybeSingle();
 
+    let userRole = "cliente";
+    let displayName = "";
+
+    if (systemUser) {
+        userRole = systemUser.rol || "empleado";
+        displayName = systemUser.nombre;
+    } else {
+        // Check if customer exists to greet by name
+        const { data: customer } = await supabaseAdmin
+            .from("clientes")
+            .select("nombre")
+            .eq("sucursal_id", sucursalId)
+            .eq("telefono", senderPhone)
+            .maybeSingle();
+        
+        displayName = customer?.nombre || "";
+    }
+
     // 6. Build Gemini prompt with context
-    const systemPrompt = buildSystemPrompt(config, sucursalName, customer?.nombre);
+    const systemPrompt = buildSystemPrompt(config, sucursalName, displayName, userRole);
 
     // 6. Filter tools based on allowed operations
     const allowedTools = filterToolsByPermissions(config.allowed_operations);
@@ -1039,10 +1190,10 @@ export async function processWhatsAppMessage(
 // ═══════════════════════════════════════════
 
 function filterToolsByPermissions(allowedOps: string[]) {
-    const readTools = ["get_products", "get_product_price", "get_categories"];
+    const readTools = ["get_products", "get_product_price", "get_categories", "get_mesa_by_number"];
     const orderReadTools = ["get_active_orders"];
     const writeTools = ["toggle_product_availability", "update_product_price"];
-    const orderWriteTools = ["create_order"];
+    const orderWriteTools = ["create_order", "create_salon_order"];
 
     const allowed: string[] = [];
     if (allowedOps.includes("view_products")) allowed.push(...readTools);

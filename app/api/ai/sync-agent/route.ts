@@ -8,17 +8,17 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { processWhatsAppMessage, getAgentConfig } from "@/lib/aiAgentService";
+import { processWhatsAppMessage, getAgentConfig, updateAgentConfig } from "@/lib/aiAgentService";
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { tenantId, sender, text, fromMe } = body;
+        const { tenantId, sender, text, fromMe, status, qr, phone } = body;
 
         // Validate required fields
-        if (!tenantId || !sender || !text) {
+        if (!tenantId) {
             return NextResponse.json(
-                { error: "Faltan campos requeridos: tenantId, sender, text" },
+                { error: "Falta campo requerido: tenantId" },
                 { status: 400 }
             );
         }
@@ -43,6 +43,24 @@ export async function POST(request: Request) {
                 );
             }
             sucursalId = sucursal.id;
+        }
+
+        // Handle status updates from local-agent
+        if (status) {
+            const success = await updateAgentConfig(sucursalId, {
+                whatsapp_status: status,
+                whatsapp_qr: qr || null,
+                whatsapp_phone: phone || null,
+            });
+            return NextResponse.json({ success });
+        }
+
+        // Validate message fields
+        if (!sender || !text) {
+            return NextResponse.json(
+                { error: "Faltan campos requeridos para procesar mensaje: sender, text" },
+                { status: 400 }
+            );
         }
 
         // Verify agent is enabled

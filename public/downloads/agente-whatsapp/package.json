@@ -1,0 +1,37 @@
+{
+  "name": "mmm-whatsapp-agent",
+  "version": "1.0.0",
+  "description": "MMM System - Agente WhatsApp IA (ejecutable standalone)",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node src/index.ts",
+    "bundle": "ncc build src/index.ts -o dist --minify --target es2020"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "mmm-system",
+    "ai-agent"
+  ],
+  "author": "MMM System",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.14.0",
+    "dotenv": "^17.4.1",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@vercel/ncc": "^0.38.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  }
+}

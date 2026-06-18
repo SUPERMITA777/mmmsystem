@@ -40,6 +40,9 @@ interface AgentConfig {
     handoff_triggers: string[];
     resume_triggers: string[];
     handoff_timeout_seconds: number;
+    whatsapp_status?: 'disconnected' | 'connecting' | 'qr' | 'connected';
+    whatsapp_qr?: string | null;
+    whatsapp_phone?: string | null;
 }
 
 interface Conversation {
@@ -144,6 +147,33 @@ export default function AgenteIAPage() {
     }, [sucursalId]);
 
     useEffect(() => { loadConfig(); }, [loadConfig]);
+
+    useEffect(() => {
+        if (!sucursalId || !config?.whatsapp_enabled || config?.whatsapp_status === 'connected') return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/ai/agent-config?sucursal_id=${sucursalId}&section=config`);
+                const data = await res.json();
+                if (data.success && data.config) {
+                    setConfig(prev => {
+                        if (!prev) return data.config;
+                        // Only update status fields to avoid overwriting user edits in progress
+                        return {
+                            ...prev,
+                            whatsapp_status: data.config.whatsapp_status,
+                            whatsapp_qr: data.config.whatsapp_qr,
+                            whatsapp_phone: data.config.whatsapp_phone,
+                        };
+                    });
+                }
+            } catch (err) {
+                console.error("Error polling config:", err);
+            }
+        }, 4000);
+
+        return () => clearInterval(interval);
+    }, [sucursalId, config?.whatsapp_enabled, config?.whatsapp_status]);
 
     // Save config
     async function handleSave() {
@@ -564,6 +594,84 @@ export default function AgenteIAPage() {
                                     }
                                 </button>
                             </div>
+
+                            {config.whatsapp_enabled && (
+                                <div className="p-4 rounded-xl bg-purple-50/30 border border-purple-100 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-semibold uppercase text-purple-700 tracking-wider">Sincronización WhatsApp</span>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            config.whatsapp_status === 'connected' ? 'bg-green-100 text-green-800' :
+                                            config.whatsapp_status === 'connecting' ? 'bg-blue-100 text-blue-800 animate-pulse' :
+                                            config.whatsapp_status === 'qr' ? 'bg-amber-100 text-amber-800' :
+                                            'bg-gray-100 text-gray-800'
+                                        }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                                config.whatsapp_status === 'connected' ? 'bg-green-500' :
+                                                config.whatsapp_status === 'connecting' ? 'bg-blue-500' :
+                                                config.whatsapp_status === 'qr' ? 'bg-amber-500' :
+                                                'bg-gray-400'
+                                            }`} />
+                                            {config.whatsapp_status === 'connected' ? 'Conectado' :
+                                             config.whatsapp_status === 'connecting' ? 'Conectando...' :
+                                             config.whatsapp_status === 'qr' ? 'Esperando QR' :
+                                             'Desconectado'}
+                                        </span>
+                                    </div>
+
+                                    {config.whatsapp_status === 'connected' && config.whatsapp_phone && (
+                                        <div className="text-sm text-gray-700 bg-white p-3 rounded-lg border border-green-100 flex items-center gap-2">
+                                            <span className="text-green-600 font-bold">✓</span>
+                                            <span>Vinculado al número: <strong>+{config.whatsapp_phone}</strong></span>
+                                        </div>
+                                    )}
+
+                                    {config.whatsapp_status === 'qr' && config.whatsapp_qr && (
+                                        <div className="flex flex-col items-center gap-3 p-3 bg-white rounded-lg border border-amber-100">
+                                            <p className="text-xs text-gray-600 text-center font-medium">
+                                                Escaneá este código QR con la app de WhatsApp desde tu celular (Dispositivos vinculados) para sincronizar:
+                                            </p>
+                                            <img
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(config.whatsapp_qr)}`}
+                                                alt="WhatsApp QR Code"
+                                                className="w-48 h-48 border rounded-lg bg-white p-2 shadow-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {config.whatsapp_status === 'connecting' && (
+                                        <div className="flex flex-col items-center justify-center p-4 gap-2 bg-white rounded-lg border">
+                                            <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                                            <p className="text-xs text-gray-500">Conectando servicio de WhatsApp...</p>
+                                        </div>
+                                    )}
+
+                                    {(!config.whatsapp_status || config.whatsapp_status === 'disconnected') && (
+                                        <div className="text-xs text-gray-600 bg-white p-3 rounded-lg border border-gray-100 flex flex-col gap-2">
+                                            <p>Ejecutá el puente de WhatsApp en tu terminal local para sincronizar los mensajes.</p>
+                                        </div>
+                                    )}
+
+                                    <div className="pt-2 border-t border-purple-100/50 mt-1">
+                                        <p className="text-xs font-medium text-purple-800 mb-2">Descargas del Agente:</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <a
+                                                href="/downloads/agente-whatsapp.zip"
+                                                download
+                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors"
+                                            >
+                                                Descargar Agente (.ZIP)
+                                            </a>
+                                            <a
+                                                href="/downloads/agente-whatsapp/Iniciar-Agente-WhatsApp.bat"
+                                                download
+                                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors border border-gray-200"
+                                            >
+                                                Archivo .BAT
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
                                 <div className="flex items-center gap-3">
