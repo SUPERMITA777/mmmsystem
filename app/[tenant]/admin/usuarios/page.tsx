@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, Edit2, Trash2, X, Lock, Mail, User, Shield, Key, QrCode } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Lock, Mail, User, Shield, Key, QrCode, Phone } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 
 type Usuario = {
@@ -13,6 +13,7 @@ type Usuario = {
     activo: boolean;
     pin?: string;
     color?: string;
+    telefono?: string;
 };
 
 const ROL_BADGE: Record<string, string> = {
@@ -46,7 +47,8 @@ export default function UsuariosPage() {
         pin: "",
         password: "",
         color: "#000000",
-        activo: true
+        activo: true,
+        telefono: ""
     });
     const [submitting, setSubmitting] = useState(false);
     const [syncing, setSyncing] = useState(false);
@@ -216,7 +218,7 @@ export default function UsuariosPage() {
 
     const openModal = (u: Usuario | "new") => {
         if (u === "new") {
-            setForm({ nombre: "", email: "", rol: "empleado", pin: "", password: "", color: "#000000", activo: true });
+            setForm({ nombre: "", email: "", rol: "empleado", pin: "", password: "", color: "#000000", activo: true, telefono: "" });
         } else {
             setForm({
                 nombre: u.nombre,
@@ -225,7 +227,8 @@ export default function UsuariosPage() {
                 pin: u.pin || "",
                 password: "",
                 color: u.color || "#000000",
-                activo: u.activo
+                activo: u.activo,
+                telefono: u.telefono || ""
             });
         }
         setModalUser(u);
@@ -403,6 +406,11 @@ export default function UsuariosPage() {
                                                 <div>
                                                     <p className="font-black text-gray-900 tracking-tight">{u.nombre}</p>
                                                     <p className="text-[11px] text-gray-400 font-bold">{u.email}</p>
+                                                    {u.telefono && (
+                                                        <p className="text-[10px] text-green-600 font-semibold flex items-center gap-1 mt-0.5">
+                                                            <Phone size={10} /> +{u.telefono}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -599,6 +607,20 @@ export default function UsuariosPage() {
                                             className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
                                             placeholder="email@ejemplo.com"
                                             disabled={modalUser !== "new"}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Teléfono / WhatsApp (ej: 5491123456789)</label>
+                                    <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3.5 focus-within:border-black transition-all shadow-sm">
+                                        <Phone size={16} className="text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={form.telefono}
+                                            onChange={e => setForm({ ...form, telefono: e.target.value.replace(/\D/g, '') })}
+                                            className="bg-transparent outline-none text-sm font-bold text-gray-900 w-full"
+                                            placeholder="Solo números (ej: 5491123456789)"
                                         />
                                     </div>
                                 </div>

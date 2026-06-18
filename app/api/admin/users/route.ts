@@ -46,7 +46,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
     try {
-        const { email, password, nombre, rol, sucursal_id, pin, color, sueldo, horario, informacion_general, tipo_sueldo } = await req.json();
+        const { email, password, nombre, rol, sucursal_id, pin, color, sueldo, horario, informacion_general, tipo_sueldo, telefono } = await req.json();
 
         if (!sucursal_id) {
             return NextResponse.json({ error: "sucursal_id es requerido" }, { status: 400 });
@@ -83,7 +83,8 @@ export async function POST(req: Request) {
                 sueldo: sueldo || 0,
                 tipo_sueldo: tipo_sueldo || 'MES',
                 horario: horario || null,
-                informacion_general: informacion_general || null
+                informacion_general: informacion_general || null,
+                telefono: telefono || null
             });
 
         if (profileError) {
@@ -101,7 +102,7 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
     try {
-        const { id, email, password, nombre, rol, activo, pin, color, sueldo, tipo_sueldo, horario, informacion_general } = await req.json();
+        const { id, email, password, nombre, rol, activo, pin, color, sueldo, tipo_sueldo, horario, informacion_general, telefono } = await req.json();
 
         if (!id) return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
 
@@ -138,6 +139,7 @@ export async function PATCH(req: Request) {
         if (tipo_sueldo !== undefined) profileUpdate.tipo_sueldo = tipo_sueldo;
         if (horario !== undefined) profileUpdate.horario = horario;
         if (informacion_general !== undefined) profileUpdate.informacion_general = informacion_general;
+        if (telefono !== undefined) profileUpdate.telefono = telefono;
 
         if (Object.keys(profileUpdate).length > 0) {
             const { error: profileError } = await supabaseAdmin
