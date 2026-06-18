@@ -45,6 +45,8 @@
     "node_modules",
     "local-agent",
     "scratch",
-    "public"
+    "public",
+    "predicciones-mundial",
+    "predicciones-whatsapp"
   ]
 }
