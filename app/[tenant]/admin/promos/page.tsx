@@ -397,12 +397,12 @@ export default function PromosPage() {
       {activeTab === "mundial" && (
         <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Plataforma de Predicciones del Mundial</h2>
-          <p className="text-gray-600 mb-6">La plataforma de predicciones corre como una aplicación separada. Haz clic en los siguientes botones para acceder (por defecto asume que corre en el puerto 3001 en desarrollo).</p>
+          <p className="text-gray-600 mb-6">La plataforma de predicciones corre como una aplicación separada. Haz clic en los siguientes botones para acceder.</p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <a href="http://localhost:3001/admin" target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
+            <a href={`${process.env.NEXT_PUBLIC_PREDICCIONES_URL || 'http://localhost:3001'}/admin`} target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
               Panel de Administración
             </a>
-            <a href="http://localhost:3001/" target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
+            <a href={process.env.NEXT_PUBLIC_PREDICCIONES_URL || 'http://localhost:3001'} target="_blank" rel="noopener noreferrer" className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors text-center">
               Ver Web Pública
             </a>
           </div>
