@@ -35,11 +35,14 @@ export default function PremiosForm({ partidos, sucursalId, tenant }: { partidos
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
           >
             <option value="">-- Elija un partido --</option>
-            {partidos.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.equipo_local} vs {p.equipo_visitante} - {new Date(p.fecha_hora).toLocaleDateString('es-AR')}
-              </option>
-            ))}
+            {partidos.map(p => {
+              const fechaStr = p.fecha_hora ? p.fecha_hora.split('T')[0] : '';
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.equipo_local} vs {p.equipo_visitante} - {fechaStr}
+                </option>
+              );
+            })}
           </select>
         </div>
 

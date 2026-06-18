@@ -47,7 +47,7 @@ export default async function AdminPremios({ params }: { params: Promise<{ tenan
                   {premio.mundial_partidos?.equipo_local} vs {premio.mundial_partidos?.equipo_visitante}
                 </p>
                 <p className="text-xs text-gray-500 mb-2">
-                  Partido: {new Date(premio.mundial_partidos?.fecha_hora).toLocaleDateString('es-AR')}
+                  Partido: {premio.mundial_partidos?.fecha_hora ? premio.mundial_partidos.fecha_hora.split('T')[0] : ''}
                 </p>
                 <p className="text-sm text-gray-700"><span className="font-bold">Premio:</span> {premio.nombre}</p>
                 {premio.descripcion && (
