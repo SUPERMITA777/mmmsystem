@@ -34,11 +34,12 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
   const footerBanner = shuffledBanners.length > 1 ? shuffledBanners[1] : (shuffledBanners[0] || null);
 
   // Fetch upcoming matches (Global)
-  // 'en_curso' and 'pendiente' matches
+  // Only 'pendiente' and future matches
   const { data: partidos } = await supabase
     .from('mundial_partidos')
     .select('*')
-    .in('estado', ['pendiente', 'en_curso'])
+    .eq('estado', 'pendiente')
+    .gte('fecha_hora', new Date().toISOString())
     .order('fecha_hora', { ascending: true })
     .limit(5);
 

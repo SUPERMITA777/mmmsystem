@@ -41,17 +41,14 @@ export async function submitBulkPredictions(data: {
       whatsapp_enviado_count: 0
     }));
 
-    // Upsert or Insert. We need to handle conflicts. Since (sucursal_id, partido_id, whatsapp) is unique,
-    // if one fails, maybe all fail? Let's use raw insert.
+    // Upsert or Insert. We need to handle conflicts.
+    // If the user submits again for the same match and whatsapp, it should overwrite.
     const { data: insertedData, error } = await supabaseAdmin
       .from('mundial_predicciones')
-      .insert(insertData)
+      .upsert(insertData, { onConflict: 'sucursal_id, partido_id, whatsapp' })
       .select();
 
     if (error) {
-      if (error.code === '23505') { // unique violation
-        return { success: false, error: 'Ya has enviado una predicción para uno de estos partidos con este número.' };
-      }
       if (error.message.includes('No se pueden hacer ni modificar predicciones')) {
         return { success: false, error: 'Uno o más partidos ya han comenzado.' };
       }
