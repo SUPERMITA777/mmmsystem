@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import PredictionForm from '@/components/mundial/PredictionForm';
+import MatchesForm from '@/components/mundial/MatchesForm';
 
 // Cache revalidation for matches (every 60 seconds)
 export const revalidate = 60;
@@ -98,71 +98,7 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
               <p className="text-gray-400 relative z-10 font-medium">No hay partidos programados en este momento.</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {partidos.map((partido) => {
-                const isStarted = new Date() >= new Date(partido.fecha_hora);
-                
-                return (
-                  <div key={partido.id} className="group bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-white/10 hover:border-white/20 transition-all duration-300 relative">
-                    {/* Glowing background effect on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                    
-                    <div className="bg-black/20 px-5 py-3 flex justify-between items-center border-b border-white/5">
-                      <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        {new Date(partido.fecha_hora).toLocaleString('es-AR', {
-                          weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'
-                        })}
-                      </span>
-                      {isStarted ? (
-                        <span className="text-xs font-black text-red-500 flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 rounded-full border border-red-500/20">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
-                          EN JUEGO
-                        </span>
-                      ) : (
-                        <span className="text-xs font-black text-blue-400 flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-                          PREVIA
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="p-6 relative z-10">
-                      <div className="flex justify-between items-center mb-6">
-                        <div className="text-center flex-1">
-                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5 overflow-hidden">
-                            {partido.escudo_local ? (
-                              <img src={partido.escudo_local} alt={partido.equipo_local} className="w-full h-full object-cover p-2" />
-                            ) : (
-                              <span className="text-2xl">🏳️</span>
-                            )}
-                          </div>
-                          <p className="font-black text-lg text-white leading-tight">{partido.equipo_local}</p>
-                        </div>
-                        <div className="px-4 text-yellow-500/50 font-black text-2xl italic tracking-tighter">VS</div>
-                        <div className="text-center flex-1">
-                          <div className="w-16 h-16 mx-auto mb-3 bg-white/10 rounded-full flex items-center justify-center shadow-inner border border-white/5 overflow-hidden">
-                            {partido.escudo_visitante ? (
-                              <img src={partido.escudo_visitante} alt={partido.equipo_visitante} className="w-full h-full object-cover p-2" />
-                            ) : (
-                              <span className="text-2xl">🏳️</span>
-                            )}
-                          </div>
-                          <p className="font-black text-lg text-white leading-tight">{partido.equipo_visitante}</p>
-                        </div>
-                      </div>
-
-                      {isStarted ? (
-                        <div className="bg-red-500/10 text-red-200 p-4 rounded-2xl text-sm text-center border border-red-500/20 font-medium">
-                          Las predicciones estÃ¡n cerradas para este partido.
-                        </div>
-                      ) : (
-                        <PredictionForm partido={partido} sucursalId={sucursalId} />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <MatchesForm partidos={partidos} sucursalId={sucursalId} tenant={tenant} />
           )}
         </section>
 

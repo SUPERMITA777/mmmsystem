@@ -7,71 +7,62 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-export async function submitPrediction(formData: FormData) {
-  const partido_id = formData.get('partido_id') as string;
-  const nombre_cliente = formData.get('nombre_cliente') as string;
-  const whatsapp = formData.get('whatsapp') as string;
-  const prediccion_local = parseInt(formData.get('prediccion_local') as string, 10);
-  const prediccion_visitante = parseInt(formData.get('prediccion_visitante') as string, 10);
-  const sucursal_id = formData.get('sucursal_id') as string;
-  const tenant = formData.get('tenant') as string;
+export async function submitBulkPredictions(data: {
+  sucursal_id: string;
+  tenant: string;
+  nombre_cliente: string;
+  whatsapp: string;
+  predicciones: { partido_id: string; prediccion_local: number; prediccion_visitante: number }[];
+}) {
+  const { sucursal_id, tenant, nombre_cliente, whatsapp, predicciones } = data;
 
-  // Generate alphanumeric code (4 chars)
-  const codigo_alfanumerico = Math.random().toString(36).substring(2, 6).toUpperCase();
-
-  // Validate format
   if (!whatsapp || !whatsapp.match(/^\d+$/)) {
     return { success: false, error: 'Número de WhatsApp inválido (solo números, con código de país).' };
   }
 
+  if (!predicciones || predicciones.length === 0) {
+    return { success: false, error: 'Debes enviar al menos una predicción.' };
+  }
+
   try {
-    const { data, error } = await supabaseAdmin
+    // Generate a single code for all predictions in this batch?
+    // Wait, the client expects `codigo_alfanumerico`. A unique code is generated for each prediction row, but maybe we generate one code for the whole batch so the user can claim all prizes with it.
+    // Or we generate a single code per match. Let's use one single code for this bulk submission for simplicity.
+    const codigo_alfanumerico = Math.random().toString(36).substring(2, 6).toUpperCase();
+
+    const insertData = predicciones.map(p => ({
+      sucursal_id,
+      partido_id: p.partido_id,
+      nombre_cliente,
+      whatsapp,
+      prediccion_local: p.prediccion_local,
+      prediccion_visitante: p.prediccion_visitante,
+      codigo_alfanumerico,
+      whatsapp_enviado_count: 0
+    }));
+
+    // Upsert or Insert. We need to handle conflicts. Since (sucursal_id, partido_id, whatsapp) is unique,
+    // if one fails, maybe all fail? Let's use raw insert.
+    const { data: insertedData, error } = await supabaseAdmin
       .from('mundial_predicciones')
-      .insert({
-        sucursal_id,
-        partido_id,
-        nombre_cliente,
-        whatsapp,
-        prediccion_local,
-        prediccion_visitante,
-        codigo_alfanumerico,
-      })
-      .select()
-      .single();
+      .insert(insertData)
+      .select();
 
     if (error) {
       if (error.code === '23505') { // unique violation
-        return { success: false, error: 'Ya has enviado una predicción para este partido con este número en este local.' };
+        return { success: false, error: 'Ya has enviado una predicción para uno de estos partidos con este número.' };
       }
       if (error.message.includes('No se pueden hacer ni modificar predicciones')) {
-        return { success: false, error: 'El partido ya ha comenzado, no se admiten más predicciones.' };
+        return { success: false, error: 'Uno o más partidos ya han comenzado.' };
       }
       console.error('Supabase error:', error);
-      return { success: false, error: 'Hubo un error al guardar la predicción.' };
+      return { success: false, error: 'Hubo un error al guardar las predicciones.' };
     }
 
-    // Attempt to notify via Baileys API
-    try {
-      const waUrl = process.env.WHATSAPP_SERVICE_URL;
-      if (waUrl) {
-        await fetch(waUrl + '/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            numero: whatsapp,
-            mensaje: `¡Hola ${nombre_cliente}! Tu predicción de ${prediccion_local} - ${prediccion_visitante} en ${tenant} ha sido registrada. Tu código es: ${codigo_alfanumerico}`
-          })
-        });
-        // Marcar como enviado si no falla
-        await supabaseAdmin.from('mundial_predicciones').update({ whatsapp_enviado: true }).eq('id', data.id);
-      }
-    } catch (waError) {
-      console.error('WhatsApp sending failed:', waError);
-      // It's ok, whatsapp_enviado will remain false, the code is shown on screen
-    }
-
-    return { success: true, data };
+    // Return the code to the frontend so it can display it
+    return { success: true, data: { codigo_alfanumerico } };
   } catch (err) {
+    console.error('Internal error:', err);
     return { success: false, error: 'Error interno del servidor.' };
   }
 }
