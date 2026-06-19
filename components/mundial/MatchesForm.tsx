@@ -95,9 +95,7 @@ export default function MatchesForm({ partidos, sucursalId, tenant }: { partidos
               <div className="bg-black/20 px-5 py-3 flex justify-between items-center border-b border-white/5">
                 <span className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  {new Date(partido.fecha_hora).toLocaleString('es-AR', {
-                    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'
-                  })}
+                  {partido.fecha_hora ? `${partido.fecha_hora.split('T')[0]} ${partido.fecha_hora.split('T')[1]?.substring(0, 5) || ''}` : ''}
                 </span>
                 {isStarted ? (
                   <span className="text-xs font-black text-red-500 flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 rounded-full border border-red-500/20">
