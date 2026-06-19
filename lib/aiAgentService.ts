@@ -1227,8 +1227,29 @@ export async function processWhatsAppMessage(
         };
     }
 
+    // 2.5. Check if user is starting conversation fresh with a greeting
+    const cleanText = text.trim().toLowerCase().replace(/[¡!.,?¿]/g, "");
+    const greetings = ["hola", "buenas noches", "buenos dias", "buen dia", "buenas tardes", "buenas"];
+    const isGreetingOnly = greetings.some(g => cleanText === g);
+
+    if (isGreetingOnly) {
+        // Clear active cart from metadata so they can start ordering from scratch
+        const updatedMeta = { ...conversation.metadata };
+        delete updatedMeta.cart;
+        
+        if (!dryRun) {
+            await supabaseAdmin
+                .from("whatsapp_conversations")
+                .update({ metadata: updatedMeta })
+                .eq("id", conversation.id);
+        }
+        conversation.metadata = updatedMeta;
+    }
+
     // 3. Get recent conversation history for context (Increased to 30 for maximum fluidity)
-    const recentMessages = await getRecentMessages(sucursalId, senderPhone, 30);
+    const recentMessages = isGreetingOnly 
+        ? [] 
+        : await getRecentMessages(sucursalId, senderPhone, 30);
 
     // 4. Get sucursal name
     const { data: sucursal } = await supabaseAdmin
