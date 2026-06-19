@@ -69,7 +69,10 @@ export default async function AdminMundialDashboard({ params }: { params: Promis
               Gestionar Premios
             </a>
             <a href={`/${tenant}/admin/mundial/canjear`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-green-700 bg-green-50 hover:bg-green-100 transition-colors text-center">
-              Canjear Premio (Sponsor)
+              Canjear Premio
+            </a>
+            <a href={`/${tenant}/admin/mundial/ajustes`} className="flex items-center justify-center px-4 py-4 border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors text-center">
+              Ajustes Generales
             </a>
           </div>
         </div>

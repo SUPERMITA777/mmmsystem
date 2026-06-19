@@ -40,15 +40,15 @@ export default function BannersForm({ sucursalId, tenant }: { sucursalId: string
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">URL de la Imagen</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Imagen del Banner</label>
           <input 
-            type="url" 
-            name="imagen_url" 
+            type="file" 
+            name="imagen_file" 
+            accept="image/*"
             required 
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="https://ejemplo.com/banner.jpg"
           />
-          <p className="text-xs text-gray-500 mt-1">Pega aquí el enlace directo a la imagen del banner.</p>
+          <p className="text-xs text-gray-500 mt-1">Sube la imagen directamente desde tu dispositivo.</p>
         </div>
 
         <div>

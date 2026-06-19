@@ -16,8 +16,8 @@ export async function submitPrediction(formData: FormData) {
   const sucursal_id = formData.get('sucursal_id') as string;
   const tenant = formData.get('tenant') as string;
 
-  // Generate alphanumeric code (6 chars)
-  const codigo_alfanumerico = Math.random().toString(36).substring(2, 8).toUpperCase();
+  // Generate alphanumeric code (4 chars)
+  const codigo_alfanumerico = Math.random().toString(36).substring(2, 6).toUpperCase();
 
   // Validate format
   if (!whatsapp || !whatsapp.match(/^\d+$/)) {

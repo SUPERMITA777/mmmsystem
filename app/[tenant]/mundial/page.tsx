@@ -39,7 +39,8 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
     .from('mundial_partidos')
     .select('*')
     .in('estado', ['pendiente', 'en_curso'])
-    .order('fecha_hora', { ascending: true });
+    .order('fecha_hora', { ascending: true })
+    .limit(5);
 
   const renderBanner = (banner: any) => {
     if (!banner) return null;
@@ -59,7 +60,9 @@ export default async function MundialHome({ params }: { params: Promise<{ tenant
   };
 
   return (
-    <div className="min-h-screen pb-24 bg-[#0f172a] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#15803d]/40 via-[#0f172a] to-[#0f172a] text-white">
+    <div className="min-h-screen pb-24 bg-[#0f172a] bg-[url('https://images.unsplash.com/photo-1518605368461-1ee7e161228b?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-fixed bg-center text-white relative">
+      <div className="absolute inset-0 bg-[#0f172a]/80 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#15803d]/40 via-transparent to-[#0f172a] pointer-events-none"></div>
+      
       {/* Header */}
       <header className="sticky top-0 z-50 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/10 shadow-xl">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center justify-center relative">
