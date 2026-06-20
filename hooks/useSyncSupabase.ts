@@ -138,6 +138,15 @@ export function useSyncSupabase(sucursalId: string | null): SyncState {
           if (itemsError) {
             console.error(`[Sync] Error insertando items para pedido ${pedido.id}:`, itemsError);
             // No fallar el pedido completo por items, marcar igualmente
+          } else {
+            // Delete obsolete items that are no longer in the payload
+            const itemIdsToKeep = itemsPayload.map(it => it.id);
+            const { error: deleteErr } = await supabase
+              .from("pedido_items")
+              .delete()
+              .eq("pedido_id", pedido.id)
+              .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
+            if (deleteErr) console.warn("[Sync] Error cleaning up obsolete items:", deleteErr);
           }
         }
 

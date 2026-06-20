@@ -797,10 +797,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
-                // Delete old items and re-insert all
-                const { error: deleteErr } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
-                if (deleteErr) throw deleteErr;
-
                 const items = carrito.map(item => {
                     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                     const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
@@ -818,8 +814,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     };
                 });
                 
-                const { error: insertErr } = await supabase.from("pedido_items").insert(items);
+                const { error: insertErr } = await supabase.from("pedido_items").upsert(items);
                 if (insertErr) throw insertErr;
+
+                // Delete obsolete items that are no longer in the cart
+                const itemIdsToKeep = items.map(it => it.id);
+                const { error: deleteErr } = await supabase
+                    .from("pedido_items")
+                    .delete()
+                    .eq("pedido_id", editPedido.id)
+                    .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
+                if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
 
                 // Consolidate other duplicate active orders for this table if editing a merged view
                 if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
@@ -953,9 +958,6 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             if (uError) throw uError;
 
             // 2. Synchronize the cart items in database to reflect any final modifications
-            const { error: dError } = await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
-            if (dError) throw dError;
-            
             const items = carrito.map(item => {
                 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
@@ -972,8 +974,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     adicionales: item.adicionales || []
                 };
             });
-            const { error: iError } = await supabase.from("pedido_items").insert(items);
+            const { error: iError } = await supabase.from("pedido_items").upsert(items);
             if (iError) throw iError;
+
+            // Delete obsolete items
+            const itemIdsToKeep = items.map(it => it.id);
+            const { error: deleteErr } = await supabase
+                .from("pedido_items")
+                .delete()
+                .eq("pedido_id", editPedido.id)
+                .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
+            if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
 
             // Consolidate and delete other grouped orders
             if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
@@ -1242,21 +1253,34 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
-                // Delete old items and insert new
-                await supabase.from("pedido_items").delete().eq("pedido_id", editPedido.id);
-                const items = carrito.map(item => ({
-                    pedido_id: editPedido.id,
-                    producto_id: item.producto_id,
-                    nombre_producto: item.nombre,
-                    cantidad: item.cantidad,
-                    precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
-                    notas: item.motivo_descuento 
-                        ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
-                        : (item.nota || ""),
-                    adicionales: item.adicionales || []
-                }));
-                const { error: iError2 } = await supabase.from("pedido_items").insert(items);
+                // Save items using upsert-then-delete pattern
+                const items = carrito.map(item => {
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
+                    return {
+                        id: finalId,
+                        pedido_id: editPedido.id,
+                        producto_id: item.producto_id,
+                        nombre_producto: item.nombre,
+                        cantidad: item.cantidad,
+                        precio_unitario: item.precioOverride !== undefined && item.precioOverride !== null ? item.precioOverride : item.precio,
+                        notas: item.motivo_descuento 
+                            ? (item.nota ? `${item.nota} [Descuento: ${item.motivo_descuento}]` : `[Descuento: ${item.motivo_descuento}]`)
+                            : (item.nota || ""),
+                        adicionales: item.adicionales || []
+                    };
+                });
+                const { error: iError2 } = await supabase.from("pedido_items").upsert(items);
                 if (iError2) throw iError2;
+
+                // Delete obsolete items
+                const itemIdsToKeep = items.map(it => it.id);
+                const { error: deleteErr } = await supabase
+                    .from("pedido_items")
+                    .delete()
+                    .eq("pedido_id", editPedido.id)
+                    .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
+                if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
                 pedidoFinalId = editPedido.id;
             } else {
                 // ═══ HYBRID PERSISTENCE ═══

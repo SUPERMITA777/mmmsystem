@@ -134,7 +134,7 @@ export function MapaSalon({ isCamareroMode = false }: { isCamareroMode?: boolean
                 const pedido = activePedidos?.find(p => p.mesa_id === m.id);
                 
                 // Reparación automática: si la DB dice ocupada pero no hay pedido activo, resetear a libre
-                if (!pedido && m.estado === 'ocupada') {
+                if (activePedidos && !pedido && m.estado === 'ocupada') {
                     supabase.from("mesas").update({ estado: "libre" }).eq("id", m.id).then();
                     return { ...m, estado: 'libre' };
                 }

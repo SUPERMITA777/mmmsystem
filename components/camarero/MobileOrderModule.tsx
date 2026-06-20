@@ -505,20 +505,7 @@ export default function MobileOrderModule({ mesaId, terminal }: { mesaId: string
         const localId = activeOrder ? activeOrder.id : crypto.randomUUID();
 
         try {
-            if (activeOrder) {
-                // Borrar items antiguos en Supabase para evitar duplicación al re-insertar el carrito completo
-                if (navigator.onLine) {
-                    try {
-                        await supabase.from("pedido_items").delete().eq("pedido_id", activeOrder.id);
-                    } catch (delErr) {
-                        console.warn("[MobileOrder] Error al borrar items anteriores de la mesa:", delErr);
-                    }
-                }
-                // Limpiar caché local
-                try {
-                    await db.pedidos.delete(activeOrder.id);
-                } catch {}
-            }
+            // El borrado e inserción seguro de items se delega a persistirPedidoHibrido para evitar pérdida de datos si falla la red.
 
             const activeTerminal = typeof window !== 'undefined' ? localStorage.getItem("active_terminal") || null : null;
             const pedidoPayload = {

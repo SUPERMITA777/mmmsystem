@@ -56,6 +56,15 @@ export async function persistirPedidoHibrido(
             const { error: iError } = await supabase.from("pedido_items").upsert(items);
             if (iError) throw iError;
 
+            // Delete obsolete items that are no longer in this version of the order
+            const itemIdsToKeep = items.map(it => it.id);
+            const { error: deleteErr } = await supabase
+                .from("pedido_items")
+                .delete()
+                .eq("pedido_id", localId)
+                .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
+            if (deleteErr) console.warn("[Hybrid] Error cleaning up obsolete items:", deleteErr);
+
             await marcarSincronizado(localId);
             console.log("[Hybrid] Sincronizado con Supabase OK");
             return { success: true, source: "supabase" };
