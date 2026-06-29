@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight, Wallet, User, ArrowUpRight, ArrowDownRight, ClipboardList, Printer } from "lucide-react";
+import { Download, TrendingUp, BarChart3, PieChart as PieChartIcon, Search, Calendar, ChevronLeft, ChevronRight, Wallet, User, ArrowUpRight, ArrowDownRight, ClipboardList, Printer, Eye, X } from "lucide-react";
 import { useTenant } from "@/context/TenantContext";
 import { getArgentinaDate, getArgentinaFirstDayOfMonth, getStartOfDayArgentina, getEndOfDayArgentina, getArgentinaYesterday, formatToArgentinaDateTime } from "@/lib/dateUtils";
 import { printCierreTurno } from "@/lib/printUtils";
@@ -70,6 +70,7 @@ export default function ReportesPage() {
 
     // Printing state and function for closed shifts
     const [printingCajaId, setPrintingCajaId] = useState<string | null>(null);
+    const [selectedCajaDetail, setSelectedCajaDetail] = useState<any | null>(null);
 
     async function handleImprimirCierre(caja: any) {
         if (!sucursalId) return;
@@ -993,18 +994,27 @@ export default function ReportesPage() {
                                                             </td>
                                                             <td className="px-6 py-4 text-center">
                                                                 {!isAbierta && (
-                                                                    <button
-                                                                        onClick={() => handleImprimirCierre(c)}
-                                                                        disabled={printingCajaId === c.id}
-                                                                        className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95 disabled:bg-purple-300 flex items-center justify-center gap-1.5 mx-auto shadow-sm"
-                                                                    >
-                                                                        {printingCajaId === c.id ? (
-                                                                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                                        ) : (
-                                                                            <Printer size={12} />
-                                                                        )}
-                                                                        <span>Reimprimir</span>
-                                                                    </button>
+                                                                    <div className="flex items-center justify-center gap-2">
+                                                                        <button
+                                                                            onClick={() => setSelectedCajaDetail(c)}
+                                                                            className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                                                                        >
+                                                                            <Eye size={12} />
+                                                                            <span>Ver</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleImprimirCierre(c)}
+                                                                            disabled={printingCajaId === c.id}
+                                                                            className="px-3 py-1.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all active:scale-95 disabled:bg-purple-300 flex items-center justify-center gap-1.5 shadow-sm"
+                                                                        >
+                                                                            {printingCajaId === c.id ? (
+                                                                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                            ) : (
+                                                                                <Printer size={12} />
+                                                                            )}
+                                                                            <span>Reimprimir</span>
+                                                                        </button>
+                                                                    </div>
                                                                 )}
                                                             </td>
                                                         </tr>
@@ -1070,7 +1080,14 @@ export default function ReportesPage() {
                                                     </div>
 
                                                     {!isAbierta && (
-                                                        <div className="flex justify-end">
+                                                        <div className="flex justify-end gap-2">
+                                                            <button
+                                                                onClick={() => setSelectedCajaDetail(c)}
+                                                                className="px-2 py-1 bg-gray-100 text-gray-700 rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-gray-200 transition-all active:scale-95 flex items-center gap-1 shadow-sm"
+                                                            >
+                                                                <Eye size={10} />
+                                                                <span>Ver</span>
+                                                            </button>
                                                             <button
                                                                 onClick={() => handleImprimirCierre(c)}
                                                                 disabled={printingCajaId === c.id}
@@ -1106,6 +1123,124 @@ export default function ReportesPage() {
                 producto={selectedProductForCosto}
                 sucursalId={sucursalId || ""}
             />
+
+            {selectedCajaDetail && (() => {
+                const c = selectedCajaDetail;
+                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => {
+                    const metodo = t.metodos_pago?.nombre || "Efectivo";
+                    const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                    if (!isEfectivo) return s;
+                    return t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto);
+                }, 0);
+                const ventasEfvo = (c.monto_esperado || 0) - c.monto_apertura - manual;
+
+                return (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                            {/* Modal Header */}
+                            <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center font-black">
+                                        <Wallet size={24} />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Detalle de Turno</p>
+                                        <h3 className="text-xl font-black text-gray-900 uppercase">{c.cajero_nombre || "Cajero"}</h3>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedCajaDetail(null)}
+                                    className="p-3 bg-white border border-gray-100 hover:bg-gray-50 rounded-2xl transition-colors text-gray-400 hover:text-gray-900 active:scale-95 flex items-center justify-center"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="p-8 overflow-y-auto space-y-8 flex-1">
+                                {/* Date and state */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50 rounded-3xl p-6 text-sm font-bold text-gray-600">
+                                    <div>
+                                        <span className="block text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Apertura</span>
+                                        <span className="text-gray-900">{formatToArgentinaDateTime(c.fecha_apertura)}</span>
+                                    </div>
+                                    {c.fecha_cierre && (
+                                        <div>
+                                            <span className="block text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Cierre</span>
+                                            <span className="text-gray-900">{formatToArgentinaDateTime(c.fecha_cierre)}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Financial Summary Cards */}
+                                <div>
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4">Arqueo de Efectivo</h4>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                        <div className="bg-gray-50 rounded-2xl p-4">
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Monto Inicial</span>
+                                            <span className="text-base font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(c.monto_apertura)}</span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-2xl p-4">
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Ventas Efectivo</span>
+                                            <span className="text-base font-black text-green-600">$ {new Intl.NumberFormat("es-AR").format(ventasEfvo)}</span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-2xl p-4">
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Mov. Manuales</span>
+                                            <span className={`text-base font-black ${manual >= 0 ? "text-blue-600" : "text-red-600"}`}>
+                                                $ {new Intl.NumberFormat("es-AR").format(manual)}
+                                            </span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-2xl p-4">
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Efectivo Esperado</span>
+                                            <span className="text-base font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(c.monto_esperado || 0)}</span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-2xl p-4">
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Cierre Real</span>
+                                            <span className="text-base font-black text-gray-900">$ {new Intl.NumberFormat("es-AR").format(c.monto_cierre || 0)}</span>
+                                        </div>
+                                        <div className={`rounded-2xl p-4 ${c.diferencia === 0 ? "bg-gray-50 text-gray-900" : c.diferencia > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                                            <span className="block text-[9px] uppercase font-black text-gray-400 mb-1">Diferencia</span>
+                                            <span className="text-base font-black">$ {new Intl.NumberFormat("es-AR").format(c.diferencia || 0)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Manual movements list */}
+                                <div>
+                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4">Movimientos Manuales del Turno</h4>
+                                    <div className="border border-gray-100 rounded-3xl overflow-hidden divide-y divide-gray-50">
+                                        {(!c.transacciones_caja || c.transacciones_caja.length === 0) ? (
+                                            <div className="p-8 text-center text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                                Sin movimientos registrados
+                                            </div>
+                                        ) : (
+                                            c.transacciones_caja.map((tx: any) => {
+                                                const metName = tx.metodos_pago?.nombre || "Efectivo";
+                                                return (
+                                                    <div key={tx.id} className="p-4 flex items-center justify-between bg-white hover:bg-gray-50/50 transition-colors">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${tx.tipo === "ingreso" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                                                                {tx.tipo === "ingreso" ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-black text-gray-900 uppercase leading-none">{tx.concepto || "Sin concepto"}</p>
+                                                                <span className="text-[8px] font-bold text-purple-600 uppercase tracking-wider mt-1 block">{metName}</span>
+                                                            </div>
+                                                        </div>
+                                                        <span className={`text-sm font-black ${tx.tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>
+                                                            {tx.tipo === "ingreso" ? "+" : "-"} $ {new Intl.NumberFormat("es-AR").format(tx.monto)}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </section>
     );
 }
