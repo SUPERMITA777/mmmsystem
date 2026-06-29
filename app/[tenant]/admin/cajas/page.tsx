@@ -28,6 +28,7 @@ type Transaccion = {
     concepto: string;
     created_at: string;
     metodo_pago_id?: string;
+    metodos_pago?: { nombre: string };
 };
 
 type UserProfile = {
@@ -203,15 +204,18 @@ export default function CajasPage() {
             // Manual transactions
             const { data: txs } = await supabase
                 .from("transacciones_caja")
-                .select("*")
+                .select("*, metodos_pago(nombre)")
                 .eq("caja_id", cajaData.id)
                 .order("created_at", { ascending: false });
             setTransacciones(txs || []);
 
-            // Calculate manual total
-            const manualTotal = (txs || []).reduce((sum, t) =>
-                t.tipo === "ingreso" ? sum + Number(t.monto) : sum - Number(t.monto), 0
-            );
+            // Calculate manual total (cash only)
+            const manualTotal = (txs || []).reduce((sum, t: any) => {
+                const metodo = t.metodos_pago?.nombre || "Efectivo";
+                const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                if (!isEfectivo) return sum;
+                return t.tipo === "ingreso" ? sum + Number(t.monto) : sum - Number(t.monto);
+            }, 0);
             setTotalManual(manualTotal);
 
             // Fetch sales since opening and accurately sum cash amounts
@@ -307,9 +311,12 @@ export default function CajasPage() {
             });
             const pagosList = Object.entries(pagosMap).map(([metodo, total]) => ({ metodo, total }));
 
-            // Egresos manuales
+            // Egresos manuales (efectivo únicamente)
             const manualOutflows = (transacciones || [])
-                .filter(t => t.tipo === "egreso")
+                .filter(t => {
+                    const metodo = t.metodos_pago?.nombre || "Efectivo";
+                    return t.tipo === "egreso" && metodo.toLowerCase().includes("efectivo");
+                })
                 .reduce((sum, t) => sum + Number(t.monto || 0), 0);
 
             // Total General

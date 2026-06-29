@@ -111,9 +111,12 @@ export default function ReportesPage() {
             });
             const pagosList = Object.entries(pagosMap).map(([metodo, total]) => ({ metodo, total }));
 
-            // Egresos manuales
+            // Egresos manuales (efectivo únicamente)
             const manualOutflows = (caja.transacciones_caja || [])
-                .filter((t: any) => t.tipo === "egreso")
+                .filter((t: any) => {
+                    const metodo = t.metodos_pago?.nombre || "Efectivo";
+                    return t.tipo === "egreso" && metodo.toLowerCase().includes("efectivo");
+                })
                 .reduce((sum: number, t: any) => sum + Number(t.monto || 0), 0);
 
             // Total General
@@ -150,7 +153,12 @@ export default function ReportesPage() {
                 nombre_local: sucursalInfo?.nombre || "MMM Pizza Artesanal"
             };
 
-            const manual = (caja.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+            const manual = (caja.transacciones_caja || []).reduce((s: number, t: any) => {
+                const metodo = t.metodos_pago?.nombre || "Efectivo";
+                const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                if (!isEfectivo) return s;
+                return t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto);
+            }, 0);
             const ventasEfvo = (caja.monto_esperado || 0) - caja.monto_apertura - manual;
             const esperado = caja.monto_apertura + manual + ventasEfvo;
 
@@ -234,7 +242,7 @@ export default function ReportesPage() {
             // Fetch Cajas for the period
             const { data: cajasData } = await supabase
                 .from("cajas")
-                .select("*, transacciones_caja(*)")
+                .select("*, transacciones_caja(*, metodos_pago(nombre))")
                 .eq("sucursal_id", sucursalId)
                 .gte("fecha_apertura", getStartOfDayArgentina(startDate))
                 .lte("fecha_apertura", getEndOfDayArgentina(endDate))
@@ -352,7 +360,12 @@ export default function ReportesPage() {
         } else {
             csvContent += "Cajero,Apertura,Cierre,Monto Apertura,Ventas Efvo,Mov Manuales,Esperado,Real,Diferencia\n";
             cajas.forEach((c: any) => {
-                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => {
+                    const metodo = t.metodos_pago?.nombre || "Efectivo";
+                    const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                    if (!isEfectivo) return s;
+                    return t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto);
+                }, 0);
                 csvContent += `${c.cajero_nombre},${c.fecha_apertura},${c.fecha_cierre},${c.monto_apertura},${(c.monto_esperado || 0) - c.monto_apertura - manual},${manual},${c.monto_esperado},${c.monto_cierre},${c.diferencia}\n`;
             });
         }
@@ -930,7 +943,12 @@ export default function ReportesPage() {
                                             <tbody className="divide-y divide-gray-50">
                                                 {cajas.map((c: any, i) => {
                                                     const isAbierta = !c.fecha_cierre;
-                                                    const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                                                    const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => {
+                                                        const metodo = t.metodos_pago?.nombre || "Efectivo";
+                                                        const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                                                        if (!isEfectivo) return s;
+                                                        return t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto);
+                                                    }, 0);
                                                     const ventasEfvo = (c.monto_esperado || 0) - c.monto_apertura - manual;
                                                     return (
                                                         <tr key={i} className="hover:bg-gray-50/50 transition-colors">
@@ -1006,7 +1024,12 @@ export default function ReportesPage() {
                                     ) : (
                                         cajas.map((c: any, i) => {
                                             const isAbierta = !c.fecha_cierre;
-                                            const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto), 0);
+                                            const manual = (c.transacciones_caja || []).reduce((s: number, t: any) => {
+                                                const metodo = t.metodos_pago?.nombre || "Efectivo";
+                                                const isEfectivo = metodo.toLowerCase().includes("efectivo");
+                                                if (!isEfectivo) return s;
+                                                return t.tipo === 'ingreso' ? s + Number(t.monto) : s - Number(t.monto);
+                                            }, 0);
                                             const ventasEfvo = (c.monto_esperado || 0) - c.monto_apertura - manual;
                                             return (
                                                 <div key={i} className="bg-white rounded-xl border border-gray-100 p-2.5 shadow-sm flex flex-col gap-1.5">
