@@ -196,8 +196,10 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '        $matched = $allPrinters | Where-Object { $_.Default -eq $true } | Select-Object -First 1\r\n';
     ps += '    }\r\n';
     ps += '    $currentDefault = ($allPrinters | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name\r\n';
-    ps += '    if ($matched) {\r\n';
+    ps += '    $changedDefault = $false\r\n';
+    ps += '    if ($matched -and $matched.Name -ne $currentDefault) {\r\n';
     ps += '        rundll32 printui.dll,PrintUIEntry /y /n "$($matched.Name)"\r\n';
+    ps += '        $changedDefault = $true\r\n';
     ps += '    }\r\n';
     ps += '    $browser = New-Object System.Windows.Forms.WebBrowser\r\n';
     ps += '    $browser.ScrollBarsEnabled = $false\r\n';
@@ -210,9 +212,11 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    }\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
-    ps += '    Start-Sleep -Seconds 3\r\n';
-    ps += '    if ($currentDefault) {\r\n';
+    ps += '    if ($changedDefault) {\r\n';
+    ps += '        Start-Sleep -Seconds 1\r\n';
     ps += '        rundll32 printui.dll,PrintUIEntry /y /n "$currentDefault"\r\n';
+    ps += '    } else {\r\n';
+    ps += '        Start-Sleep -Milliseconds 100\r\n';
     ps += '    }\r\n';
     ps += '} catch { exit 1 }\r\n';
     return ps;
@@ -334,6 +338,16 @@ function startServer(port) {
 
         res.writeHead(404);
         res.end(JSON.stringify({ error: 'Not found' }));
+    });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE' && port === 9100) {
+            console.warn('*** Puerto 9100 ocupado. Intentando con puerto 9101...');
+            startServer(9101);
+        } else {
+            console.error('CRITICAL ERROR:', err.message);
+            process.exit(1);
+        }
     });
 
     server.listen(port, '0.0.0.0', () => {
