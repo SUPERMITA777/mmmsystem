@@ -197,8 +197,8 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    }\r\n';
     ps += '    $currentDefault = ($allPrinters | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name\r\n';
     ps += '    $changedDefault = $false\r\n';
-    ps += '    if ($matched -and $matched.Name -ne $currentDefault) {\r\n';
-    ps += '        rundll32 printui.dll,PrintUIEntry /y /n "$($matched.Name)"\r\n';
+    ps += '    if ($matched -and $matched.Name -and $matched.Name.Trim() -ne "" -and $matched.Name -ne $currentDefault) {\r\n';
+    ps += '        (New-Object -ComObject WScript.Network).SetDefaultPrinter($matched.Name)\r\n';
     ps += '        $changedDefault = $true\r\n';
     ps += '    }\r\n';
     ps += '    $browser = New-Object System.Windows.Forms.WebBrowser\r\n';
@@ -212,9 +212,9 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    }\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
-    ps += '    if ($changedDefault) {\r\n';
+    ps += '    if ($changedDefault -and $currentDefault) {\r\n';
     ps += '        Start-Sleep -Seconds 1\r\n';
-    ps += '        rundll32 printui.dll,PrintUIEntry /y /n "$currentDefault"\r\n';
+    ps += '        (New-Object -ComObject WScript.Network).SetDefaultPrinter($currentDefault)\r\n';
     ps += '    } else {\r\n';
     ps += '        Start-Sleep -Milliseconds 100\r\n';
     ps += '    }\r\n';
