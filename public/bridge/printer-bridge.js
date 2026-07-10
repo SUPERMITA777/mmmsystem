@@ -1,6 +1,6 @@
 /* ───────────────────────────────────────────────
    Puente de Impresión MMM – Print Bridge
-   v4.0 - Solo impresión, sin credenciales, sin DB
+   v4.2 - Solo impresión, sin credenciales, sin DB
    ─────────────────────────────────────────────── */
 
 const http = require('http');
@@ -250,7 +250,7 @@ function startServer(port) {
         // --- ENDPOINT: STATUS ---
         if (req.method === 'GET' && pathname === '/status') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ status: 'ok', version: '4.0.0' }));
+            return res.end(JSON.stringify({ status: 'ok', version: '4.2.0' }));
         }
 
         // --- ENDPOINT: GET PRINTERS ---
@@ -298,7 +298,7 @@ function startServer(port) {
                     const testHtml = `
                         <html><body style="font-family:Arial;text-align:center;padding:20px;">
                             <h1>TEST OK</h1>
-                            <p>MMM SYSTEM v4.0</p>
+                            <p>MMM SYSTEM v4.2</p>
                             <p>Impresora: ${printerName}</p>
                             <p>Fecha: ${new Date().toLocaleString()}</p>
                         </body></html>
@@ -352,7 +352,7 @@ function startServer(port) {
     server.listen(port, '0.0.0.0', () => {
         const localIp = getLocalIp();
         console.log('\n=================================================');
-        console.log('   MMM PRINT BRIDGE v4.0');
+        console.log('   MMM PRINT BRIDGE v4.2');
         console.log('   -----------------------------------');
         console.log('   Sin credenciales — Solo impresión');
         console.log('   DIRECCION IP: ' + localIp);
