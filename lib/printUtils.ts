@@ -669,9 +669,9 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
   ${itemsHtml}
 
   <!-- CAMARERO -->
-  ${pedido.usuarios?.nombre || pedido.camarero_nombre ? `
+  ${pedido.usuarios?.nombre || pedido.camarero_nombre || pedido.camarero?.nombre ? `
   <div class="center" style="font-size:18px;font-weight:bold;margin-top:10px;padding:4px;border:1px dashed #000">
-    ATENDIDO POR: ${(pedido.usuarios?.nombre || pedido.camarero_nombre).toUpperCase()}
+    ATENDIDO POR: ${(pedido.usuarios?.nombre || pedido.camarero_nombre || pedido.camarero?.nombre).toUpperCase()}
   </div>` : ""}
 
   <hr class="sep">
@@ -869,9 +869,9 @@ export async function printPreCuenta(pedido: any, config: Partial<PrintConfig> =
   <div class="center" style="font-size:${c.fuente_footer}px;color:#555;font-style:italic;margin-top:2px">
     Comprobante no válido como factura.
   </div>
-  ${(pedido as any).camarero_nombre ? `
+  ${pedido.usuarios?.nombre || (pedido as any).camarero_nombre || pedido.camarero?.nombre ? `
   <div class="center" style="font-size:${c.fuente_footer}px;color:#333;margin-top:6px;font-weight:bold;text-transform:uppercase">
-    USTED HA SIDO ATENDIDO POR ${(pedido as any).camarero_nombre}
+    USTED HA SIDO ATENDIDO POR ${pedido.usuarios?.nombre || (pedido as any).camarero_nombre || pedido.camarero?.nombre}
   </div>` : ''}
 
 </body></html>`;

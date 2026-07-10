@@ -32,6 +32,7 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
                     .select(`
                         id,
                         mesa_id,
+                        mesa_numero,
                         sucursal_id,
                         camarero_id,
                         metodo_pago_id,
@@ -78,6 +79,7 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
                             numero
                         ),
                         camarero:usuarios!camarero_id (
+                            nombre,
                             color
                         )
                     `)
