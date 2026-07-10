@@ -212,11 +212,10 @@ function buildPrintScript(printerName, htmlFilePath) {
     ps += '    }\r\n';
     ps += '    $axIns = $browser.ActiveXInstance\r\n';
     ps += '    $axIns.ExecWB(6, 2, [ref]$null, [ref]$null)\r\n';
+    ps += '    Start-Sleep -Seconds 4\r\n';
     ps += '    if ($changedDefault -and $currentDefault) {\r\n';
-    ps += '        Start-Sleep -Seconds 1\r\n';
     ps += '        (New-Object -ComObject WScript.Network).SetDefaultPrinter($currentDefault)\r\n';
-    ps += '    } else {\r\n';
-    ps += '        Start-Sleep -Milliseconds 100\r\n';
+    ps += '        Start-Sleep -Milliseconds 500\r\n';
     ps += '    }\r\n';
     ps += '} catch { exit 1 }\r\n';
     return ps;
