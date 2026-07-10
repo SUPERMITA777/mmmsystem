@@ -188,6 +188,8 @@ export default function PanelPedidosPage() {
   const [promoActiva, setPromoActiva] = useState(false);
   const [terminalId, setTerminalId] = useState("1");
   const [preCuentaPedido, setPreCuentaPedido] = useState<Pedido | null>(null);
+  const [depositosLemon, setDepositosLemon] = useState<any[]>([]);
+  const [selectedDeposito, setSelectedDeposito] = useState<any | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -202,32 +204,62 @@ export default function PanelPedidosPage() {
   );
   const { playNotificationSound, enableAudio, audioEnabled } = useNotifications();
 
+  async function fetchDepositosLemon() {
+    if (!sucursalId) return;
+    const { data, error } = await supabase
+      .from("lemon_deposits")
+      .select("*")
+      .eq("sucursal_id", sucursalId)
+      .eq("estado", "pendiente")
+      .order("created_at", { ascending: false });
+    if (!error && data) {
+      setDepositosLemon(data);
+    }
+  }
+
   useEffect(() => {
     if (!sucursalId) return;
 
     fetchPedidos();
+    fetchDepositosLemon();
     fetchRepartidores();
     fetchPrintConfig();
     fetchSucursalConfig();
     fetchWaiterColors();
     fetchMetodosPago();
     fetchPromoConfig();
-    const interval = setInterval(() => fetchPedidos(), 30000);
 
-    // Polling de seguridad cada 15 segundos
+    // Único polling lento de seguridad para Lemon Deposits (cada 90 segundos)
+    // Los pedidos principales se actualizan instantáneamente por Realtime (WebSockets)
     const pollTimer = setInterval(() => {
-      fetchPedidos(true);
-    }, 15000);
+      fetchDepositosLemon();
+    }, 90000);
 
     const channel = supabase
       .channel("pedidos-rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "pedidos", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         fetchPedidos(true);
       })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "lemon_deposits", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
+        console.log("[PanelPedidos] Nuevo depósito Lemon Realtime:", payload.new);
+        fetchDepositosLemon();
+        if (payload.new.estado === "pendiente") {
+          playNotificationSound(true, `Lemon Cash por ${payload.new.emisor || 'desconocido'}`);
+          setSelectedDeposito(payload.new);
+        } else {
+          if (typeof window !== "undefined" && window.speechSynthesis) {
+            const utterance = new SpeechSynthesisUtterance(`Depósito de ${payload.new.monto} pesos de ${payload.new.emisor || 'desconocido'} confirmado automáticamente.`);
+            window.speechSynthesis.speak(utterance);
+          }
+          fetchPedidos(true);
+        }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "lemon_deposits", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
+        fetchDepositosLemon();
+      })
       .subscribe();
 
     return () => {
-      clearInterval(interval);
       clearInterval(pollTimer);
       supabase.removeChannel(channel);
     };
@@ -240,6 +272,49 @@ export default function PanelPedidosPage() {
 
   async function fetchPedidos(fromRealtime = false) {
     refreshHybrid();
+  }
+
+  async function asociarDepositoAPedido(depositoId: string, pedidoId: string) {
+    try {
+      const { error: depError } = await supabase
+        .from("lemon_deposits")
+        .update({ pedido_id: pedidoId, estado: "asociado" })
+        .eq("id", depositoId);
+
+      if (depError) throw depError;
+
+      const { error: pedError } = await supabase
+        .from("pedidos")
+        .update({ estado: "confirmado", pago_confirmado: true })
+        .eq("id", pedidoId);
+
+      if (pedError) throw pedError;
+
+      alert("¡Depósito asociado y pedido confirmado con éxito!");
+      setSelectedDeposito(null);
+      fetchDepositosLemon();
+      fetchPedidos(true);
+    } catch (err: any) {
+      console.error("Error al asociar depósito:", err);
+      alert(`Error al asociar depósito: ${err.message}`);
+    }
+  }
+
+  async function descartarDeposito(depositoId: string) {
+    if (!confirm("¿Deseas descartar esta alerta? El depósito quedará registrado pero no se asociará a ningún pedido.")) return;
+    try {
+      const { error } = await supabase
+        .from("lemon_deposits")
+        .update({ estado: "descartado" })
+        .eq("id", depositoId);
+
+      if (error) throw error;
+      setSelectedDeposito(null);
+      fetchDepositosLemon();
+    } catch (err: any) {
+      console.error("Error al descartar depósito:", err);
+      alert(`Error al descartar depósito: ${err.message}`);
+    }
   }
 
   async function fetchRepartidores() {
@@ -679,6 +754,17 @@ export default function PanelPedidosPage() {
                  <option value="5">Terminal 5</option>
                </select>
              </div>
+
+             {/* Lemon Cash Alert Badge */}
+             {depositosLemon.length > 0 && (
+               <button
+                 onClick={() => setSelectedDeposito(depositosLemon[0])}
+                 className="flex items-center gap-1.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg px-2.5 py-1 ml-4 shadow-sm font-extrabold text-[10px] animate-pulse transition-all"
+               >
+                 <span className="text-xs">🍋</span>
+                 <span>LEMON: {depositosLemon.length} PENDIENTE{depositosLemon.length > 1 ? 'S' : ''}</span>
+               </button>
+             )}
           </div>
         </div>
 
@@ -1313,6 +1399,111 @@ export default function PanelPedidosPage() {
         onCreated={() => { fetchPedidos(); setIsNuevoPedidoOpen(false); setEditingPedido(null); }}
         editPedido={editingPedido || undefined}
       />
+
+      {/* ── MODAL LEMON DEPOSIT ASSOCIATION ── */}
+      {selectedDeposito && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-yellow-50">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🍋</span>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Depósito Lemon Cash Recibido
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">Asociación manual de pago</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedDeposito(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-lg px-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto space-y-4">
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider text-[10px]">Monto recibido</span>
+                  <span className="text-xl font-black text-green-600">${fmt(selectedDeposito.monto)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-wider text-[10px]">Emisor</span>
+                  <span className="text-sm font-extrabold text-slate-700">{selectedDeposito.emisor || "Desconocido"}</span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-200">
+                  <p className="text-xs text-slate-400 italic">"{selectedDeposito.texto_notificacion}"</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2 text-[10px]">
+                  Seleccionar Pedido Abierto para Asociar
+                </h4>
+                
+                {hybridPedidos.filter(p => p.estado === 'pendiente').length === 0 ? (
+                  <p className="text-sm text-slate-500 py-4 text-center italic">
+                    No hay pedidos pendientes en este momento.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-[35vh] overflow-y-auto pr-1">
+                    {hybridPedidos.filter(p => p.estado === 'pendiente').map(p => {
+                      const isSameAmount = Number(p.total) === Number(selectedDeposito.monto);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => asociarDepositoAPedido(selectedDeposito.id, p.id)}
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between ${
+                            isSameAmount 
+                              ? 'border-green-300 bg-green-50 hover:bg-green-100 ring-2 ring-green-500/20' 
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-800">
+                                {p.cliente_nombre || "Cliente sin nombre"}
+                              </span>
+                              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-bold uppercase">
+                                {p.numero_pedido?.split("-").pop() || p.numero_pedido}
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-500">
+                              {p.tipo === 'delivery' ? '🏍️ Delivery' : p.tipo === 'takeaway' ? '🥡 Take Away' : '🍽️ Salón'} · {formatHora(p.created_at)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-black text-slate-900">${fmt(Number(p.total))}</span>
+                            {isSameAmount && (
+                              <span className="block text-[9px] text-green-600 font-extrabold uppercase">Monto Coincide</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <button
+                onClick={() => descartarDeposito(selectedDeposito.id)}
+                className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold rounded-xl transition-all"
+              >
+                Descartar aviso
+              </button>
+              <button
+                onClick={() => setSelectedDeposito(null)}
+                className="px-4 py-2 bg-slate-200 text-slate-700 hover:bg-slate-300 text-xs font-bold rounded-xl transition-all"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

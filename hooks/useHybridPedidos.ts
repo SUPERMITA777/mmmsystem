@@ -29,7 +29,58 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
             try {
                 const { data, error } = await supabase
                     .from("pedidos")
-                    .select("*, pedido_items(*, productos(id, nombre, categoria_id, impresora, categorias(nombre))), mesas(numero), camarero:usuarios!camarero_id(color)")
+                    .select(`
+                        id,
+                        mesa_id,
+                        sucursal_id,
+                        camarero_id,
+                        metodo_pago_id,
+                        metodo_pago_nombre,
+                        estado,
+                        total,
+                        subtotal,
+                        costo_envio,
+                        propina,
+                        recargo,
+                        cubierto_total,
+                        comensales,
+                        descuento,
+                        origen,
+                        notas,
+                        notas_internas,
+                        terminal_id,
+                        created_at,
+                        pago_confirmado,
+                        repartidor_id,
+                        tiempo_preparacion_minutos,
+                        pedido_items (
+                            id,
+                            pedido_id,
+                            producto_id,
+                            nombre_producto,
+                            cantidad,
+                            precio_unitario,
+                            descuento,
+                            notas,
+                            estado,
+                            adicionales,
+                            productos (
+                                id,
+                                nombre,
+                                categoria_id,
+                                impresora,
+                                categorias (
+                                    nombre
+                                )
+                            )
+                        ),
+                        mesas (
+                            numero
+                        ),
+                        camarero:usuarios!camarero_id (
+                            color
+                        )
+                    `)
                     .eq("sucursal_id", sucursalId)
                     .in("estado", ["pendiente", "confirmado", "preparando", "listo", "en_camino"])
                     .order("created_at", { ascending: false });
@@ -91,7 +142,8 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
 
     useEffect(() => {
         fetchPedidos();
-        const timer = setInterval(fetchPedidos, 15000);
+        // Polling de respaldo muy infrecuente (2 minutos) ya que usamos Realtime en los paneles principales
+        const timer = setInterval(fetchPedidos, 120000);
         return () => clearInterval(timer);
     }, [fetchPedidos]);
 
