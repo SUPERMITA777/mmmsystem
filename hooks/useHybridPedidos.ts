@@ -42,6 +42,8 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
                         tipo,
                         numero_pedido,
                         cliente_nombre,
+                        cliente_telefono,
+                        cliente_direccion,
                         total,
                         subtotal,
                         costo_envio,
