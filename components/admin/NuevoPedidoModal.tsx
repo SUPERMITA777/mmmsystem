@@ -797,8 +797,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 }).eq("id", editPedido.id);
                 if (uError) throw uError;
 
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const items = carrito.map(item => {
-                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                     const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
                     return {
                         id: finalId,
@@ -814,17 +814,32 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                     };
                 });
                 
+                console.log(`[NuevoPedidoModal] Upserting ${items.length} items for pedido ${editPedido.id}`, items.map(i => ({ id: i.id, nombre: i.nombre_producto })));
                 const { error: insertErr } = await supabase.from("pedido_items").upsert(items);
                 if (insertErr) throw insertErr;
 
-                // Delete obsolete items that are no longer in the cart
-                const itemIdsToKeep = items.map(it => it.id);
-                const { error: deleteErr } = await supabase
+                // Verify upsert succeeded before deleting obsolete items
+                const { data: verifyData, error: verifyErr } = await supabase
                     .from("pedido_items")
-                    .delete()
-                    .eq("pedido_id", editPedido.id)
-                    .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
-                if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
+                    .select("id")
+                    .eq("pedido_id", editPedido.id);
+                
+                if (verifyErr) {
+                    console.error("[NuevoPedidoModal] Error verifying items after upsert:", verifyErr);
+                } else {
+                    const dbItemIds = new Set((verifyData || []).map((r: any) => r.id));
+                    const itemIdsToKeep = new Set(items.map(it => it.id));
+                    const idsToDelete = [...dbItemIds].filter(id => !itemIdsToKeep.has(id));
+                    
+                    if (idsToDelete.length > 0) {
+                        console.log(`[NuevoPedidoModal] Deleting ${idsToDelete.length} obsolete items:`, idsToDelete);
+                        const { error: deleteErr } = await supabase
+                            .from("pedido_items")
+                            .delete()
+                            .in("id", idsToDelete);
+                        if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
+                    }
+                }
 
                 // Consolidate other duplicate active orders for this table if editing a merged view
                 if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
@@ -958,8 +973,8 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             if (uError) throw uError;
 
             // 2. Synchronize the cart items in database to reflect any final modifications
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             const items = carrito.map(item => {
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                 const finalId = (item.id && uuidRegex.test(item.id)) ? item.id : crypto.randomUUID();
                 return {
                     id: finalId,
@@ -977,14 +992,28 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             const { error: iError } = await supabase.from("pedido_items").upsert(items);
             if (iError) throw iError;
 
-            // Delete obsolete items
-            const itemIdsToKeep = items.map(it => it.id);
-            const { error: deleteErr } = await supabase
+            // Verify upsert succeeded before deleting obsolete items
+            const { data: verifyData, error: verifyErr } = await supabase
                 .from("pedido_items")
-                .delete()
-                .eq("pedido_id", editPedido.id)
-                .not("id", "in", `(${itemIdsToKeep.map(id => `"${id}"`).join(",")})`);
-            if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
+                .select("id")
+                .eq("pedido_id", editPedido.id);
+            
+            if (verifyErr) {
+                console.error("[NuevoPedidoModal] Error verifying items after upsert:", verifyErr);
+            } else {
+                const dbItemIds = new Set((verifyData || []).map((r: any) => r.id));
+                const itemIdsToKeep = new Set(items.map(it => it.id));
+                const idsToDelete = [...dbItemIds].filter(id => !itemIdsToKeep.has(id));
+                
+                if (idsToDelete.length > 0) {
+                    console.log(`[NuevoPedidoModal] cobrarMesa: Deleting ${idsToDelete.length} obsolete items:`, idsToDelete);
+                    const { error: deleteErr } = await supabase
+                        .from("pedido_items")
+                        .delete()
+                        .in("id", idsToDelete);
+                    if (deleteErr) console.warn("[NuevoPedidoModal] Error cleaning up obsolete items:", deleteErr);
+                }
+            }
 
             // Consolidate and delete other grouped orders
             if (editPedido.groupedIds && editPedido.groupedIds.length > 1) {
