@@ -71,6 +71,7 @@ export function useHybridPedidos(sucursalId: string | null, bridgeIp: string = "
                             notas,
                             estado,
                             adicionales,
+                            created_at,
                             productos (
                                 id,
                                 nombre,
