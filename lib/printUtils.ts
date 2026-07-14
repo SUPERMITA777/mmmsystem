@@ -461,21 +461,26 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
   const itemsByPrinter: Record<string, any[]> = {};
   const defaultPrinterKey = "COCINA 1";
 
+  const normalizePrinterName = (name: string) => {
+    return (name || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  };
+
   const isValidPrinter = (printerKey: string) => {
     if (!printerKey) return false;
-    const cleanKey = printerKey.replace(/ /g, "");
+    const normKey = normalizePrinterName(printerKey);
     return !!(
-      c.impresoras?.[printerKey] || 
-      c.impresoras?.[cleanKey] || 
-      Object.values(c.impresoras || {}).some((p: any) => p.printerName === printerKey)
+      Object.keys(c.impresoras || {}).some(k => normalizePrinterName(k) === normKey) ||
+      Object.values(c.impresoras || {}).some((p: any) => normalizePrinterName(p.printerName) === normKey)
     );
   };
 
   const getResolvedPrinterKey = (printerKey: string) => {
-    if (c.impresoras?.[printerKey]) return printerKey;
-    const cleanKey = printerKey.replace(/ /g, "");
-    if (c.impresoras?.[cleanKey]) return cleanKey;
-    return Object.keys(c.impresoras || {}).find(k => (c.impresoras?.[k] as any).printerName === printerKey) || defaultPrinterKey;
+    const normKey = normalizePrinterName(printerKey);
+    const foundKey = Object.keys(c.impresoras || {}).find(k => normalizePrinterName(k) === normKey);
+    if (foundKey) return foundKey;
+    const foundValKey = Object.keys(c.impresoras || {}).find(k => normalizePrinterName((c.impresoras?.[k] as any)?.printerName) === normKey);
+    if (foundValKey) return foundValKey;
+    return defaultPrinterKey;
   };
   
   itemsToPrint.forEach((item: any) => {
