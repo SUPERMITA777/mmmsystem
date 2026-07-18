@@ -8,7 +8,7 @@
  * Solo necesitás: Código de Negocio + escanear QR.
  */
 
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers, downloadMediaMessage } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import axios from 'axios';
@@ -209,6 +209,87 @@ async function connectToWhatsApp(config: SavedConfig) {
 
     sock.ev.on('creds.update', saveCreds);
 
+    let isSyncingHistory = false;
+    sock.ev.on('messaging-history.set', async ({ messages }) => {
+        if (isSyncingHistory) return;
+        isSyncingHistory = true;
+        
+        logInfo('📥 Recibiendo historial de chats desde tu teléfono...');
+        
+        (async () => {
+            try {
+                const sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
+                const messagesToSync = [];
+                let audioCount = 0;
+
+                for (const msg of messages) {
+                    if (!msg.message) continue;
+                    const sender = msg.key.remoteJid;
+                    if (!sender || sender.includes('@g.us') || sender === 'status@broadcast') continue;
+
+                    const timestamp = ((msg.messageTimestamp as number) || Math.floor(Date.now() / 1000)) * 1000;
+                    if (timestamp < sixtyDaysAgo) continue;
+
+                    const fromMe = msg.key.fromMe || false;
+                    let text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+                    let audioBase64: string | undefined;
+                    let audioMimeType: string | undefined;
+
+                    if (msg.message.audioMessage) {
+                        try {
+                            const buffer = await downloadMediaMessage(
+                                msg,
+                                'buffer',
+                                {},
+                                {
+                                    logger: silentLogger,
+                                    reuploadRequest: sock.updateMediaMessage
+                                }
+                            );
+                            if (Buffer.isBuffer(buffer)) {
+                                audioBase64 = buffer.toString('base64');
+                                audioMimeType = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
+                                text = '[Nota de voz]';
+                                audioCount++;
+                            }
+                        } catch {
+                            text = '[Nota de voz (Expirada)]';
+                        }
+                    }
+
+                    if (!text && !audioBase64) continue;
+
+                    messagesToSync.push({
+                        sender,
+                        text,
+                        fromMe,
+                        timestamp,
+                        audio: audioBase64,
+                        audioMime: audioMimeType
+                    });
+                }
+
+                if (messagesToSync.length > 0) {
+                    logInfo(`Subiendo ${messagesToSync.length} mensajes históricos a la base de datos...`);
+                    const chunkSize = 30;
+                    for (let i = 0; i < messagesToSync.length; i += chunkSize) {
+                        const chunk = messagesToSync.slice(i, i + chunkSize);
+                        await axios.post(
+                            `${config.serverUrl}/api/ai/sync-history`,
+                            { tenantId: config.tenantId, messages: chunk },
+                            { headers: { 'Content-Type': 'application/json' }, timeout: 180000 }
+                        );
+                    }
+                    logSuccess(`Sincronización de historial completada (${messagesToSync.length} mensajes actualizados).`);
+                }
+            } catch (err: any) {
+                logError(`Error al sincronizar historial: ${err.message}`);
+            } finally {
+                isSyncingHistory = false;
+            }
+        })();
+    });
+
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
@@ -279,14 +360,40 @@ async function connectToWhatsApp(config: SavedConfig) {
 
             const sender = msg.key.remoteJid;
             const fromMe = msg.key.fromMe;
-            const text = msg.message.conversation
+            
+            let text = msg.message.conversation
                 || msg.message.extendedTextMessage?.text;
+            let audioBase64: string | undefined;
+            let audioMimeType: string | undefined;
 
-            if (!text || !sender) continue;
+            if (msg.message.audioMessage && sender) {
+                try {
+                    log('🎤 ' + sender.split('@')[0] + ': Recibiendo nota de voz...', c.cyan);
+                    const buffer = await downloadMediaMessage(
+                        msg,
+                        'buffer',
+                        {},
+                        {
+                            logger: silentLogger,
+                            reuploadRequest: sock.updateMediaMessage
+                        }
+                    );
+                    if (Buffer.isBuffer(buffer)) {
+                        audioBase64 = buffer.toString('base64');
+                        audioMimeType = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
+                        text = '[Nota de voz]';
+                    }
+                } catch (err: any) {
+                    logError(`Error al descargar nota de voz: ${err.message}`);
+                }
+            }
+
+            if (!text && !audioBase64) continue;
+            if (!sender) continue;
             if (sender.includes('@g.us') || sender === 'status@broadcast') continue;
 
             const senderShort = sender.split('@')[0];
-            logMsg('<<', senderShort, text);
+            logMsg('<<', senderShort, text || '[Audio]');
             messageCount++;
 
             try {
@@ -300,7 +407,14 @@ async function connectToWhatsApp(config: SavedConfig) {
                 // Send to API
                 const response = await axios.post(
                     `${config.serverUrl}/api/ai/sync-agent`,
-                    { tenantId: config.tenantId, sender, text, fromMe },
+                    { 
+                        tenantId: config.tenantId, 
+                        sender, 
+                        text, 
+                        fromMe,
+                        audio: audioBase64,
+                        audioMime: audioMimeType
+                    },
                     { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
                 );
 

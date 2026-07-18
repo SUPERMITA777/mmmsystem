@@ -13,7 +13,7 @@ import { processWhatsAppMessage, getAgentConfig, updateAgentConfig } from "@/lib
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { tenantId, sender, text, fromMe, status, qr, phone } = body;
+        const { tenantId, sender, text, fromMe, status, qr, phone, audio, audioMime } = body;
 
         // Validate required fields
         if (!tenantId) {
@@ -77,7 +77,10 @@ export async function POST(request: Request) {
             sucursalId,
             sender,
             text,
-            fromMe || false
+            fromMe || false,
+            false,
+            audio,
+            audioMime
         );
 
         // Return reply

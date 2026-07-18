@@ -356,6 +356,7 @@ export default function FlyerManagerModal({
                 isOpen={!!cropperSrc}
                 imageSrc={cropperSrc || ''}
                 aspectRatio={9 / 16}
+                maxDimension={1200}
                 onCropComplete={handleCroppedUpload}
                 onClose={() => setCropperSrc(null)}
                 title="Recortar Flyer"

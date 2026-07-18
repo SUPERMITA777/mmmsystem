@@ -12,9 +12,10 @@ interface ImageCropperModalProps {
     onCropComplete: (croppedBlob: Blob) => void;
     onClose: () => void;
     title?: string;
+    maxDimension?: number;
 }
 
-async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+async function getCroppedImg(imageSrc: string, pixelCrop: Area, maxDimension = 1024): Promise<Blob> {
     const image = new Image();
     image.crossOrigin = "anonymous";
     await new Promise<void>((resolve, reject) => {
@@ -27,8 +28,22 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("No canvas context");
 
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    let targetWidth = pixelCrop.width;
+    let targetHeight = pixelCrop.height;
+
+    // Redimensionar proporcionalmente si excede maxDimension
+    if (targetWidth > maxDimension || targetHeight > maxDimension) {
+        if (targetWidth > targetHeight) {
+            targetHeight = Math.round((targetHeight * maxDimension) / targetWidth);
+            targetWidth = maxDimension;
+        } else {
+            targetWidth = Math.round((targetWidth * maxDimension) / targetHeight);
+            targetHeight = maxDimension;
+        }
+    }
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
 
     ctx.drawImage(
         image,
@@ -38,8 +53,8 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
         pixelCrop.height,
         0,
         0,
-        pixelCrop.width,
-        pixelCrop.height
+        targetWidth,
+        targetHeight
     );
 
     return new Promise((resolve, reject) => {
@@ -49,7 +64,7 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
                 else reject(new Error("Canvas toBlob failed"));
             },
             "image/jpeg",
-            0.92
+            0.85 // Calidad reducida a 85% para compresión óptima sin pérdida visible
         );
     });
 }
@@ -61,6 +76,7 @@ export default function ImageCropperModal({
     onCropComplete,
     onClose,
     title = "Recortar imagen",
+    maxDimension = 1024,
 }: ImageCropperModalProps) {
     const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
@@ -82,7 +98,7 @@ export default function ImageCropperModal({
         if (!croppedAreaPixels) return;
         setIsSaving(true);
         try {
-            const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
+            const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels, maxDimension);
             onCropComplete(croppedBlob);
         } catch (error) {
             console.error("Error cropping image:", error);

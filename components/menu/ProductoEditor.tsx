@@ -582,6 +582,7 @@ export function ProductoEditor({
         isOpen={!!cropperSrc}
         imageSrc={cropperSrc || ''}
         aspectRatio={1}
+        maxDimension={800}
         onCropComplete={async (croppedBlob) => {
           try {
             const fileName = `${Math.random().toString(36).substring(2)}.jpg`;

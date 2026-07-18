@@ -311,7 +311,7 @@ export async function updateAgentConfig(
 // CONVERSATION HISTORY
 // ═══════════════════════════════════════════
 
-async function getOrCreateConversation(sucursalId: string, senderPhone: string) {
+export async function getOrCreateConversation(sucursalId: string, senderPhone: string) {
     // Simulator dummy conversation
     if (senderPhone === "simulador-admin") {
         return {
@@ -1158,7 +1158,9 @@ export async function processWhatsAppMessage(
     senderPhone: string,
     text: string,
     fromMe: boolean = false,
-    dryRun: boolean = false
+    dryRun: boolean = false,
+    audioBase64?: string,
+    audioMimeType?: string
 ): Promise<AgentResponse> {
     // 1. Load agent config
     const config = await getAgentConfig(sucursalId);
@@ -1170,6 +1172,35 @@ export async function processWhatsAppMessage(
     // Skip messages sent by ourselves
     if (fromMe) {
         return { reply: "" };
+    }
+
+    // If audio note is provided, transcribe it using Groq Whisper first
+    let originalAudioText = "";
+    if (audioBase64) {
+        try {
+            console.log(`[Audio Transcribe] Initiating transcription for ${senderPhone}...`);
+            const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+            
+            const buffer = Buffer.from(audioBase64, 'base64');
+            const ext = audioMimeType?.includes('mp3') ? 'mp3' : 'ogg';
+            const file = new File([buffer], `audio.${ext}`, { type: audioMimeType || 'audio/ogg; codecs=opus' });
+
+            const transcription = await groq.audio.transcriptions.create({
+                file: file,
+                model: 'whisper-large-v3',
+                language: 'es'
+            });
+
+            if (transcription.text) {
+                console.log(`[Audio Transcribe] Success: "${transcription.text}"`);
+                originalAudioText = text; // Typically "[Nota de voz]"
+                text = transcription.text;
+            } else {
+                console.warn(`[Audio Transcribe] Empty transcription result.`);
+            }
+        } catch (err: any) {
+            console.error(`[Audio Transcribe] Error:`, err.message || err);
+        }
     }
 
     // 2. Get/create conversation and save incoming message
