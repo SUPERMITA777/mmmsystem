@@ -499,13 +499,11 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
                        finalMainProd.id_impresora || 
                        finalMainProd.impresora_id;
 
-    // 1. Verificar si es un override explícito (distinto de 'COCINA1' / 'COCINA 1' y válido)
-    const isExplicitOverride = prodPrinter && 
-                               prodPrinter !== "COCINA1" && 
-                               prodPrinter !== "COCINA 1" && 
-                               prodPrinter !== "null" && 
-                               prodPrinter !== "undefined" &&
-                               isValidPrinter(prodPrinter);
+    // 1. Verificar si hay un puesto de impresora válido configurado en el producto
+    const hasProductPrinter = prodPrinter && 
+                              prodPrinter !== "null" && 
+                              prodPrinter !== "undefined" &&
+                              isValidPrinter(prodPrinter);
 
     // 2. Buscar si hay una impresora asignada a la categoría
     let categoryPrinterKey: string | null = null;
@@ -523,16 +521,15 @@ export async function printCocina(pedido: any, config: Partial<PrintConfig> = {}
       }
     }
 
-    // 3. Decidir destino final por prioridad
-    if (isExplicitOverride && prodPrinter) {
+    // 3. Decidir destino final por prioridad (1° Producto, 2° Categoría, 3° Por Defecto)
+    if (hasProductPrinter) {
       mainPrinterKey = getResolvedPrinterKey(prodPrinter);
     } else if (categoryPrinterKey) {
       mainPrinterKey = categoryPrinterKey;
-    } else if (prodPrinter && isValidPrinter(prodPrinter)) {
-      mainPrinterKey = getResolvedPrinterKey(prodPrinter);
     } else {
       mainPrinterKey = defaultPrinterKey;
     }
+
 
     // Separate additionals that have a different printer
     const mainItemAdditionals: any[] = [];
