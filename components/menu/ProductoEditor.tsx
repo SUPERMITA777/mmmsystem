@@ -379,6 +379,18 @@ export function ProductoEditor({
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={formData.activo}
+                  onChange={(e) => handleChange("activo", e.target.checked)}
+                  className="w-4 h-4 accent-purple-600 rounded"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm text-gray-700 font-medium">Producto activo</span>
+                  <span className="text-[11px] text-gray-400">Permite vender o pausar el producto completamente</span>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={formData.visible_en_menu}
                   onChange={(e) => handleChange("visible_en_menu", e.target.checked)}
                   className="w-4 h-4 accent-purple-600 rounded"
