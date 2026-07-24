@@ -6,11 +6,13 @@ import {
     Plus, Building2, ExternalLink, ShieldCheck, 
     Mail, LogOut, Loader2, BarChart3, Users as UsersIcon, 
     TrendingUp, Eye, Search, Filter, MoreVertical, X, Pencil,
-    Bot, ToggleLeft, ToggleRight
+    Bot, ToggleLeft, ToggleRight, Server, HardDrive, Cpu, Activity,
+    Zap, Database, RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert
 } from "lucide-react";
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-    Tooltip, ResponsiveContainer, Cell, AreaChart, Area 
+    Tooltip, ResponsiveContainer, Cell, AreaChart, Area,
+    PieChart, Pie, Legend
 } from 'recharts';
 
 export default function SuperAdminPage() {
@@ -116,7 +118,29 @@ export default function SuperAdminPage() {
         }
     }
 
-    const [activeTab, setActiveTab] = useState<"tenants" | "users" | "metrics" | "landing_config">("tenants");
+    const [activeTab, setActiveTab] = useState<"tenants" | "users" | "metrics" | "landing_config" | "server_usage">("tenants");
+    const [usageData, setUsageData] = useState<any>(null);
+    const [usageLoading, setUsageLoading] = useState(false);
+    const [usageLastChecked, setUsageLastChecked] = useState<string | null>(null);
+
+    async function fetchServerUsage() {
+        setUsageLoading(true);
+        try {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/superadmin/usage", { headers });
+            if (res.ok) {
+                const data = await res.json();
+                setUsageData(data);
+                setUsageLastChecked(new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            } else {
+                alert("Error al consultar consumos");
+            }
+        } catch (err: any) {
+            alert("Error: " + err.message);
+        } finally {
+            setUsageLoading(false);
+        }
+    }
     const [users, setUsers] = useState<any[]>([]);
 
     const [landingForm, setLandingForm] = useState<any>({
@@ -264,6 +288,12 @@ export default function SuperAdminPage() {
     useEffect(() => {
         if (isSuperAdmin && activeTab === "landing_config") {
             fetchLandingConfig();
+        }
+    }, [activeTab, isSuperAdmin]);
+
+    useEffect(() => {
+        if (isSuperAdmin && activeTab === "server_usage" && !usageData) {
+            fetchServerUsage();
         }
     }, [activeTab, isSuperAdmin]);
 
@@ -469,6 +499,7 @@ export default function SuperAdminPage() {
                         { id: "tenants", label: "Locales", icon: Building2 },
                         { id: "users", label: "Usuarios", icon: UsersIcon },
                         { id: "metrics", label: "Métricas", icon: BarChart3 },
+                        { id: "server_usage", label: "Servidores", icon: Server },
                         { id: "landing_config", label: "Pág. Ventas", icon: Bot },
                     ].map((t) => (
                         <button
@@ -1061,6 +1092,271 @@ export default function SuperAdminPage() {
                                     </button>
                                 </div>
                             </form>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === "server_usage" && (
+                    <div className="space-y-8 animate-in fade-in duration-500">
+                        {/* Header Banner */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-gradient-to-r from-slate-900 via-[#0b1730] to-slate-900 p-8 rounded-[2rem] border border-[#00B2FF]/20 shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-96 h-96 bg-[#00B2FF]/10 rounded-full blur-3xl pointer-events-none" />
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="p-2.5 bg-[#00B2FF]/10 rounded-xl text-[#00B2FF] border border-[#00B2FF]/20">
+                                        <Server size={24} />
+                                    </div>
+                                    <h2 className="text-3xl font-black text-white tracking-tight">Control de Consumos & Servidores</h2>
+                                </div>
+                                <p className="text-sm text-slate-400 font-medium">Monitoreo en tiempo real de cuotas para planes Free en Vercel & Supabase.</p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10">
+                                {usageLastChecked && (
+                                    <div className="text-right text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-black/40 px-4 py-3 rounded-2xl border border-white/5">
+                                        <span>Última consulta:</span>
+                                        <span className="block text-white text-xs font-black">{usageLastChecked} hs</span>
+                                    </div>
+                                )}
+                                <button
+                                    onClick={fetchServerUsage}
+                                    disabled={usageLoading}
+                                    className="bg-gradient-to-r from-[#00B2FF] to-blue-600 hover:from-[#0092d1] hover:to-blue-700 text-white font-black px-8 py-4 rounded-2xl transition-all shadow-[0_0_30px_rgba(0,178,255,0.4)] flex items-center justify-center gap-3 text-xs uppercase tracking-widest disabled:opacity-50 active:scale-95 cursor-pointer"
+                                >
+                                    {usageLoading ? (
+                                        <>
+                                            <Loader2 size={18} className="animate-spin text-white" />
+                                            <span>Consultando...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Zap size={18} className="text-yellow-300 animate-bounce" />
+                                            <span>CONSULTAR CONSUMOS</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Status Summary Message */}
+                        {usageData?.summary && (
+                            <div className={`p-6 rounded-3xl border flex items-start gap-4 backdrop-blur-xl transition-all ${
+                                usageData.summary.health_score === "EXCELENTE"
+                                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                : usageData.summary.health_score === "MODERADO"
+                                ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                                : "bg-red-500/10 border-red-500/30 text-red-300"
+                            }`}>
+                                <div className="p-2 rounded-xl bg-black/30 shrink-0">
+                                    {usageData.summary.health_score === "EXCELENTE" ? (
+                                        <CheckCircle2 size={24} className="text-emerald-400" />
+                                    ) : usageData.summary.health_score === "MODERADO" ? (
+                                        <AlertTriangle size={24} className="text-amber-400" />
+                                    ) : (
+                                        <ShieldAlert size={24} className="text-red-400" />
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <h3 className="font-black text-sm uppercase tracking-wider text-white">Estado del Servidor: {usageData.summary.health_score}</h3>
+                                        <span className="text-[10px] font-black px-3 py-1 rounded-full bg-white/10 uppercase tracking-widest">Plan Free Tier</span>
+                                    </div>
+                                    <p className="text-xs font-medium leading-relaxed opacity-90">{usageData.summary.message}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {usageLoading && !usageData ? (
+                            <div className="py-20 flex flex-col justify-center items-center gap-4 bg-white/[0.02] border border-white/5 rounded-3xl">
+                                <Loader2 size={40} className="animate-spin text-[#00B2FF]" />
+                                <span className="text-slate-400 font-bold tracking-widest text-xs uppercase">Consultando métricas en tiempo real con Supabase y Vercel...</span>
+                            </div>
+                        ) : (
+                            usageData && (
+                                <>
+                                    {/* Key Quota Metric Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {/* Card 1: Supabase DB */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20">
+                                                        <Database size={20} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full uppercase tracking-wider">SUPABASE DB</span>
+                                                </div>
+                                                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Base de Datos Postgres</h4>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="text-2xl font-black text-white">{usageData.supabase.db.used_mb} MB</span>
+                                                    <span className="text-xs text-slate-500 font-bold">/ {usageData.supabase.db.limit_mb} MB</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 pt-4 border-t border-white/5 space-y-2">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-slate-400">Cuota Consumida</span>
+                                                    <span className="text-emerald-400">{usageData.supabase.db.percentage}%</span>
+                                                </div>
+                                                <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                                    <div 
+                                                        className="h-full bg-emerald-500 rounded-full transition-all duration-1000"
+                                                        style={{ width: `${Math.min(100, Math.max(2, usageData.supabase.db.percentage))}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Card 2: Supabase Storage */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden group hover:border-[#00B2FF]/40 transition-all">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-[#00B2FF]/10 text-[#00B2FF] rounded-2xl border border-[#00B2FF]/20">
+                                                        <HardDrive size={20} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-[#00B2FF] bg-[#00B2FF]/10 px-3 py-1 rounded-full uppercase tracking-wider">SUPABASE STORAGE</span>
+                                                </div>
+                                                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Archivos & Fotos</h4>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="text-2xl font-black text-white">{usageData.supabase.storage.used_mb} MB</span>
+                                                    <span className="text-xs text-slate-500 font-bold">/ {usageData.supabase.storage.limit_mb} MB</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 pt-4 border-t border-white/5 space-y-2">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-slate-400">Cuota Consumida</span>
+                                                    <span className="text-[#00B2FF]">{usageData.supabase.storage.percentage}%</span>
+                                                </div>
+                                                <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                                    <div 
+                                                        className="h-full bg-[#00B2FF] rounded-full transition-all duration-1000"
+                                                        style={{ width: `${Math.min(100, Math.max(2, usageData.supabase.storage.percentage))}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Card 3: Vercel Bandwidth */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden group hover:border-purple-500/40 transition-all">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-purple-500/10 text-purple-400 rounded-2xl border border-purple-500/20">
+                                                        <Activity size={20} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full uppercase tracking-wider">VERCEL TRAFFIC</span>
+                                                </div>
+                                                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Ancho de Banda Saliente</h4>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="text-2xl font-black text-white">{usageData.vercel.bandwidth.used_gb} GB</span>
+                                                    <span className="text-xs text-slate-500 font-bold">/ {usageData.vercel.bandwidth.limit_gb} GB</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 pt-4 border-t border-white/5 space-y-2">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-slate-400">Cuota Consumida</span>
+                                                    <span className="text-purple-400">{usageData.vercel.bandwidth.percentage}%</span>
+                                                </div>
+                                                <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                                    <div 
+                                                        className="h-full bg-purple-500 rounded-full transition-all duration-1000"
+                                                        style={{ width: `${Math.min(100, Math.max(2, usageData.vercel.bandwidth.percentage))}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Card 4: Vercel Serverless Functions */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-6 flex flex-col justify-between relative overflow-hidden group hover:border-amber-500/40 transition-all">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="p-3 bg-amber-500/10 text-amber-400 rounded-2xl border border-amber-500/20">
+                                                        <Cpu size={20} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full uppercase tracking-wider">VERCEL API CALLS</span>
+                                                </div>
+                                                <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Invocaciones Serverless</h4>
+                                                <div className="flex items-baseline gap-2">
+                                                    <span className="text-2xl font-black text-white">{usageData.vercel.functions.used_count.toLocaleString()}</span>
+                                                    <span className="text-xs text-slate-500 font-bold">/ {usageData.vercel.functions.limit_count.toLocaleString()}</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-6 pt-4 border-t border-white/5 space-y-2">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-slate-400">Cuota Consumida</span>
+                                                    <span className="text-amber-400">{usageData.vercel.functions.percentage}%</span>
+                                                </div>
+                                                <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                                    <div 
+                                                        className="h-full bg-amber-500 rounded-full transition-all duration-1000"
+                                                        style={{ width: `${Math.min(100, Math.max(2, usageData.vercel.functions.percentage))}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Interactive Charts Section */}
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                        {/* Chart 1: Database Table Breakdown Pie Chart */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-8 lg:col-span-2">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <div>
+                                                    <h3 className="text-lg font-black text-white tracking-tight">Distribución del Espacio en la Base de Datos</h3>
+                                                    <p className="text-xs text-slate-400 font-medium">Desglose de megabytes consumidos por cada tabla principal en PostgreSQL</p>
+                                                </div>
+                                                <span className="text-[10px] font-black text-[#00B2FF] bg-[#00B2FF]/10 px-3 py-1.5 rounded-xl border border-[#00B2FF]/20 uppercase tracking-widest">
+                                                    Top Tablas
+                                                </span>
+                                            </div>
+
+                                            <div className="h-72 w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={usageData.supabase.tables} margin={{ top: 10, right: 20, left: 0, bottom: 25 }}>
+                                                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                                        <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11, fontWeight: 'bold' }} interval={0} angle={-20} textAnchor="end" />
+                                                        <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} unit=" MB" />
+                                                        <Tooltip 
+                                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '1rem', color: '#fff' }} 
+                                                            formatter={(value: any) => [`${value} MB`, 'Espacio Ocupado']}
+                                                        />
+                                                        <Bar dataKey="estimated_mb" radius={[8, 8, 0, 0]}>
+                                                            {usageData.supabase.tables.map((entry: any, index: number) => {
+                                                                const colors = ['#00B2FF', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#3b82f6', '#64748b'];
+                                                                return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                                            })}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+
+                                        {/* Table Row Counts Detail */}
+                                        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-8 flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="text-lg font-black text-white tracking-tight mb-1">Volumen de Registros</h3>
+                                                <p className="text-xs text-slate-400 font-medium mb-6">Cantidad total de registros activos almacenados</p>
+                                                
+                                                <div className="space-y-4">
+                                                    {usageData.supabase.tables.slice(0, 5).map((t: any, idx: number) => (
+                                                        <div key={idx} className="flex justify-between items-center p-3.5 bg-black/30 rounded-2xl border border-white/5">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-2 h-2 rounded-full bg-[#00B2FF]" />
+                                                                <span className="text-xs font-bold text-slate-200 capitalize">{t.name}</span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <span className="text-xs font-black text-white">{t.count?.toLocaleString() || 'N/A'} reg.</span>
+                                                                <span className="block text-[10px] text-slate-500 font-medium">{t.estimated_mb} MB</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">
+                                                <span>Optimizados con caché local Dexie / IndexedDB</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )
                         )}
                     </div>
                 )}
