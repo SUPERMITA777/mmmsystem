@@ -7,8 +7,10 @@ import {
     Mail, LogOut, Loader2, BarChart3, Users as UsersIcon, 
     TrendingUp, Eye, Search, Filter, MoreVertical, X, Pencil,
     Bot, ToggleLeft, ToggleRight, Server, HardDrive, Cpu, Activity,
-    Zap, Database, RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert
+    Zap, Database, RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert,
+    Trash2, Archive, RotateCcw, ChevronDown
 } from "lucide-react";
+
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, 
     Tooltip, ResponsiveContainer, Cell, AreaChart, Area,
@@ -224,6 +226,14 @@ export default function SuperAdminPage() {
     const [extendDays, setExtendDays] = useState("30");
     const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
 
+    // Archive / Delete / Restore states
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [confirmDeleteTenant, setConfirmDeleteTenant] = useState<{ id: string; nombre: string } | null>(null);
+    const [confirmDeleteInput, setConfirmDeleteInput] = useState("");
+    const [deletingTenant, setDeletingTenant] = useState<string | null>(null);
+    const [showArchived, setShowArchived] = useState(false);
+
+
     // Helper to get auth headers with Bearer token for API calls
     async function getAuthHeaders(): Promise<Record<string, string>> {
         const { data: { session } } = await supabase.auth.getSession();
@@ -344,6 +354,65 @@ export default function SuperAdminPage() {
         }
     }
 
+    async function handleArchiveTenant(id: string) {
+        setOpenMenuId(null);
+        setDeletingTenant(id);
+        try {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/superadmin/tenant", {
+                method: "DELETE",
+                headers,
+                body: JSON.stringify({ sucursal_id: id, action: "archive" })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || "Error al archivar");
+            // Actualizar localmente: activo = false
+            setSucursales(prev => prev.map(s => s.id === id ? { ...s, activo: false } : s));
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setDeletingTenant(null);
+        }
+    }
+
+    async function handleDeleteTenant(id: string) {
+        setDeletingTenant(id);
+        try {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/superadmin/tenant", {
+                method: "DELETE",
+                headers,
+                body: JSON.stringify({ sucursal_id: id, action: "delete" })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || "Error al eliminar");
+            // Quitar de la lista local
+            setSucursales(prev => prev.filter(s => s.id !== id));
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setDeletingTenant(null);
+            setConfirmDeleteTenant(null);
+            setConfirmDeleteInput("");
+        }
+    }
+
+    async function handleRestoreTenant(id: string) {
+        setDeletingTenant(id);
+        try {
+            const headers = await getAuthHeaders();
+            const res = await fetch("/api/superadmin/tenant", {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ sucursal_id: id })
+            });
+            if (!res.ok) throw new Error((await res.json()).error || "Error al restaurar");
+            setSucursales(prev => prev.map(s => s.id === id ? { ...s, activo: true } : s));
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setDeletingTenant(null);
+        }
+    }
+
     async function handleSaveUser(e: React.FormEvent) {
         e.preventDefault();
         try {
@@ -427,7 +496,21 @@ export default function SuperAdminPage() {
         document.body.removeChild(link);
     };
 
+    // Cerrar el menú de acciones al hacer click fuera
+    useEffect(() => {
+        if (!openMenuId) return;
+        const handler = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest("[data-action-menu]")) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, [openMenuId]);
+
     if (authChecking) return <div className="min-h-screen bg-[#111] flex items-center justify-center text-white"><span className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" /></div>;
+
 
     if (!isSuperAdmin) {
         return (
@@ -583,9 +666,12 @@ export default function SuperAdminPage() {
                                 <span className="text-slate-500 font-bold tracking-widest text-xs uppercase">Sincronizando Datos...</span>
                             </div>
                         ) : (
+                            <>
+                            {/* Grid: solo activos */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                {sucursales.map(s => {
+                                {sucursales.filter(s => s.activo !== false).map(s => {
                                     const isExpired = s.subscription_end && new Date(s.subscription_end) < new Date();
+                                    const isProcessing = deletingTenant === s.id;
                                     return (
                                     <div key={s.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between group hover:border-[#00B2FF]/40 transition-all duration-500 hover:translate-y-[-4px] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
                                         <div className="relative">
@@ -593,13 +679,47 @@ export default function SuperAdminPage() {
                                                 <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center font-black text-[#00B2FF] text-2xl overflow-hidden shrink-0 border border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500">
                                                     {s.imagen_url ? <img src={s.imagen_url} alt="Logo" className="w-full h-full object-cover" /> : s.nombre.charAt(0).toUpperCase()}
                                                 </div>
-                                                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest border transition-all ${
-                                                    isExpired 
-                                                    ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]" 
-                                                    : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
-                                                }`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? "bg-red-500" : "bg-emerald-500"}`} />
-                                                    {isExpired ? "EXPIRADO" : "ACTIVO"}
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black tracking-widest border transition-all ${
+                                                        isExpired 
+                                                        ? "bg-red-500/10 text-red-500 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]" 
+                                                        : "bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                                                    }`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? "bg-red-500" : "bg-emerald-500"}`} />
+                                                        {isExpired ? "EXPIRADO" : "ACTIVO"}
+                                                    </div>
+                                                    {/* Menú de acciones */}
+                                                    <div className="relative" data-action-menu>
+                                                        <button
+                                                            onClick={() => setOpenMenuId(openMenuId === s.id ? null : s.id)}
+                                                            disabled={isProcessing}
+                                                            className="p-2 rounded-xl text-slate-500 hover:text-white hover:bg-white/10 transition-all border border-white/5 hover:border-white/20"
+                                                            title="Más acciones"
+                                                        >
+                                                            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <MoreVertical size={16} />}
+                                                        </button>
+                                                        {openMenuId === s.id && (
+                                                            <div className="absolute right-0 top-10 z-50 w-48 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl py-2 animate-in zoom-in-95 duration-150">
+                                                                <button
+                                                                    onClick={() => handleArchiveTenant(s.id)}
+                                                                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-amber-400 hover:bg-amber-500/10 transition-all"
+                                                                >
+                                                                    <Archive size={14} /> Archivar local
+                                                                </button>
+                                                                <div className="mx-3 my-1 border-t border-white/5" />
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setOpenMenuId(null);
+                                                                        setConfirmDeleteTenant({ id: s.id, nombre: s.nombre });
+                                                                        setConfirmDeleteInput("");
+                                                                    }}
+                                                                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-400 hover:bg-red-500/10 transition-all"
+                                                                >
+                                                                    <Trash2 size={14} /> Eliminar permanente
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -667,8 +787,131 @@ export default function SuperAdminPage() {
                                         </div>
                                     </div>
                                 )})}
+                                {sucursales.filter(s => s.activo !== false).length === 0 && (
+                                    <div className="col-span-3 py-16 text-center text-slate-500 font-bold text-xs uppercase tracking-widest">
+                                        No hay negocios activos registrados
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Sección archivados */}
+                            {sucursales.filter(s => s.activo === false).length > 0 && (
+                                <div className="mt-10">
+                                    <button
+                                        onClick={() => setShowArchived(v => !v)}
+                                        className="flex items-center gap-3 text-slate-500 hover:text-slate-300 transition-all font-black text-xs uppercase tracking-widest mb-4 group"
+                                    >
+                                        <Archive size={16} className="text-amber-500/70" />
+                                        Archivados ({sucursales.filter(s => s.activo === false).length})
+                                        <ChevronDown size={16} className={`transition-transform duration-300 ${showArchived ? "rotate-180" : ""}`} />
+                                    </button>
+                                    {showArchived && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            {sucursales.filter(s => s.activo === false).map(s => {
+                                                const isProcessing = deletingTenant === s.id;
+                                                return (
+                                                <div key={s.id} className="bg-white/[0.015] border border-white/5 rounded-[2rem] p-6 flex flex-col gap-4 opacity-60 hover:opacity-80 transition-all">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center font-black text-slate-500 text-lg overflow-hidden shrink-0 border border-white/5">
+                                                            {s.imagen_url ? <img src={s.imagen_url} alt="Logo" className="w-full h-full object-cover grayscale" /> : s.nombre.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-black text-slate-400 truncate">{s.nombre}</p>
+                                                            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-wider mt-0.5">/{s.slug}</p>
+                                                        </div>
+                                                        <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-widest border bg-slate-500/10 text-slate-500 border-slate-500/20">
+                                                            <Archive size={10} /> ARCHIVADO
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-3 pt-2 border-t border-white/5">
+                                                        <button
+                                                            onClick={() => handleRestoreTenant(s.id)}
+                                                            disabled={isProcessing}
+                                                            className="flex-1 flex items-center justify-center gap-2 text-xs font-black text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-500 py-3 rounded-xl transition-all border border-emerald-500/20 hover:border-emerald-500 uppercase tracking-widest disabled:opacity-50"
+                                                        >
+                                                            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                                                            Restaurar
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setConfirmDeleteTenant({ id: s.id, nombre: s.nombre });
+                                                                setConfirmDeleteInput("");
+                                                            }}
+                                                            disabled={isProcessing}
+                                                            className="flex items-center justify-center gap-2 px-4 text-xs font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 py-3 rounded-xl transition-all border border-red-500/20 hover:border-red-500 disabled:opacity-50"
+                                                            title="Eliminar permanentemente"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )})}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            </>
+                        )}
+
+                        {/* Modal de confirmación de eliminación permanente */}
+                        {confirmDeleteTenant && (
+                            <div
+                                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+                                onClick={(e) => { if (e.target === e.currentTarget) { setConfirmDeleteTenant(null); setConfirmDeleteInput(""); }}}
+                            >
+                                <div className="bg-[#0f172a] border border-red-500/20 rounded-[2rem] p-8 w-full max-w-md shadow-2xl shadow-red-900/20 animate-in zoom-in-95 duration-200">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="w-14 h-14 bg-red-500/10 rounded-2xl flex items-center justify-center border border-red-500/20">
+                                            <Trash2 size={24} className="text-red-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-white">Eliminar local</h3>
+                                            <p className="text-xs text-slate-500 mt-0.5">Esta acción es <span className="text-red-400 font-black">irreversible</span></p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-4 mb-6">
+                                        <p className="text-sm text-slate-300">
+                                            Se eliminarán <span className="font-black text-white">todos los datos</span> de{" "}
+                                            <span className="text-red-400 font-black">"{confirmDeleteTenant.nombre}"</span>:
+                                            productos, pedidos, clientes, configuraciones y el usuario administrador asociado.
+                                        </p>
+                                    </div>
+                                    <div className="mb-6">
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                                            Escribí el nombre del local para confirmar
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={confirmDeleteInput}
+                                            onChange={e => setConfirmDeleteInput(e.target.value)}
+                                            placeholder={confirmDeleteTenant.nombre}
+                                            className="w-full bg-black/50 border border-white/10 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:border-red-500/50 transition-all placeholder:text-slate-700 font-bold"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => { setConfirmDeleteTenant(null); setConfirmDeleteInput(""); }}
+                                            className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-2xl transition-all"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteTenant(confirmDeleteTenant.id)}
+                                            disabled={confirmDeleteInput !== confirmDeleteTenant.nombre || deletingTenant === confirmDeleteTenant.id}
+                                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-black text-white bg-red-600 hover:bg-red-500 rounded-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-red-900/30"
+                                        >
+                                            {deletingTenant === confirmDeleteTenant.id ? (
+                                                <><Loader2 size={16} className="animate-spin" /> Eliminando...</>
+                                            ) : (
+                                                <><Trash2 size={16} /> Eliminar permanente</>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
+
                     </div>
                 )}
 
