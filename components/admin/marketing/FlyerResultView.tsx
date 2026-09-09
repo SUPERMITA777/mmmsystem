@@ -137,7 +137,7 @@ export default function FlyerResultView({ flyer, sucursalId, onReset }: FlyerRes
                         {/* Smartphone mockup badge */}
                         <div className="absolute top-3 left-3 z-10 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-medium text-white flex items-center gap-1.5 shadow">
                             {isStory ? <Smartphone size={13} className="text-purple-300" /> : <Instagram size={13} className="text-pink-300" />}
-                            {isStory ? "Story / Estado (9:16)" : "Post Feed"}
+                            {isStory ? "Story / Estado (9:16)" : flyer.formato === "post_4_5" ? "Post Retrato (4:5)" : "Post Cuadrado (1:1)"}
                         </div>
 
                         {/* Full view trigger button */}

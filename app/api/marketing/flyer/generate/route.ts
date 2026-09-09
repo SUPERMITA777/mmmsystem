@@ -1,16 +1,29 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-// Helper para generar imagen con Gemini
-async function generateImageWithGemini(apiKey: string, promptText: string): Promise<{ mimeType: string; data: string }> {
+// Helper para generar imagen con Gemini en la relación de aspecto real
+async function generateImageWithGemini(
+    apiKey: string,
+    promptText: string,
+    formato: string = "story_9_16"
+): Promise<{ mimeType: string; data: string }> {
     const modelsToTry = [
         "gemini-2.5-flash-image",
         "gemini-3.1-flash-image",
         "gemini-3-pro-image",
     ];
 
+    // Mapear el formato seleccionado al enum de aspectRatio que acepta la API de Gemini
+    let geminiAspectRatio = "9:16";
+    if (formato === "post_1_1") {
+        geminiAspectRatio = "1:1";
+    } else if (formato === "post_4_5") {
+        geminiAspectRatio = "4:5";
+    }
+
     let lastError: any = null;
 
+    // Intento 1: Con aspectRatio nativo en generationConfig
     for (const model of modelsToTry) {
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -23,12 +36,18 @@ async function generateImageWithGemini(apiKey: string, promptText: string): Prom
                             parts: [{ text: promptText }],
                         },
                     ],
+                    generationConfig: {
+                        responseModalities: ["IMAGE"],
+                        imageConfig: {
+                            aspectRatio: geminiAspectRatio,
+                        },
+                    },
                 }),
             });
 
             if (!res.ok) {
                 const errJson = await res.json().catch(() => ({}));
-                console.warn(`Model ${model} failed with status ${res.status}:`, errJson);
+                console.warn(`Model ${model} with aspectRatio ${geminiAspectRatio} failed:`, errJson);
                 lastError = errJson;
                 continue;
             }
@@ -44,9 +63,33 @@ async function generateImageWithGemini(apiKey: string, promptText: string): Prom
                 };
             }
         } catch (err: any) {
-            console.warn(`Error trying ${model}:`, err.message);
+            console.warn(`Error trying ${model} with aspectRatio:`, err.message);
             lastError = err;
         }
+    }
+
+    // Intento 2 (Fallback): Sin generationConfig por si acaso
+    for (const model of modelsToTry) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: promptText }] }],
+                }),
+            });
+            if (res.ok) {
+                const json = await res.json();
+                const part = json.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+                if (part?.inlineData?.data) {
+                    return {
+                        mimeType: part.inlineData.mimeType || "image/png",
+                        data: part.inlineData.data,
+                    };
+                }
+            }
+        } catch (_) {}
     }
 
     throw new Error(
@@ -196,7 +239,7 @@ Key attributes: Mouth-watering appetizing look, photorealistic gourmet food pres
 
         // 4. Generar la imagen y el copy en paralelo
         const [imageResult, socialCopy] = await Promise.all([
-            generateImageWithGemini(geminiKey, imagePrompt),
+            generateImageWithGemini(geminiKey, imagePrompt, formato),
             generateCopy(geminiKey, {
                 producto_nombre,
                 categoria_nombre,

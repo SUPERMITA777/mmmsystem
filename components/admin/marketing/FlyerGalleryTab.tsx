@@ -179,13 +179,16 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {flyers.map((flyer) => {
                     const isStory = flyer.formato === "story_9_16";
+                    const isPost45 = flyer.formato === "post_4_5";
                     return (
                         <div
                             key={flyer.id}
                             className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col group"
                         >
                             {/* Visual Preview */}
-                            <div className="relative bg-gray-900 overflow-hidden aspect-[9/16] max-h-72">
+                            <div className={`relative bg-gray-900 overflow-hidden flex items-center justify-center ${
+                                isStory ? "aspect-[9/16]" : isPost45 ? "aspect-[4/5]" : "aspect-square"
+                            }`}>
                                 <img
                                     src={flyer.imagen_url}
                                     alt={flyer.producto_nombre}
@@ -195,7 +198,7 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
                                 {/* Formato badge */}
                                 <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-medium text-white flex items-center gap-1 shadow">
                                     {isStory ? <Smartphone size={11} className="text-purple-300" /> : <Instagram size={11} className="text-pink-300" />}
-                                    {isStory ? "Story" : "Feed"}
+                                    {isStory ? "Story (9:16)" : isPost45 ? "Post (4:5)" : "Feed (1:1)"}
                                 </div>
 
                                 {/* Quick Inspect Overlay Button */}
