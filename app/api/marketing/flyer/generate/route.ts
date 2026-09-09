@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+interface ReferenceImage {
+    data: string; // base64
+    mimeType: string;
+    tipo?: string;
+    nombre?: string;
+}
+
 // Helper para generar imagen con Gemini en la relación de aspecto real
 async function generateImageWithGemini(
     apiKey: string,
     promptText: string,
-    formato: string = "story_9_16"
+    formato: string = "story_9_16",
+    referenceImages: ReferenceImage[] = []
 ): Promise<{ mimeType: string; data: string }> {
     const modelsToTry = [
         "gemini-2.5-flash-image",
@@ -21,6 +29,25 @@ async function generateImageWithGemini(
         geminiAspectRatio = "4:5";
     }
 
+    // Construir partes del contenido multimodal (imágenes de referencia + prompt textual)
+    const parts: any[] = [];
+    if (referenceImages && referenceImages.length > 0) {
+        for (const ref of referenceImages) {
+            if (ref.data) {
+                const cleanData = ref.data.includes("base64,")
+                    ? ref.data.split("base64,")[1]
+                    : ref.data;
+                parts.push({
+                    inlineData: {
+                        mimeType: ref.mimeType || "image/png",
+                        data: cleanData,
+                    },
+                });
+            }
+        }
+    }
+    parts.push({ text: promptText });
+
     let lastError: any = null;
 
     // Intento 1: Con aspectRatio nativo en generationConfig
@@ -33,7 +60,7 @@ async function generateImageWithGemini(
                 body: JSON.stringify({
                     contents: [
                         {
-                            parts: [{ text: promptText }],
+                            parts,
                         },
                     ],
                     generationConfig: {
@@ -171,6 +198,7 @@ export async function POST(request: Request) {
             formato = "story_9_16",
             llamado_accion,
             titulo_promo,
+            imagenes_referencia = [],
         } = body;
 
         if (!sucursal_id) {
@@ -225,6 +253,12 @@ export async function POST(request: Request) {
         }
 
         // 3. Elaborar prompt gastronómico completo
+        const refImagesText = imagenes_referencia.length > 0
+            ? `\nIMPORTANT BRANDING & REFERENCE INSTRUCTIONS:
+The user has attached ${imagenes_referencia.length} reference image(s) (including the restaurant official logo, brand mark, or dish presentation).
+Naturally and prominently incorporate the provided logo/branding element into the promotional flyer composition (e.g. at the top header or prominent corner), preserving its shape, typography, and recognizable brand identity.`
+            : "";
+
         const imagePrompt = `A professional commercial food advertising flyer poster for a restaurant.
 ${categoria_nombre ? `Category / Culinary type: ${categoria_nombre}.` : ""}
 Featured food / Promotional offer: ${producto_nombre}.
@@ -233,13 +267,14 @@ ${titulo_promo ? `Theme/Banner style: "${titulo_promo}".` : ""}
 Visual style: ${chosenStyleDesc}.
 Framing & Composition: ${framingDesc}.
 ${prompt_usuario ? `Additional creative details: ${prompt_usuario}.` : ""}
+${refImagesText}
 Key attributes: Mouth-watering appetizing look, photorealistic gourmet food presentation, vibrant colors, premium commercial food photography, award-winning culinary styling, no distorted elements, studio quality.`;
 
-        console.log("Generando imagen con prompt:", imagePrompt);
+        console.log("Generando imagen con prompt:", imagePrompt, "Imágenes de referencia:", imagenes_referencia.length);
 
         // 4. Generar la imagen y el copy en paralelo
         const [imageResult, socialCopy] = await Promise.all([
-            generateImageWithGemini(geminiKey, imagePrompt, formato),
+            generateImageWithGemini(geminiKey, imagePrompt, formato, imagenes_referencia),
             generateCopy(geminiKey, {
                 producto_nombre,
                 categoria_nombre,

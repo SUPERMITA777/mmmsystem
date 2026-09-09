@@ -22,9 +22,20 @@ import {
     Loader2,
     Plus,
     Filter,
-    Percent
+    Percent,
+    Upload,
+    ImagePlus
 } from "lucide-react";
 import FlyerResultView, { GeneratedFlyer } from "./FlyerResultView";
+
+export interface ReferenceAsset {
+    id: string;
+    nombre: string;
+    mimeType: string;
+    data: string;
+    previewUrl: string;
+    tipo: "logo" | "producto" | "elemento";
+}
 
 interface Categoria {
     id: string;
@@ -145,6 +156,8 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
     const [promptUsuario, setPromptUsuario] = useState("");
     const [tituloPromo, setTituloPromo] = useState("¡SUPER PROMO!");
     const [llamadoAccion, setLlamadoAccion] = useState("Pedí ahora por WhatsApp y te lo llevamos a casa");
+    const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
+    const [uploadingAsset, setUploadingAsset] = useState(false);
 
     // Loading & Result states
     const [loadingDetails, setLoadingDetails] = useState(false);
@@ -299,6 +312,89 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         }
     }
 
+    // Procesar y comprimir imágenes de referencia en el cliente
+    function processImageFile(file: File, tipo: "logo" | "producto" | "elemento" = "logo"): Promise<ReferenceAsset> {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    const maxDim = 800;
+                    let { width, height } = img;
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) {
+                        reject(new Error("No se pudo procesar imagen"));
+                        return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
+                    const base64Data = canvas.toDataURL(mimeType, 0.85);
+                    resolve({
+                        id: Math.random().toString(36).substring(2, 9),
+                        nombre: file.name,
+                        mimeType,
+                        data: base64Data,
+                        previewUrl: base64Data,
+                        tipo,
+                    });
+                };
+                img.onerror = reject;
+                img.src = e.target?.result as string;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function handleFilesUpload(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        if (referenceAssets.length + files.length > 3) {
+            alert("Podés subir hasta 3 imágenes de referencia (ej: logo, foto de producto o elementos).");
+            return;
+        }
+
+        setUploadingAsset(true);
+        try {
+            const newAssets: ReferenceAsset[] = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const defaultTipo = referenceAssets.length === 0 && i === 0 ? "logo" : "elemento";
+                const asset = await processImageFile(file, defaultTipo);
+                newAssets.push(asset);
+            }
+            setReferenceAssets((prev) => [...prev, ...newAssets]);
+        } catch (err: any) {
+            alert("Error al procesar la imagen: " + err.message);
+        } finally {
+            setUploadingAsset(false);
+            e.target.value = "";
+        }
+    }
+
+    function handleRemoveAsset(id: string) {
+        setReferenceAssets((prev) => prev.filter((a) => a.id !== id));
+    }
+
+    function handleChangeAssetType(id: string, tipo: "logo" | "producto" | "elemento") {
+        setReferenceAssets((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, tipo } : a))
+        );
+    }
+
     // Enviar solicitud de generación a la IA
     async function handleGenerate() {
         if (!productoNombre.trim()) {
@@ -332,6 +428,12 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                     formato,
                     titulo_promo: tituloPromo.trim() || undefined,
                     llamado_accion: llamadoAccion.trim() || undefined,
+                    imagenes_referencia: referenceAssets.map((a) => ({
+                        data: a.data,
+                        mimeType: a.mimeType,
+                        tipo: a.tipo,
+                        nombre: a.nombre,
+                    })),
                 }),
             });
 
@@ -816,6 +918,83 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                                 + {sug}
                             </button>
                         ))}
+                    </div>
+
+                    {/* Subida de Imágenes de Referencia (Logos, Marcas o Elementos Clave) */}
+                    <div className="pt-3 border-t border-gray-100 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                                <ImagePlus size={15} className="text-[#7B1FA2]" />
+                                Imágenes de Referencia (Logos, Marcas o Elementos Clave)
+                            </label>
+                            <span className="text-[11px] text-gray-400">
+                                {referenceAssets.length}/3 agregadas
+                            </span>
+                        </div>
+
+                        {/* Botón de Carga */}
+                        {referenceAssets.length < 3 && (
+                            <label className="flex items-center justify-center gap-2 p-3 bg-purple-50/60 hover:bg-purple-100/60 border border-dashed border-purple-300 rounded-xl cursor-pointer transition-colors group">
+                                <Upload size={16} className="text-[#7B1FA2] group-hover:scale-110 transition-transform" />
+                                <span className="text-xs font-bold text-[#7B1FA2]">
+                                    {uploadingAsset ? "Procesando imagen..." : "Subir Logo o Imagen de Referencia"}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    disabled={uploadingAsset}
+                                    onChange={handleFilesUpload}
+                                    className="hidden"
+                                />
+                            </label>
+                        )}
+
+                        {/* Lista de Imágenes de Referencia cargadas */}
+                        {referenceAssets.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                {referenceAssets.map((asset) => (
+                                    <div
+                                        key={asset.id}
+                                        className="p-2 bg-white rounded-xl border border-gray-200 shadow-2xs flex items-center gap-2.5 relative group"
+                                    >
+                                        <img
+                                            src={asset.previewUrl}
+                                            alt={asset.nombre}
+                                            className="w-12 h-12 rounded-lg object-contain bg-gray-50 border border-gray-100 p-0.5 shrink-0"
+                                        />
+                                        <div className="min-w-0 flex-1 space-y-1">
+                                            <p className="text-xs font-semibold text-gray-800 truncate" title={asset.nombre}>
+                                                {asset.nombre}
+                                            </p>
+                                            <select
+                                                value={asset.tipo}
+                                                onChange={(e) =>
+                                                    handleChangeAssetType(asset.id, e.target.value as any)
+                                                }
+                                                className="w-full text-[10px] font-semibold bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 outline-none"
+                                            >
+                                                <option value="logo">🏷️ Logo de la Marca</option>
+                                                <option value="producto">📸 Foto del Plato</option>
+                                                <option value="elemento">⭐ Elemento Clave</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveAsset(asset.id)}
+                                            className="p-1 rounded-full text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                                            title="Quitar imagen"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <p className="text-[11px] text-gray-400 leading-snug">
+                            La IA analizará esta imagen para incluir tu logo o reproducir los elementos de tu foto en el flyer manteniendo su identidad.
+                        </p>
                     </div>
                 </div>
 
