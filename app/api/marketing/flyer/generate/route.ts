@@ -60,6 +60,8 @@ async function generateCopy(
     apiKey: string,
     params: {
         producto_nombre: string;
+        categoria_nombre?: string;
+        productos_nombres?: string[];
         precio?: number;
         ingredientes?: string;
         estilo?: string;
@@ -68,10 +70,12 @@ async function generateCopy(
     }
 ): Promise<string> {
     const prompt = `Eres un experto copywriter de marketing gastronómico para redes sociales (Instagram y WhatsApp).
-Escribe un copy atractivo, vendedor y tentador para promocionar el siguiente producto en redes sociales:
-- Plato / Producto: ${params.producto_nombre}
+Escribe un copy atractivo, vendedor y tentador para promocionar el siguiente producto o combo en redes sociales:
+${params.categoria_nombre ? `- Categoría: ${params.categoria_nombre}` : ""}
+- Plato(s) / Promoción: ${params.producto_nombre}
+${params.productos_nombres && params.productos_nombres.length > 1 ? `- Productos incluidos en la promo: ${params.productos_nombres.join(", ")}` : ""}
 ${params.precio ? `- Precio promocional: $${params.precio}` : ""}
-${params.ingredientes ? `- Ingredientes / Características: ${params.ingredientes}` : ""}
+${params.ingredientes ? `- Ingredientes / Sabores: ${params.ingredientes}` : ""}
 ${params.estilo ? `- Estilo de la marca: ${params.estilo}` : ""}
 ${params.llamado_accion ? `- Llamado a la acción: ${params.llamado_accion}` : "- Llamado a la acción: Pedí ahora por WhatsApp o tienda online"}
 ${params.prompt_usuario ? `- Instrucciones adicionales del dueño: ${params.prompt_usuario}` : ""}
@@ -79,9 +83,10 @@ ${params.prompt_usuario ? `- Instrucciones adicionales del dueño: ${params.prom
 REGLAS DEL TEXTO:
 1. Incluye un título con gancho impactante y emojis atractivos.
 2. Descripción corta que despierte el apetito (resaltando ingredientes clave y textura).
-3. Precio y oferta clara.
-4. Llamado a la acción directo ("Pedí al WhatsApp", "Hacé tu pedido al link").
-5. Agrega 5 hashtags relevantes y populares al final.
+3. Si es un combo o incluye varios productos, destaca la combinación ideal de sabores.
+4. Precio y oferta clara.
+5. Llamado a la acción directo ("Pedí al WhatsApp", "Hacé tu pedido al link").
+6. Agrega 5 hashtags relevantes y populares al final.
 Responde únicamente con el texto listo para copiar y pegar, sin explicaciones ni saludos.`;
 
     try {
@@ -114,6 +119,8 @@ export async function POST(request: Request) {
             sucursal_id,
             producto_id,
             producto_nombre,
+            categoria_nombre,
+            productos_nombres,
             precio,
             ingredientes,
             prompt_usuario,
@@ -176,8 +183,9 @@ export async function POST(request: Request) {
 
         // 3. Elaborar prompt gastronómico completo
         const imagePrompt = `A professional commercial food advertising flyer poster for a restaurant.
-Main dish: ${producto_nombre}.
-${ingredientes ? `Visible delicious ingredients: ${ingredientes}.` : ""}
+${categoria_nombre ? `Category / Culinary type: ${categoria_nombre}.` : ""}
+Featured food / Promotional offer: ${producto_nombre}.
+${ingredientes ? `Key ingredients and visible elements: ${ingredientes}.` : ""}
 ${titulo_promo ? `Theme/Banner style: "${titulo_promo}".` : ""}
 Visual style: ${chosenStyleDesc}.
 Framing & Composition: ${framingDesc}.
@@ -191,6 +199,8 @@ Key attributes: Mouth-watering appetizing look, photorealistic gourmet food pres
             generateImageWithGemini(geminiKey, imagePrompt),
             generateCopy(geminiKey, {
                 producto_nombre,
+                categoria_nombre,
+                productos_nombres,
                 precio,
                 ingredientes,
                 estilo,

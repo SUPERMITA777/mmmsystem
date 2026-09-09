@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
     Sparkles,
@@ -19,9 +19,19 @@ import {
     Coffee,
     PartyPopper,
     X,
-    Loader2
+    Loader2,
+    Plus,
+    Filter,
+    Percent
 } from "lucide-react";
 import FlyerResultView, { GeneratedFlyer } from "./FlyerResultView";
+
+interface Categoria {
+    id: string;
+    nombre: string;
+    orden?: number;
+    activo: boolean;
+}
 
 interface Producto {
     id: string;
@@ -110,93 +120,177 @@ const SUGERENCIAS_PROMPT = [
     "Papas fritas crocantes y gaseosa fría",
     "Salsa especial chorreando",
     "Masa inflada y dorada al horno",
+    "Banquete con todos los productos servidos juntos",
     "Toque de hierbas frescas y orégano",
 ];
 
 export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps) {
+    // Data states
+    const [categorias, setCategorias] = useState<Categoria[]>([]);
     const [productos, setProductos] = useState<Producto[]>([]);
-    const [loadingProductos, setLoadingProductos] = useState(false);
-    const [searchProducto, setSearchProducto] = useState("");
-    const [selectedProducto, setSelectedProducto] = useState<Producto | null>(null);
+    const [loadingData, setLoadingData] = useState(false);
 
-    // Form states
+    // Filters and selections
+    const [selectedCategoriaId, setSelectedCategoriaId] = useState<string>("all");
+    const [searchProducto, setSearchProducto] = useState("");
+    const [selectedProductos, setSelectedProductos] = useState<Producto[]>([]);
+
+    // Form fields
     const [productoNombre, setProductoNombre] = useState("");
     const [precio, setPrecio] = useState<string>("");
+    const [precioRegularTotal, setPrecioRegularTotal] = useState<number>(0);
     const [ingredientes, setIngredientes] = useState("");
     const [estilo, setEstilo] = useState("gourmet");
     const [formato, setFormato] = useState("story_9_16");
     const [promptUsuario, setPromptUsuario] = useState("");
-    const [tituloPromo, setTituloPromo] = useState("¡PROMO ESPECIAL!");
+    const [tituloPromo, setTituloPromo] = useState("¡SUPER PROMO!");
     const [llamadoAccion, setLlamadoAccion] = useState("Pedí ahora por WhatsApp y te lo llevamos a casa");
 
-    // Loading / Result states
+    // Loading & Result states
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [generating, setGenerating] = useState(false);
     const [progressStep, setProgressStep] = useState(0);
     const [generatedFlyer, setGeneratedFlyer] = useState<GeneratedFlyer | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Cargar productos de la sucursal
+    // Cargar categorías y productos de la sucursal
     useEffect(() => {
         if (sucursalId) {
-            loadProductos();
+            loadInitialData();
         }
     }, [sucursalId]);
 
-    async function loadProductos() {
-        setLoadingProductos(true);
+    async function loadInitialData() {
+        setLoadingData(true);
         try {
-            const { data, error } = await supabase
+            // Cargar categorías
+            const { data: catsData } = await supabase
+                .from("categorias")
+                .select("id, nombre, orden, activo")
+                .eq("sucursal_id", sucursalId)
+                .eq("activo", true)
+                .order("orden", { ascending: true });
+
+            if (catsData) setCategorias(catsData);
+
+            // Cargar productos
+            const { data: prodsData } = await supabase
                 .from("productos")
                 .select("id, nombre, precio, descripcion, imagen_url, categoria_id")
                 .eq("sucursal_id", sucursalId)
                 .eq("activo", true)
                 .order("nombre");
 
-            if (!error && data) {
-                setProductos(data);
-            }
+            if (prodsData) setProductos(prodsData);
         } catch (err) {
-            console.error("Error cargando productos:", err);
+            console.error("Error cargando datos de carta:", err);
         } finally {
-            setLoadingProductos(false);
+            setLoadingData(false);
         }
     }
 
-    // Al seleccionar un producto de la carta
-    async function handleSelectProduct(prod: Producto) {
-        setSelectedProducto(prod);
-        setProductoNombre(prod.nombre);
-        setPrecio(prod.precio ? prod.precio.toString() : "");
-        setSearchProducto("");
+    // Productos filtrados por categoría y búsqueda
+    const productosFiltrados = useMemo(() => {
+        return productos.filter((p) => {
+            const matchesCat = selectedCategoriaId === "all" || p.categoria_id === selectedCategoriaId;
+            const matchesSearch = p.nombre.toLowerCase().includes(searchProducto.toLowerCase());
+            return matchesCat && matchesSearch;
+        });
+    }, [productos, selectedCategoriaId, searchProducto]);
+
+    // Función para recalcular nombre, precios e ingredientes al cambiar los productos seleccionados
+    async function updateSelectionDetails(newSelected: Producto[]) {
+        setSelectedProductos(newSelected);
         setErrorMsg(null);
 
-        // Extraer ingredientes automáticamente desde el backend
+        if (newSelected.length === 0) {
+            setProductoNombre("");
+            setPrecio("");
+            setPrecioRegularTotal(0);
+            setIngredientes("");
+            return;
+        }
+
+        // 1. Calcular precio regular total
+        const total = newSelected.reduce((sum, p) => sum + (Number(p.precio) || 0), 0);
+        setPrecioRegularTotal(total);
+
+        // 2. Establecer nombre sugerido
+        const cat = categorias.find((c) => c.id === selectedCategoriaId);
+        if (newSelected.length === 1) {
+            setProductoNombre(newSelected[0].nombre);
+            setPrecio(newSelected[0].precio ? newSelected[0].precio.toString() : "");
+        } else {
+            const catName = cat ? cat.nombre : "Especial";
+            const prodsNames = newSelected.map((p) => p.nombre).join(" + ");
+            setProductoNombre(`Promo ${catName}: ${prodsNames}`);
+            // Sugerir el total o un descuento aproximado
+            setPrecio(total.toString());
+        }
+
+        // 3. Extraer ingredientes combinados desde el backend
         setLoadingDetails(true);
         try {
-            const res = await fetch(`/api/marketing/product-details?producto_id=${prod.id}`);
+            const idsParam = newSelected.map((p) => p.id).join(",");
+            const res = await fetch(`/api/marketing/product-details?producto_ids=${idsParam}`);
             const json = await res.json();
+
             if (json.success) {
                 if (json.ingredientesTexto) {
                     setIngredientes(json.ingredientesTexto);
-                } else if (prod.descripcion) {
-                    setIngredientes(prod.descripcion);
+                } else {
+                    const fallbackDesc = newSelected
+                        .map((p) => `${p.nombre}: ${p.descripcion || ""}`)
+                        .filter((s) => s.trim().length > 0)
+                        .join(" | ");
+                    setIngredientes(fallbackDesc);
                 }
-            } else if (prod.descripcion) {
-                setIngredientes(prod.descripcion);
+            } else {
+                const fallbackDesc = newSelected
+                    .map((p) => `${p.nombre}: ${p.descripcion || ""}`)
+                    .filter((s) => s.trim().length > 0)
+                    .join(" | ");
+                setIngredientes(fallbackDesc);
             }
         } catch (err) {
-            if (prod.descripcion) setIngredientes(prod.descripcion);
+            const fallbackDesc = newSelected
+                .map((p) => `${p.nombre}: ${p.descripcion || ""}`)
+                .filter((s) => s.trim().length > 0)
+                .join(" | ");
+            setIngredientes(fallbackDesc);
         } finally {
             setLoadingDetails(false);
         }
     }
 
-    function handleClearProduct() {
-        setSelectedProducto(null);
-        setProductoNombre("");
-        setPrecio("");
-        setIngredientes("");
+    // Alternar selección de un producto individual
+    function handleToggleProduct(prod: Producto) {
+        const exists = selectedProductos.some((p) => p.id === prod.id);
+        const updated = exists
+            ? selectedProductos.filter((p) => p.id !== prod.id)
+            : [...selectedProductos, prod];
+
+        updateSelectionDetails(updated);
+    }
+
+    // Seleccionar todos los productos de la categoría visible actual
+    function handleSelectAllVisible() {
+        // Unir los visibles con los ya seleccionados sin duplicados
+        const ids = new Set(selectedProductos.map((p) => p.id));
+        const toAdd = productosFiltrados.filter((p) => !ids.has(p.id));
+        updateSelectionDetails([...selectedProductos, ...toAdd]);
+    }
+
+    // Deseleccionar todos los productos
+    function handleClearAllSelected() {
+        updateSelectionDetails([]);
+    }
+
+    // Aplicar descuento porcentual rápido al precio total regular
+    function handleApplyDiscount(percentage: number) {
+        if (!precioRegularTotal) return;
+        const discounted = Math.round(precioRegularTotal * (1 - percentage / 100));
+        setPrecio(discounted.toString());
     }
 
     function handleAddPromptTag(tag: string) {
@@ -205,10 +299,10 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         }
     }
 
-    // Generar Flyer con IA
+    // Enviar solicitud de generación a la IA
     async function handleGenerate() {
         if (!productoNombre.trim()) {
-            setErrorMsg("Por favor indica el nombre del producto o la promoción.");
+            setErrorMsg("Por favor indica el nombre del producto o de la promoción.");
             return;
         }
 
@@ -216,9 +310,10 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         setGenerating(true);
         setProgressStep(1);
 
-        // Simulación de pasos de progreso visual
         const stepTimer1 = setTimeout(() => setProgressStep(2), 2500);
         const stepTimer2 = setTimeout(() => setProgressStep(3), 6000);
+
+        const cat = categorias.find((c) => c.id === selectedCategoriaId);
 
         try {
             const res = await fetch("/api/marketing/flyer/generate", {
@@ -226,8 +321,10 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     sucursal_id: sucursalId,
-                    producto_id: selectedProducto?.id || null,
+                    producto_id: selectedProductos.length === 1 ? selectedProductos[0].id : null,
                     producto_nombre: productoNombre,
+                    categoria_nombre: cat ? cat.nombre : undefined,
+                    productos_nombres: selectedProductos.map((p) => p.nombre),
                     precio: precio ? Number(precio) : null,
                     ingredientes: ingredientes.trim() || undefined,
                     prompt_usuario: promptUsuario.trim() || undefined,
@@ -256,7 +353,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         }
     }
 
-    // Si ya tenemos un flyer recién generado, mostramos la vista de resultado
+    // Si hay un flyer recién creado, mostrar la vista del resultado
     if (generatedFlyer) {
         return (
             <FlyerResultView
@@ -267,15 +364,12 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         );
     }
 
-    const filteredProducts = productos.filter((p) =>
-        p.nombre.toLowerCase().includes(searchProducto.toLowerCase())
-    );
+    const currentCatObj = categorias.find((c) => c.id === selectedCategoriaId);
 
     return (
         <div className="space-y-6">
-            {/* Generador Card Principal */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-6">
-                {/* Título de sección */}
+                {/* Cabecera */}
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-purple-100 text-[#7B1FA2] flex items-center justify-center shadow-sm">
@@ -286,13 +380,13 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                                 Diseñar Flyer con Inteligencia Artificial
                             </h2>
                             <p className="text-xs text-gray-500">
-                                Extraé datos de tu carta, elegí un estilo y generá imágenes gastronómicas en segundos
+                                Elegí una categoría, seleccioná los productos de la carta y generá pósters promocionales listos para redes
                             </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Error Banner si lo hay */}
+                {/* Banner de error */}
                 {errorMsg && (
                     <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-start justify-between gap-2">
                         <div>
@@ -305,142 +399,308 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                     </div>
                 )}
 
-                {/* Paso 1: Elegir Producto de la Carta */}
-                <div className="space-y-3">
-                    <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                        <Utensils size={16} className="text-[#7B1FA2]" />
-                        1. Elegir Producto de la Carta (o escribir uno nuevo)
-                    </label>
-
-                    {selectedProducto ? (
-                        /* Producto Seleccionado Box */
-                        <div className="flex items-center justify-between p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl">
-                            <div className="flex items-center gap-3">
-                                {selectedProducto.imagen_url ? (
-                                    <img
-                                        src={selectedProducto.imagen_url}
-                                        alt={selectedProducto.nombre}
-                                        className="w-12 h-12 rounded-lg object-cover border border-purple-200 shrink-0"
-                                    />
-                                ) : (
-                                    <div className="w-12 h-12 rounded-lg bg-purple-200 text-[#7B1FA2] flex items-center justify-center shrink-0">
-                                        <Utensils size={20} />
-                                    </div>
-                                )}
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold text-gray-900">{selectedProducto.nombre}</span>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-200 text-[#7B1FA2]">
-                                            De la Carta
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-purple-700 font-semibold mt-0.5">
-                                        Precio carta: ${selectedProducto.precio.toLocaleString()}
-                                    </p>
-                                </div>
-                            </div>
+                {/* PASO 1: Selección de Categoría y Productos */}
+                <div className="space-y-4 bg-gray-50/50 p-4 sm:p-5 rounded-2xl border border-gray-200/80">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                            <Filter size={16} className="text-[#7B1FA2]" />
+                            1. Elegir Categoría y Productos para la Promo
+                        </label>
+                        {selectedProductos.length > 0 && (
                             <button
-                                onClick={handleClearProduct}
-                                className="px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-gray-200"
+                                onClick={handleClearAllSelected}
+                                className="text-xs font-semibold text-red-600 hover:underline"
                             >
-                                Cambiar
+                                Limpiar selección ({selectedProductos.length})
                             </button>
+                        )}
+                    </div>
+
+                    {/* Selector de Categorías (Pills con scroll horizontal) */}
+                    <div className="space-y-2">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
+                            Filtrar por Categoría:
+                        </span>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedCategoriaId("all")}
+                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                                    selectedCategoriaId === "all"
+                                        ? "bg-[#7B1FA2] text-white shadow-sm"
+                                        : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100"
+                                }`}
+                            >
+                                Todas las Categorías
+                                <span
+                                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                                        selectedCategoriaId === "all"
+                                            ? "bg-white/20 text-white"
+                                            : "bg-gray-100 text-gray-600"
+                                    }`}
+                                >
+                                    {productos.length}
+                                </span>
+                            </button>
+
+                            {categorias.map((cat) => {
+                                const count = productos.filter((p) => p.categoria_id === cat.id).length;
+                                const isSelected = selectedCategoriaId === cat.id;
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => setSelectedCategoriaId(cat.id)}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
+                                            isSelected
+                                                ? "bg-[#7B1FA2] text-white shadow-sm"
+                                                : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100"
+                                        }`}
+                                    >
+                                        {cat.nombre}
+                                        <span
+                                            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                                                isSelected
+                                                    ? "bg-white/20 text-white"
+                                                    : "bg-gray-100 text-gray-600"
+                                            }`}
+                                        >
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
                         </div>
-                    ) : (
-                        /* Selector / Buscador */
-                        <div className="relative">
-                            <div className="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-100 transition-all">
-                                <Search size={18} className="text-gray-400 shrink-0 ml-1" />
-                                <input
-                                    type="text"
-                                    value={searchProducto}
-                                    onChange={(e) => setSearchProducto(e.target.value)}
-                                    placeholder="Buscar producto de tu carta (ej: Hamburguesa Triple, Pizza Fugazzeta...)"
-                                    className="w-full bg-transparent text-sm outline-none text-gray-900 placeholder:text-gray-400"
-                                />
+                    </div>
+
+                    {/* Buscador de productos dentro de la categoría y botón de selección masiva */}
+                    <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                        <div className="relative flex-1 w-full">
+                            <Search size={16} className="text-gray-400 absolute left-3 top-2.5" />
+                            <input
+                                type="text"
+                                value={searchProducto}
+                                onChange={(e) => setSearchProducto(e.target.value)}
+                                placeholder={
+                                    currentCatObj
+                                        ? `Buscar en ${currentCatObj.nombre}...`
+                                        : "Buscar en todos los productos..."
+                                }
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                            />
+                        </div>
+
+                        {productosFiltrados.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleSelectAllVisible}
+                                className="w-full sm:w-auto px-3.5 py-2 bg-white hover:bg-purple-50 border border-gray-200 text-[#7B1FA2] hover:border-purple-300 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 shadow-sm"
+                            >
+                                <Plus size={14} />
+                                Seleccionar todos los de esta lista ({productosFiltrados.length})
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Lista interactiva de productos para elegir */}
+                    <div className="space-y-1.5">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
+                            Toca los productos que saldrán en el flyer:
+                        </span>
+
+                        {loadingData ? (
+                            <div className="p-6 text-center text-xs text-gray-400">
+                                <Loader2 size={20} className="animate-spin text-[#7B1FA2] mx-auto mb-1.5" />
+                                Cargando carta de productos...
+                            </div>
+                        ) : productosFiltrados.length === 0 ? (
+                            <div className="p-4 bg-white border border-dashed border-gray-300 rounded-xl text-center text-xs text-gray-400">
+                                No se encontraron productos en esta selección.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1 custom-scrollbar">
+                                {productosFiltrados.map((prod) => {
+                                    const isSelected = selectedProductos.some((p) => p.id === prod.id);
+                                    return (
+                                        <button
+                                            key={prod.id}
+                                            type="button"
+                                            onClick={() => handleToggleProduct(prod)}
+                                            className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 group ${
+                                                isSelected
+                                                    ? "border-purple-500 bg-purple-50/80 shadow-sm ring-1 ring-purple-400"
+                                                    : "border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300"
+                                            }`}
+                                        >
+                                            {/* Checkbox visual */}
+                                            <div
+                                                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                                                    isSelected
+                                                        ? "bg-[#7B1FA2] border-[#7B1FA2] text-white"
+                                                        : "border-gray-300 bg-white group-hover:border-purple-400"
+                                                }`}
+                                            >
+                                                {isSelected && <Check size={13} strokeWidth={3} />}
+                                            </div>
+
+                                            {/* Thumbnail de producto */}
+                                            {prod.imagen_url ? (
+                                                <img
+                                                    src={prod.imagen_url}
+                                                    alt={prod.nombre}
+                                                    className="w-9 h-9 rounded-lg object-cover shrink-0 border border-gray-200"
+                                                />
+                                            ) : (
+                                                <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center shrink-0">
+                                                    <Utensils size={15} />
+                                                </div>
+                                            )}
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold text-gray-900 truncate">{prod.nombre}</p>
+                                                <p className="text-[11px] font-semibold text-[#7B1FA2]">${prod.precio.toLocaleString()}</p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Resumen de Productos Seleccionados (Chips) */}
+                    {selectedProductos.length > 0 && (
+                        <div className="pt-3 border-t border-purple-100 space-y-2 animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                                    <Utensils size={13} className="text-[#7B1FA2]" />
+                                    Productos en la Promo ({selectedProductos.length}):
+                                </span>
+                                {precioRegularTotal > 0 && (
+                                    <span className="text-xs text-gray-500 font-semibold">
+                                        Precio regular total:{" "}
+                                        <strong className="text-gray-800">${precioRegularTotal.toLocaleString()}</strong>
+                                    </span>
+                                )}
                             </div>
 
-                            {searchProducto && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto custom-scrollbar">
-                                    {filteredProducts.length > 0 ? (
-                                        filteredProducts.map((p) => (
-                                            <button
-                                                key={p.id}
-                                                onClick={() => handleSelectProduct(p)}
-                                                className="w-full px-4 py-2.5 text-left text-sm hover:bg-purple-50 flex items-center justify-between border-b border-gray-50 last:border-0 transition-colors"
-                                            >
-                                                <span className="font-semibold text-gray-900">{p.nombre}</span>
-                                                <span className="text-xs font-bold text-[#7B1FA2]">${p.precio}</span>
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="p-3 text-center text-xs text-gray-500">
-                                            No se encontraron productos con ese nombre. Podés escribirlo manualmente abajo.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                            <div className="flex flex-wrap gap-1.5">
+                                {selectedProductos.map((p) => (
+                                    <span
+                                        key={p.id}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-100 text-purple-950 text-xs font-semibold border border-purple-200 shadow-2xs"
+                                    >
+                                        <span>{p.nombre}</span>
+                                        <span className="text-[#7B1FA2] font-bold">${p.precio}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleProduct(p)}
+                                            className="p-0.5 hover:bg-purple-200 rounded text-purple-600 hover:text-red-600"
+                                            title="Quitar de la promo"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                     )}
+                </div>
 
-                    {/* Campos de Nombre, Precio e Ingredientes (Auto-rellenados y editables) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+                {/* PASO 2: Ajuste de Nombre, Precio Promocional e Ingredientes */}
+                <div className="space-y-4">
+                    <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                        <Tag size={16} className="text-[#7B1FA2]" />
+                        2. Datos y Oferta de la Promo (Editables)
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                        {/* Nombre de la promo */}
                         <div className="sm:col-span-8 space-y-1">
-                            <label className="text-xs font-semibold text-gray-600">Nombre del Producto / Promo</label>
+                            <label className="text-xs font-semibold text-gray-600">
+                                Título o Nombre de la Promoción
+                            </label>
                             <input
                                 type="text"
                                 value={productoNombre}
                                 onChange={(e) => setProductoNombre(e.target.value)}
-                                placeholder="Ej: Hamburguesa Doble Cheddar con Bacon"
+                                placeholder="Ej: Combo 2 Pizzas Napolitanas + Bebida"
                                 className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
                             />
                         </div>
+
+                        {/* Precio Promocional */}
                         <div className="sm:col-span-4 space-y-1">
-                            <label className="text-xs font-semibold text-gray-600">Precio de la Oferta ($)</label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-semibold text-gray-600">Precio de la Oferta ($)</label>
+                                {precioRegularTotal > 0 && Number(precio) < precioRegularTotal && (
+                                    <span className="text-[10px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+                                        Ahorra ${(precioRegularTotal - Number(precio)).toLocaleString()}
+                                    </span>
+                                )}
+                            </div>
                             <div className="relative">
                                 <DollarSign size={16} className="text-gray-400 absolute left-3 top-3" />
                                 <input
                                     type="number"
                                     value={precio}
                                     onChange={(e) => setPrecio(e.target.value)}
-                                    placeholder="Ej: 8500"
+                                    placeholder="Ej: 19990"
                                     className="w-full pl-8 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
                                 />
                             </div>
+
+                            {/* Descuentos rápidos si hay precio regular */}
+                            {precioRegularTotal > 0 && (
+                                <div className="flex items-center gap-1 pt-1">
+                                    <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-0.5">
+                                        <Percent size={10} /> Descuento:
+                                    </span>
+                                    {[10, 15, 20, 25].map((pct) => (
+                                        <button
+                                            key={pct}
+                                            type="button"
+                                            onClick={() => handleApplyDiscount(pct)}
+                                            className="px-1.5 py-0.5 rounded bg-gray-100 hover:bg-purple-100 hover:text-[#7B1FA2] text-[10px] font-bold text-gray-600 transition-colors"
+                                        >
+                                            -{pct}%
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Ingredientes / Ficha Técnica */}
+                        {/* Ingredientes / Detalles Combinados */}
                         <div className="sm:col-span-12 space-y-1">
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
-                                    <Tag size={13} className="text-purple-600" />
-                                    Ingredientes & Detalles Gastronómicos (extraídos de la carta)
+                                    <Utensils size={13} className="text-purple-600" />
+                                    Ingredientes & Sabores Extraídos de la Carta (Editables)
                                 </label>
                                 {loadingDetails && (
                                     <span className="text-[11px] text-purple-600 flex items-center gap-1">
-                                        <Loader2 size={12} className="animate-spin" /> Extrayendo ingredientes...
+                                        <Loader2 size={12} className="animate-spin" /> Extrayendo ingredientes de los productos...
                                     </span>
                                 )}
                             </div>
-                            <input
-                                type="text"
+                            <textarea
+                                rows={2}
                                 value={ingredientes}
                                 onChange={(e) => setIngredientes(e.target.value)}
-                                placeholder="Ej: Doble medallón de carne, queso cheddar fundido, panceta crocante, pan de papa brioche"
-                                className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100"
+                                placeholder="Ej: Masa artesanal al horno, muzzarella fundida, jamón cocido, hojas de albahaca fresca..."
+                                className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs text-gray-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 resize-none"
                             />
                             <p className="text-[11px] text-gray-400">
-                                La IA utilizará estos ingredientes exactos para crear los detalles visuales y el copy tentador.
+                                La IA usará estos detalles para representar fielmente la comida en el flyer y describirla en el copy.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Paso 2: Formato del Flyer */}
+                {/* PASO 3: Formato del Flyer */}
                 <div className="space-y-3 pt-2">
                     <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
                         <Smartphone size={16} className="text-[#7B1FA2]" />
-                        2. Formato del Flyer
+                        3. Formato del Flyer
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {FORMATOS.map((f) => {
@@ -474,11 +734,11 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                     </div>
                 </div>
 
-                {/* Paso 3: Estilo Visual del Flyer */}
+                {/* PASO 4: Estilo Visual Gastronómico */}
                 <div className="space-y-3 pt-2">
                     <label className="text-sm font-bold text-gray-800 flex items-center gap-2">
                         <Sparkles size={16} className="text-[#7B1FA2]" />
-                        3. Estilo Visual Gastronómico
+                        4. Estilo Visual Gastronómico
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {ESTILOS.map((est) => {
@@ -523,12 +783,12 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                     </div>
                 </div>
 
-                {/* Paso 4: Prompt Personalizado & Detalles Creativos */}
+                {/* PASO 5: Prompt Personalizado & Detalles Creativos */}
                 <div className="space-y-3 pt-2">
                     <label className="text-sm font-bold text-gray-800 flex items-center justify-between">
                         <span className="flex items-center gap-2">
                             <Wand2 size={16} className="text-[#7B1FA2]" />
-                            4. Prompt Creativo Adicional (Opcional)
+                            5. Prompt Creativo Adicional (Opcional)
                         </span>
                         <span className="text-[11px] font-normal text-gray-400">
                             Agregá detalles de ambiente, luces o promociones
@@ -539,7 +799,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                         rows={2}
                         value={promptUsuario}
                         onChange={(e) => setPromptUsuario(e.target.value)}
-                        placeholder="Ej: Iluminación de atardecer, queso derretido goteando, fondo rústico con copas de cerveza, aspecto premium..."
+                        placeholder="Ej: Iluminación cinematográfica, humo suave saliendo, salsa goteando, banquete apetitoso con todos los productos juntos..."
                         className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 outline-none focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all resize-none"
                     />
 
@@ -571,16 +831,20 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                             <>
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                 <span>
-                                    {progressStep === 1 && "Analizando plato e ingredientes..."}
-                                    {progressStep === 2 && "Generando póster publicitario con IA..."}
-                                    {progressStep === 3 && "Redactando copy para Instagram y WhatsApp..."}
+                                    {progressStep === 1 && "Analizando productos e ingredientes seleccionados..."}
+                                    {progressStep === 2 && "Generando arte publicitario con Google Gemini..."}
+                                    {progressStep === 3 && "Redactando copy promocional para Instagram y WhatsApp..."}
                                     {progressStep === 0 && "Iniciando generación con IA..."}
                                 </span>
                             </>
                         ) : (
                             <>
                                 <Sparkles size={20} className="text-amber-300" />
-                                <span>Generar Flyer con Inteligencia Artificial</span>
+                                <span>
+                                    {selectedProductos.length > 1
+                                        ? `Generar Flyer del Combo (${selectedProductos.length} productos) con IA`
+                                        : "Generar Flyer con Inteligencia Artificial"}
+                                </span>
                             </>
                         )}
                     </button>
