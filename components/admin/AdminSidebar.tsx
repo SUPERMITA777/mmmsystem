@@ -24,7 +24,8 @@ import {
   Bot,
   LogOut,
   Briefcase,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
@@ -49,6 +50,7 @@ const items = [
   { id: "clientes", href: "/admin/clientes", icon: Users, label: "Clientes" },
   { id: "descuentos", href: "/admin/descuentos", icon: Percent, label: "Descuentos" },
   { id: "promo-qr", href: "/admin/promos", icon: QrCode, label: "Promos" },
+  { id: "marketing", href: "/admin/marketing", icon: Sparkles, label: "Marketing" },
   { id: "agente-ia", href: "/admin/agente-ia", icon: Bot, label: "Agente IA" },
   { id: "integraciones", href: "/admin/integraciones", icon: Plug, label: "Integraciones" },
   { id: "usuarios", href: "/admin/usuarios", icon: UserCheck, label: "Usuarios y Permisos" },

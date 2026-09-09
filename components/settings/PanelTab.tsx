@@ -14,6 +14,7 @@ const MODULOS = [
   { id: "clientes", label: "Clientes" },
   { id: "descuentos", label: "Descuentos" },
   { id: "cajas", label: "Cajas" },
+  { id: "marketing", label: "Marketing" },
   { id: "permisos", label: "Permisos" },
   { id: "usuarios", label: "Usuarios" },
 ];

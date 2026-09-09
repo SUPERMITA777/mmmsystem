@@ -76,6 +76,7 @@ export default function UsuariosPage() {
         { id: "clientes", label: "Clientes" },
         { id: "descuentos", label: "Descuentos" },
         { id: "promos", label: "Promos" },
+        { id: "marketing", label: "Marketing" },
         { id: "agente-ia", label: "Agente IA" },
         { id: "integraciones", label: "Integraciones" },
         { id: "usuarios", label: "Usuarios" },
