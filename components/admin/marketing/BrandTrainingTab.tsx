@@ -108,11 +108,18 @@ export default function BrandTrainingTab({ sucursalId }: BrandTrainingTabProps) 
     try {
       const res = await fetch(`/api/marketing/brand-config?sucursal_id=${sucursalId}`);
       if (res.ok) {
-        const data = await res.json();
+        const json = await res.json();
+        const data = json.data || json;
         if (data) {
-          if (data.logos) setLogos(data.logos);
+          if (data.logos && Array.isArray(data.logos)) setLogos(data.logos);
           if (data.estilo_default) setEstiloDefault(data.estilo_default);
-          if (data.colores_marca) setColoresMarca(data.colores_marca);
+          if (data.colores_marca) {
+            setColoresMarca({
+              primario: data.colores_marca.primario || "#7B1FA2",
+              secundario: data.colores_marca.secundario || "#4A148C",
+              acento: data.colores_marca.acento || "#E1BEE7"
+            });
+          }
           if (data.tono_comunicacion) setTonoComunicacion(data.tono_comunicacion);
           if (data.slogan) setSlogan(data.slogan);
           if (data.instrucciones_permanentes) setInstruccionesPermanentes(data.instrucciones_permanentes);
@@ -134,6 +141,7 @@ export default function BrandTrainingTab({ sucursalId }: BrandTrainingTabProps) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sucursal_id: sucursalId,
+          logos,
           estilo_default: estiloDefault,
           colores_marca: coloresMarca,
           tono_comunicacion: tonoComunicacion,
@@ -174,20 +182,40 @@ export default function BrandTrainingTab({ sucursalId }: BrandTrainingTabProps) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sucursal_id: sucursalId,
+          image_data: base64Img,
           imagen_base64: base64Img,
+          file_name: file.name,
           nombre: file.name
         })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setLogos([...logos, data.logo]);
+      const json = await res.json();
+      if (res.ok && json.success) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "");
+        const newLogo: Logo = json.logo || { url: json.url, nombre: cleanName };
+        const updatedLogos = [...logos, newLogo];
+        setLogos(updatedLogos);
+
+        // Guardar automáticamente en la configuración para no requerir click en guardar
+        await fetch(`/api/marketing/brand-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sucursal_id: sucursalId,
+            logos: updatedLogos,
+            estilo_default: estiloDefault,
+            colores_marca: coloresMarca,
+            tono_comunicacion: tonoComunicacion,
+            slogan,
+            instrucciones_permanentes: instruccionesPermanentes
+          })
+        });
       } else {
-        alert("Error al subir el logo");
+        alert(json.error || "Error al subir el logo");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading logo:", error);
-      alert("Error al subir el logo");
+      alert(error.message || "Error al subir el logo");
     } finally {
       setUploadingLogo(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -197,29 +225,36 @@ export default function BrandTrainingTab({ sucursalId }: BrandTrainingTabProps) 
   const handleDeleteLogo = async (url: string) => {
     if (!confirm("¿Eliminar este logo?")) return;
     try {
-      const res = await fetch(`/api/marketing/brand-logo`, {
+      await fetch(`/api/marketing/brand-logo`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sucursal_id: sucursalId, url })
       });
-      if (res.ok) {
-        setLogos(logos.filter((l) => l.url !== url));
-      } else {
-        alert("Error al eliminar el logo");
-      }
+
+      const updatedLogos = logos.filter((l) => l.url !== url);
+      setLogos(updatedLogos);
+
+      await fetch(`/api/marketing/brand-config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sucursal_id: sucursalId,
+          logos: updatedLogos,
+          estilo_default: estiloDefault,
+          colores_marca: coloresMarca,
+          tono_comunicacion: tonoComunicacion,
+          slogan,
+          instrucciones_permanentes: instruccionesPermanentes
+        })
+      });
     } catch (error) {
       console.error("Error deleting logo:", error);
       alert("Error al eliminar el logo");
     }
   };
 
-  const handleLogoNameChange = async (url: string, newName: string) => {
-    setLogos(logos.map(l => l.url === url ? { ...l, nombre: newName } : l));
-    // Optionally update name in backend here, but standard PUT /brand-config can also handle logos if needed
-    // Assuming logos is saved in brand-config PUT, wait no, logos are handled by separate endpoints in this design.
-    // The instructions say "Grid of current logos (thumbnail 80x80, name input, delete button)", but doesn't mention saving name separately.
-    // We'll update state and save it in the main handleSave by doing a full PUT or ignoring. Wait, handleSave doesn't send logos. 
-    // We will just keep it in state, maybe it's just for display.
+  const handleLogoNameChange = (url: string, newName: string) => {
+    setLogos(logos.map((l) => (l.url === url ? { ...l, nombre: newName } : l)));
   };
 
   if (loading) {
