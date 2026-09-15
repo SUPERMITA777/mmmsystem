@@ -1,10 +1,19 @@
 "use client";
 
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Trash2, Tag } from "lucide-react";
+import { isProductPromoActive } from "@/lib/promoPriceUtils";
 
 export type Producto = {
   id: string;
   nombre: string;
+  precio?: number;
+  precio_promocional?: number | null;
+  promo_activo?: boolean;
+  promo_desde?: string | null;
+  promo_hasta?: string | null;
+  promo_hora_desde?: string | null;
+  promo_hora_hasta?: string | null;
+  promo_dias?: number[] | null;
   activo: boolean;
   visible_en_menu: boolean;
   producto_oculto: boolean;
@@ -72,7 +81,25 @@ export function ProductosList({
                     : "bg-red-500"
                 }`}
               />
-              <span className="flex-1 text-sm font-medium truncate">{producto.nombre}</span>
+              <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                <span className="text-sm font-medium truncate">{producto.nombre}</span>
+                {producto.promo_activo && producto.precio_promocional != null && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 ${
+                      isProductPromoActive(producto as any)
+                        ? "bg-amber-100 text-amber-800 border border-amber-300"
+                        : "bg-gray-100 text-gray-400"
+                    }`}
+                    title={
+                      isProductPromoActive(producto as any)
+                        ? `Promo activa: $${producto.precio_promocional}`
+                        : `Promo programada: $${producto.precio_promocional}`
+                    }
+                  >
+                    PROMO
+                  </span>
+                )}
+              </div>
 
               {/* Action Icons - Visible on Hover */}
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

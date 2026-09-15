@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { ExternalLink, ChefHat, TrendingUp, ChevronDown, Check } from "lucide-react";
+import { ExternalLink, ChefHat, TrendingUp, ChevronDown, Check, Tag, Clock, Calendar, AlertCircle } from "lucide-react";
 import ImageCropperModal from "@/components/ui/ImageCropperModal";
 import { useTenant } from "@/context/TenantContext";
 import { db } from "@/lib/db";
+import { isProductPromoActive, DIAS_SEMANA } from "@/lib/promoPriceUtils";
 
 type Categoria = {
   id: string;
@@ -21,6 +22,13 @@ type Producto = {
   descripcion?: string;
   precio: number;
   precio_costo?: number;
+  precio_promocional?: number | null;
+  promo_activo?: boolean;
+  promo_desde?: string | null;
+  promo_hasta?: string | null;
+  promo_hora_desde?: string | null;
+  promo_hora_hasta?: string | null;
+  promo_dias?: number[] | null;
   imagen_url?: string;
   categoria_id: string;
   activo: boolean;
@@ -75,6 +83,13 @@ export function ProductoEditor({
     producto_oculto: false,
     producto_sugerido: false,
     impresora: 'COCINA1',
+    precio_promocional: null,
+    promo_activo: false,
+    promo_desde: null,
+    promo_hasta: null,
+    promo_hora_desde: null,
+    promo_hora_hasta: null,
+    promo_dias: [0, 1, 2, 3, 4, 5, 6],
   };
 
   const [formData, setFormData] = useState<Producto | null>(isCreating ? emptyProduct : producto);
@@ -83,6 +98,53 @@ export function ProductoEditor({
   const [fichasTecnicas, setFichasTecnicas] = useState<FichaTecnica[]>([]);
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const isPromoActiveNow = useMemo(() => {
+    if (!formData) return false;
+    return isProductPromoActive(formData);
+  }, [formData]);
+
+  const descuentoCalculado = useMemo(() => {
+    if (!formData || !formData.precio || !formData.precio_promocional) {
+      return { monto: 0, porcentaje: 0 };
+    }
+    const regular = Number(formData.precio);
+    const promo = Number(formData.precio_promocional);
+    if (promo >= regular || promo <= 0) return { monto: 0, porcentaje: 0 };
+    const ahorro = regular - promo;
+    return {
+      monto: ahorro,
+      porcentaje: Math.round((ahorro / regular) * 100),
+    };
+  }, [formData]);
+
+  const setPromoHoy = () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (!formData) return;
+    setFormData({ ...formData, promo_desde: today, promo_hasta: today });
+  };
+
+  const setPromoFinde = () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToFri = (5 - day + 7) % 7;
+    const friday = new Date(now);
+    friday.setDate(now.getDate() + diffToFri);
+    const sunday = new Date(friday);
+    sunday.setDate(friday.getDate() + 2);
+    if (!formData) return;
+    setFormData({
+      ...formData,
+      promo_desde: friday.toISOString().split('T')[0],
+      promo_hasta: sunday.toISOString().split('T')[0],
+      promo_dias: [5, 6, 0],
+    });
+  };
+
+  const clearFechas = () => {
+    if (!formData) return;
+    setFormData({ ...formData, promo_desde: null, promo_hasta: null });
+  };
 
   useEffect(() => {
     if (isCreating) {
@@ -323,6 +385,264 @@ export function ProductoEditor({
               />
             </div>
           </fieldset>
+
+          {/* Precio Promocional Temporal */}
+          <div className="border border-amber-200/80 rounded-xl p-3.5 bg-amber-50/40 space-y-3.5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Tag size={15} />
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-gray-900 flex items-center gap-1.5 leading-none">
+                    Precio Promocional Temporal
+                    {isPromoActiveNow && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-green-100 text-green-700 border border-green-200">
+                        ACTIVA AHORA
+                      </span>
+                    )}
+                  </h5>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Reemplaza temporalmente el precio dentro del período fijado
+                  </p>
+                </div>
+              </div>
+
+              {/* Switch Activar Promo */}
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={!!formData.promo_activo}
+                  onChange={(e) => handleChange("promo_activo", e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            {formData.promo_activo && (
+              <div className="space-y-3 pt-1 border-t border-amber-200/60 animate-in fade-in duration-200">
+                {/* Input de Precio Promocional y Cálculo de Descuento */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+                  <fieldset className="border border-amber-300 rounded-lg px-3 pt-0.5 pb-1.5 bg-white focus-within:border-amber-500 transition-colors shadow-xs">
+                    <legend className="text-[10px] font-bold text-amber-800 px-1">
+                      Precio Promocional ($)
+                    </legend>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-amber-700 font-bold text-sm">$</span>
+                      <input
+                        type="text"
+                        value={formData.precio_promocional != null ? formData.precio_promocional.toLocaleString("es-AR") : ""}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          handleChange("precio_promocional", val ? Number(val) : null);
+                        }}
+                        className="flex-1 bg-transparent text-gray-900 font-black text-sm outline-none py-0.5"
+                        placeholder="Ej: 10000"
+                      />
+                    </div>
+                  </fieldset>
+
+                  {/* Ahorro / Descuento Calculado */}
+                  <div className="p-2 rounded-lg bg-white border border-amber-200/70 text-xs flex items-center justify-between shadow-xs">
+                    <div>
+                      <span className="text-gray-400 block text-[10px]">Ahorro cliente:</span>
+                      <span className="font-black text-amber-700 text-xs">
+                        {descuentoCalculado.monto > 0
+                          ? `$ ${new Intl.NumberFormat("es-AR").format(descuentoCalculado.monto)}`
+                          : "$ 0"}
+                      </span>
+                    </div>
+                    {descuentoCalculado.porcentaje > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                        -{descuentoCalculado.porcentaje}% OFF
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Advertencia si promo >= precio normal */}
+                {formData.precio_promocional != null && formData.precio_promocional >= formData.precio && (
+                  <p className="text-[11px] text-red-600 bg-red-50 p-2 rounded-lg border border-red-200 flex items-center gap-1.5">
+                    <AlertCircle size={13} />
+                    El precio promocional debe ser menor al precio de venta (${formData.precio}).
+                  </p>
+                )}
+
+                {/* Rango de Fechas */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-700 flex items-center gap-1 uppercase tracking-wider">
+                      <Calendar size={12} className="text-amber-600" />
+                      Rango de Fechas (opcional)
+                    </label>
+                    <div className="flex gap-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={setPromoHoy}
+                        className="text-amber-700 hover:underline font-semibold"
+                      >
+                        Hoy
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={setPromoFinde}
+                        className="text-amber-700 hover:underline font-semibold"
+                      >
+                        Fin de semana
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={clearFechas}
+                        className="text-gray-400 hover:underline"
+                      >
+                        Sin límite
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[9px] text-gray-500 block mb-0.5">Desde:</span>
+                      <input
+                        type="date"
+                        value={formData.promo_desde || ""}
+                        onChange={(e) => handleChange("promo_desde", e.target.value || null)}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-500 block mb-0.5">Hasta:</span>
+                      <input
+                        type="date"
+                        value={formData.promo_hasta || ""}
+                        onChange={(e) => handleChange("promo_hasta", e.target.value || null)}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rango de Horarios */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-700 flex items-center gap-1 uppercase tracking-wider">
+                      <Clock size={12} className="text-amber-600" />
+                      Horario de Vigencia (opcional)
+                    </label>
+                    <div className="flex gap-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleChange("promo_hora_desde", "20:00");
+                          handleChange("promo_hora_hasta", "23:59");
+                        }}
+                        className="text-amber-700 hover:underline font-semibold"
+                      >
+                        Noche (20 a 00hs)
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleChange("promo_hora_desde", null);
+                          handleChange("promo_hora_hasta", null);
+                        }}
+                        className="text-gray-400 hover:underline"
+                      >
+                        Todo el día
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[9px] text-gray-500 block mb-0.5">Hora desde:</span>
+                      <input
+                        type="time"
+                        value={formData.promo_hora_desde || ""}
+                        onChange={(e) => handleChange("promo_hora_desde", e.target.value || null)}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-500 block mb-0.5">Hora hasta:</span>
+                      <input
+                        type="time"
+                        value={formData.promo_hora_hasta || ""}
+                        onChange={(e) => handleChange("promo_hora_hasta", e.target.value || null)}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-800 outline-none focus:border-amber-400 transition-colors"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Días de la Semana */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">
+                      Días aplicables:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allDays = [0, 1, 2, 3, 4, 5, 6];
+                        const current = formData.promo_dias || [];
+                        if (current.length === 7) {
+                          handleChange("promo_dias", []);
+                        } else {
+                          handleChange("promo_dias", allDays);
+                        }
+                      }}
+                      className="text-[10px] text-amber-700 hover:underline font-semibold"
+                    >
+                      {(formData.promo_dias || []).length === 7 ? "Deseleccionar todos" : "Todos los días"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {DIAS_SEMANA.map((d) => {
+                      const selected = (formData.promo_dias || []).includes(d.dia);
+                      return (
+                        <button
+                          key={d.dia}
+                          type="button"
+                          onClick={() => {
+                            const current = formData.promo_dias || [0, 1, 2, 3, 4, 5, 6];
+                            const next = selected
+                              ? current.filter((x) => x !== d.dia)
+                              : [...current, d.dia];
+                            handleChange("promo_dias", next);
+                          }}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all ${
+                            selected
+                              ? "bg-amber-500 text-white shadow-xs"
+                              : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100"
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Estado en vivo */}
+                <div className="pt-2 border-t border-amber-200/60 flex items-center gap-2 text-xs">
+                  <span className="text-[11px] text-gray-500">Estado actual:</span>
+                  {isPromoActiveNow ? (
+                    <span className="font-bold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Vigente ahora ($ {new Intl.NumberFormat("es-AR").format(formData.precio_promocional || 0)})
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full text-[10px]">
+                      ⏳ Programada (Inactiva en este momento)
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Ficha Técnica / Receta */}
           <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/50">

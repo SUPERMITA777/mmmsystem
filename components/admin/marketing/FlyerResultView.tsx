@@ -12,7 +12,10 @@ import {
     Sparkles,
     Smartphone,
     Instagram,
-    Eye
+    Eye,
+    Pencil,
+    Loader2,
+    Wand2
 } from "lucide-react";
 
 export interface GeneratedFlyer {
@@ -31,13 +34,17 @@ interface FlyerResultViewProps {
     flyer: GeneratedFlyer;
     sucursalId: string;
     onReset: () => void;
+    onFlyerUpdated?: (flyer: GeneratedFlyer) => void;
 }
 
-export default function FlyerResultView({ flyer, sucursalId, onReset }: FlyerResultViewProps) {
+export default function FlyerResultView({ flyer, sucursalId, onReset, onFlyerUpdated }: FlyerResultViewProps) {
     const [copied, setCopied] = useState(false);
     const [settingAsPopup, setSettingAsPopup] = useState(false);
     const [popupSuccess, setPopupSuccess] = useState(false);
     const [fullImageModal, setFullImageModal] = useState(false);
+    const [correctionText, setCorrectionText] = useState("");
+    const [correcting, setCorrecting] = useState(false);
+    const [correctionError, setCorrectionError] = useState("");
 
     const handleCopyText = () => {
         if (!flyer.copy_social) return;
@@ -103,6 +110,59 @@ export default function FlyerResultView({ flyer, sucursalId, onReset }: FlyerRes
     };
 
     const isStory = flyer.formato === "story_9_16";
+
+    const handleCorrection = async () => {
+        if (!correctionText.trim() || correcting) return;
+        setCorrecting(true);
+        setCorrectionError("");
+
+        try {
+            // Download current flyer image as base64 for reference
+            const imgRes = await fetch(flyer.imagen_url);
+            const imgBlob = await imgRes.blob();
+            const imgBase64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(imgBlob);
+            });
+
+            const res = await fetch("/api/marketing/flyer/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursal_id: sucursalId,
+                    producto_nombre: flyer.producto_nombre,
+                    precio: flyer.precio,
+                    ingredientes: flyer.ingredientes,
+                    estilo: flyer.estilo,
+                    formato: flyer.formato,
+                    correccion: correctionText.trim(),
+                    imagen_origen_url: flyer.imagen_url,
+                    flyer_origen_id: flyer.id,
+                    imagenes_referencia: [{
+                        data: imgBase64,
+                        mimeType: "image/png",
+                        tipo: "Flyer Original",
+                        nombre: "Flyer a corregir",
+                    }],
+                }),
+            });
+
+            const json = await res.json();
+            if (json.success && json.flyer) {
+                setCorrectionText("");
+                if (onFlyerUpdated) {
+                    onFlyerUpdated(json.flyer);
+                }
+            } else {
+                setCorrectionError(json.message || "Error al aplicar correcciones");
+            }
+        } catch (err: any) {
+            setCorrectionError(err.message || "Error de conexión");
+        } finally {
+            setCorrecting(false);
+        }
+    };
 
     return (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-300">
@@ -262,6 +322,54 @@ export default function FlyerResultView({ flyer, sucursalId, onReset }: FlyerRes
                                 Se mostrará a los clientes cuando entren a tu menú digital
                             </p>
                         </div>
+                    </div>
+
+                    {/* Correcciones con IA */}
+                    <div className="bg-amber-50/60 rounded-xl p-4 border border-amber-200/60 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                                <Wand2 size={15} />
+                            </div>
+                            <div>
+                                <span className="text-xs font-bold text-gray-800 block">Correcciones con IA</span>
+                                <span className="text-[11px] text-gray-500">
+                                    Describí los cambios y se generará una versión corregida
+                                </span>
+                            </div>
+                        </div>
+
+                        <textarea
+                            value={correctionText}
+                            onChange={(e) => setCorrectionText(e.target.value)}
+                            placeholder='Ej: El texto dice "Piza", debería ser "Pizza". Hacé el logo más grande. Cambiá el fondo a más oscuro...'
+                            className="w-full p-3 rounded-xl border border-amber-200 bg-white text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent transition-all"
+                            rows={3}
+                            disabled={correcting}
+                        />
+
+                        {correctionError && (
+                            <p className="text-xs text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
+                                {correctionError}
+                            </p>
+                        )}
+
+                        <button
+                            onClick={handleCorrection}
+                            disabled={!correctionText.trim() || correcting}
+                            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                        >
+                            {correcting ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    Aplicando correcciones con IA...
+                                </>
+                            ) : (
+                                <>
+                                    <Wand2 size={16} />
+                                    Corregir con IA
+                                </>
+                            )}
+                        </button>
                     </div>
 
                     {/* Metadata summary */}

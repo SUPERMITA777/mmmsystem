@@ -137,6 +137,7 @@ async function generateCopy(
         estilo?: string;
         prompt_usuario?: string;
         llamado_accion?: string;
+        brandConfig?: any;
     }
 ): Promise<string> {
     const prompt = `Eres un experto copywriter de marketing gastronómico para redes sociales (Instagram y WhatsApp).
@@ -149,6 +150,9 @@ ${params.ingredientes ? `- Ingredientes / Sabores: ${params.ingredientes}` : ""}
 ${params.estilo ? `- Estilo de la marca: ${params.estilo}` : ""}
 ${params.llamado_accion ? `- Llamado a la acción: ${params.llamado_accion}` : "- Llamado a la acción: Pedí ahora por WhatsApp o tienda online"}
 ${params.prompt_usuario ? `- Instrucciones adicionales del dueño: ${params.prompt_usuario}` : ""}
+${params.brandConfig?.slogan ? `- Eslogan de la marca: "${params.brandConfig.slogan}"` : ""}
+${params.brandConfig?.tono_comunicacion ? `- Tono de comunicación: ${params.brandConfig.tono_comunicacion}` : ""}
+${params.brandConfig?.instrucciones_permanentes ? `- Instrucciones creativas permanentes de la marca: ${params.brandConfig.instrucciones_permanentes}` : ""}
 
 REGLAS DEL TEXTO:
 1. Incluye un título con gancho impactante y emojis atractivos.
@@ -199,6 +203,9 @@ export async function POST(request: Request) {
             llamado_accion,
             titulo_promo,
             imagenes_referencia = [],
+            correccion,
+            imagen_origen_url,
+            flyer_origen_id,
         } = body;
 
         if (!sucursal_id) {
@@ -224,6 +231,61 @@ export async function POST(request: Request) {
                 },
                 { status: 500 }
             );
+        }
+
+        // Load brand config for auto-injection
+        let brandConfig: any = null;
+        try {
+            const { data } = await supabaseAdmin
+                .from('marketing_brand_config')
+                .select('*')
+                .eq('sucursal_id', sucursal_id)
+                .single();
+            brandConfig = data;
+        } catch (e) { /* no brand config, that's fine */ }
+
+        // Merge brand permanent logos into reference images
+        const allReferenceImages = [...imagenes_referencia];
+        if (brandConfig?.logos && Array.isArray(brandConfig.logos)) {
+            for (const logo of brandConfig.logos) {
+                if (logo.url) {
+                    try {
+                        const logoRes = await fetch(logo.url);
+                        const logoBuffer = await logoRes.arrayBuffer();
+                        const logoBase64 = Buffer.from(logoBuffer).toString('base64');
+                        allReferenceImages.push({
+                            data: logoBase64,
+                            mimeType: 'image/png',
+                            tipo: 'Logo de la Marca',
+                            nombre: logo.nombre || 'Logo',
+                        });
+                    } catch (e) {
+                        console.warn('Error loading brand logo:', logo.url, e);
+                    }
+                }
+            }
+        }
+
+        if (correccion && imagen_origen_url) {
+            const alreadyHasOriginal = allReferenceImages.some(
+                (ref) => ref.tipo === "Flyer Original" || ref.tipo === "Imagen Original a Corregir"
+            );
+            if (!alreadyHasOriginal) {
+                try {
+                    const imgRes = await fetch(imagen_origen_url);
+                    const imgBuffer = await imgRes.arrayBuffer();
+                    const imgBase64 = Buffer.from(imgBuffer).toString('base64');
+                    // Prepend original image
+                    allReferenceImages.unshift({
+                        data: imgBase64,
+                        mimeType: 'image/png',
+                        tipo: 'Imagen Original a Corregir',
+                        nombre: 'Original',
+                    });
+                } catch (e) {
+                    console.warn('Error loading original image for correction:', imagen_origen_url, e);
+                }
+            }
         }
 
         // 1. Mapeo de estilos visuales
@@ -252,14 +314,41 @@ export async function POST(request: Request) {
             framingDesc = "portrait 4:5 aspect ratio composition, framed for vertical Instagram feed post, delicious commercial food presentation";
         }
 
+        const brandInstructions = brandConfig ? `
+BRAND IDENTITY & PERMANENT GUIDELINES:
+${brandConfig.slogan ? `- Brand slogan: "${brandConfig.slogan}"` : ''}
+${brandConfig.tono_comunicacion ? `- Communication tone: ${brandConfig.tono_comunicacion}` : ''}
+${brandConfig.colores_marca?.primario ? `- Primary brand color: ${brandConfig.colores_marca.primario}` : ''}
+${brandConfig.colores_marca?.secundario ? `- Secondary brand color: ${brandConfig.colores_marca.secundario}` : ''}
+${brandConfig.colores_marca?.acento ? `- Accent color: ${brandConfig.colores_marca.acento}` : ''}
+${brandConfig.instrucciones_permanentes ? `- Permanent creative instructions: ${brandConfig.instrucciones_permanentes}` : ''}
+${brandConfig.logos?.length > 0 ? `- The brand has ${brandConfig.logos.length} permanent logo(s) attached as reference images. Always incorporate them prominently.` : ''}
+` : '';
+
         // 3. Elaborar prompt gastronómico completo
-        const refImagesText = imagenes_referencia.length > 0
+        const refImagesText = allReferenceImages.length > 0
             ? `\nIMPORTANT BRANDING & REFERENCE INSTRUCTIONS:
-The user has attached ${imagenes_referencia.length} reference image(s) (including the restaurant official logo, brand mark, or dish presentation).
+The user has attached ${allReferenceImages.length} reference image(s) (including the restaurant official logo, brand mark, or dish presentation).
 Naturally and prominently incorporate the provided logo/branding element into the promotional flyer composition (e.g. at the top header or prominent corner), preserving its shape, typography, and recognizable brand identity.`
             : "";
 
-        const imagePrompt = `A professional commercial food advertising flyer poster for a restaurant.
+        let imagePrompt = "";
+        
+        if (correccion) {
+            imagePrompt = `You are given an existing promotional food flyer image. The user wants to make corrections/modifications to it.
+
+Original flyer details:
+- Product: ${producto_nombre}
+- Style: ${chosenStyleDesc}
+- Format: ${framingDesc}
+
+CORRECTION INSTRUCTIONS FROM THE USER:
+${correccion}
+
+Generate a NEW version of this flyer incorporating all the requested corrections while maintaining the overall design style, composition, and format. Keep everything that wasn't mentioned in the corrections the same.
+${brandInstructions}`;
+        } else {
+            imagePrompt = `A professional commercial food advertising flyer poster for a restaurant.
 ${categoria_nombre ? `Category / Culinary type: ${categoria_nombre}.` : ""}
 Featured food / Promotional offer: ${producto_nombre}.
 ${ingredientes ? `Key ingredients and visible elements: ${ingredientes}.` : ""}
@@ -268,13 +357,15 @@ Visual style: ${chosenStyleDesc}.
 Framing & Composition: ${framingDesc}.
 ${prompt_usuario ? `Additional creative details: ${prompt_usuario}.` : ""}
 ${refImagesText}
+${brandInstructions}
 Key attributes: Mouth-watering appetizing look, photorealistic gourmet food presentation, vibrant colors, premium commercial food photography, award-winning culinary styling, no distorted elements, studio quality.`;
+        }
 
-        console.log("Generando imagen con prompt:", imagePrompt, "Imágenes de referencia:", imagenes_referencia.length);
+        console.log("Generando imagen con prompt:", imagePrompt, "Imágenes de referencia:", allReferenceImages.length);
 
         // 4. Generar la imagen y el copy en paralelo
         const [imageResult, socialCopy] = await Promise.all([
-            generateImageWithGemini(geminiKey, imagePrompt, formato, imagenes_referencia),
+            generateImageWithGemini(geminiKey, imagePrompt, formato, allReferenceImages),
             generateCopy(geminiKey, {
                 producto_nombre,
                 categoria_nombre,
@@ -284,6 +375,7 @@ Key attributes: Mouth-watering appetizing look, photorealistic gourmet food pres
                 estilo,
                 prompt_usuario,
                 llamado_accion,
+                brandConfig,
             }),
         ]);
 
@@ -320,6 +412,8 @@ Key attributes: Mouth-watering appetizing look, photorealistic gourmet food pres
                     precio: precio ? Number(precio) : null,
                     ingredientes: ingredientes || null,
                     prompt_usuario: prompt_usuario || null,
+                    prompt_correccion: correccion || null,
+                    flyer_origen_id: flyer_origen_id || null,
                     estilo,
                     formato,
                     imagen_url: publicUrl,

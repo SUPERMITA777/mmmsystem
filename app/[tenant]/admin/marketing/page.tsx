@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useTenant } from "@/context/TenantContext";
-import { Sparkles, Image as ImageIcon, Settings2, Megaphone, Loader2 } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Settings2, Megaphone, Loader2, GraduationCap } from "lucide-react";
 import FlyerGeneratorTab from "@/components/admin/marketing/FlyerGeneratorTab";
 import FlyerGalleryTab from "@/components/admin/marketing/FlyerGalleryTab";
 import MarketingConfigTab from "@/components/admin/marketing/MarketingConfigTab";
+import BrandTrainingTab from "@/components/admin/marketing/BrandTrainingTab";
 
 export default function MarketingPage() {
     const { sucursalId, loading: tenantLoading } = useTenant();
-    const [activeTab, setActiveTab] = useState<"generator" | "gallery" | "config">("generator");
+    const [activeTab, setActiveTab] = useState<"generator" | "gallery" | "training" | "config">("generator");
 
     if (tenantLoading || !sucursalId) {
         return (
@@ -68,6 +69,18 @@ export default function MarketingPage() {
                 </button>
 
                 <button
+                    onClick={() => setActiveTab("training")}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+                        activeTab === "training"
+                            ? "bg-[#7B1FA2] text-white shadow-md shadow-purple-200"
+                            : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                >
+                    <GraduationCap size={16} className={activeTab === "training" ? "text-amber-300" : "text-purple-600"} />
+                    Entrenamiento
+                </button>
+
+                <button
                     onClick={() => setActiveTab("config")}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
                         activeTab === "config"
@@ -91,6 +104,10 @@ export default function MarketingPage() {
                         sucursalId={sucursalId}
                         onGoToGenerator={() => setActiveTab("generator")}
                     />
+                )}
+
+                {activeTab === "training" && (
+                    <BrandTrainingTab sucursalId={sucursalId} />
                 )}
 
                 {activeTab === "config" && (

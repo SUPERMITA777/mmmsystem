@@ -24,9 +24,11 @@ import {
     Filter,
     Percent,
     Upload,
-    ImagePlus
+    ImagePlus,
+    GraduationCap
 } from "lucide-react";
 import FlyerResultView, { GeneratedFlyer } from "./FlyerResultView";
+import { isProductPromoActive } from "@/lib/promoPriceUtils";
 
 export interface ReferenceAsset {
     id: string;
@@ -48,6 +50,13 @@ interface Producto {
     id: string;
     nombre: string;
     precio: number;
+    precio_promocional?: number | null;
+    promo_activo?: boolean;
+    promo_desde?: string | null;
+    promo_hasta?: string | null;
+    promo_hora_desde?: string | null;
+    promo_hora_hasta?: string | null;
+    promo_dias?: number[] | null;
     descripcion?: string;
     imagen_url?: string;
     categoria_id?: string;
@@ -165,6 +174,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
     const [progressStep, setProgressStep] = useState(0);
     const [generatedFlyer, setGeneratedFlyer] = useState<GeneratedFlyer | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [brandConfig, setBrandConfig] = useState<any>(null);
 
     // Cargar categorías y productos de la sucursal
     useEffect(() => {
@@ -176,6 +186,20 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
     async function loadInitialData() {
         setLoadingData(true);
         try {
+            // Cargar configuración de marca (entrenamiento)
+            try {
+                const brandRes = await fetch(`/api/marketing/brand-config?sucursal_id=${sucursalId}`);
+                const brandJson = await brandRes.json();
+                if (brandJson.success && brandJson.data) {
+                    setBrandConfig(brandJson.data);
+                    if (brandJson.data.estilo_default) {
+                        setEstilo(brandJson.data.estilo_default);
+                    }
+                }
+            } catch (brandErr) {
+                console.warn("No se pudo cargar brand-config:", brandErr);
+            }
+
             // Cargar categorías
             const { data: catsData } = await supabase
                 .from("categorias")
@@ -189,7 +213,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
             // Cargar productos
             const { data: prodsData } = await supabase
                 .from("productos")
-                .select("id, nombre, precio, descripcion, imagen_url, categoria_id")
+                .select("id, nombre, precio, precio_promocional, promo_activo, promo_desde, promo_hasta, promo_hora_desde, promo_hora_hasta, promo_dias, descripcion, imagen_url, categoria_id")
                 .eq("sucursal_id", sucursalId)
                 .eq("activo", true)
                 .order("nombre");
@@ -228,11 +252,20 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         const total = newSelected.reduce((sum, p) => sum + (Number(p.precio) || 0), 0);
         setPrecioRegularTotal(total);
 
-        // 2. Establecer nombre sugerido
+        // 2. Establecer nombre y precio sugerido
         const cat = categorias.find((c) => c.id === selectedCategoriaId);
         if (newSelected.length === 1) {
-            setProductoNombre(newSelected[0].nombre);
-            setPrecio(newSelected[0].precio ? newSelected[0].precio.toString() : "");
+            const first = newSelected[0];
+            setProductoNombre(first.nombre);
+            const promoActive = isProductPromoActive(first);
+            if (promoActive && first.precio_promocional) {
+                setPrecio(first.precio_promocional.toString());
+                const ahorro = first.precio - first.precio_promocional;
+                const pct = Math.round((ahorro / first.precio) * 100);
+                setTituloPromo(`¡PROMO -${pct}% OFF!`);
+            } else {
+                setPrecio(first.precio ? first.precio.toString() : "");
+            }
         } else {
             const catName = cat ? cat.nombre : "Especial";
             const prodsNames = newSelected.map((p) => p.nombre).join(" + ");
@@ -462,6 +495,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                 flyer={generatedFlyer}
                 sucursalId={sucursalId}
                 onReset={() => setGeneratedFlyer(null)}
+                onFlyerUpdated={(updated) => setGeneratedFlyer(updated)}
             />
         );
     }
@@ -472,7 +506,7 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
         <div className="space-y-6">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-6">
                 {/* Cabecera */}
-                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                <div className="flex flex-wrap items-center justify-between border-b border-gray-100 pb-4 gap-3">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-purple-100 text-[#7B1FA2] flex items-center justify-center shadow-sm">
                             <Wand2 size={20} />
@@ -486,6 +520,18 @@ export default function FlyerGeneratorTab({ sucursalId }: FlyerGeneratorTabProps
                             </p>
                         </div>
                     </div>
+
+                    {brandConfig && (brandConfig.logos?.length > 0 || brandConfig.instrucciones_permanentes || brandConfig.slogan) && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-xs font-semibold text-[#7B1FA2] shadow-xs">
+                            <GraduationCap size={15} />
+                            <span>Entrenamiento activo</span>
+                            {brandConfig.logos?.length > 0 && (
+                                <span className="bg-[#7B1FA2] text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                                    {brandConfig.logos.length} {brandConfig.logos.length === 1 ? "logo" : "logos"}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Banner de error */}

@@ -377,7 +377,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     }
 
     function getDiscountedPrice(producto: any): { original: number; final: number; porcentaje: number, id?: string, no_acumulable?: boolean, has_discount: boolean } {
-        const disc = getProductDiscount(producto.id, producto.categoria_id || "", descuentos);
+        const disc = getProductDiscount(producto.id, producto.categoria_id || "", descuentos, producto);
         if (!disc) return { original: Math.round(producto.precio), final: Math.round(producto.precio), porcentaje: 0, has_discount: false };
 
         return {

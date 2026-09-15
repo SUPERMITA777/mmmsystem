@@ -66,7 +66,7 @@ export default function AlternativoProductList({ categorias, onProductClick, des
                         {isExpanded && (
                             <div className="bg-white">
                                 {cat.productos.map((prod, index) => {
-                                    const discount = getProductDiscount(prod.id, cat.id, descuentos);
+                                    const discount = getProductDiscount(prod.id, cat.id, descuentos, prod);
                                     const hasPercentDiscount = discount && discount.porcentaje > 0;
                                     const precioConDescuento = discount ? discount.precioFinal(prod.precio) : prod.precio;
                                     const isLast = index === cat.productos.length - 1;
@@ -98,6 +98,11 @@ export default function AlternativoProductList({ categorias, onProductClick, des
                                                                 <span className="text-green-600 font-bold text-base">
                                                                     $ {new Intl.NumberFormat("es-AR").format(precioConDescuento)}
                                                                 </span>
+                                                                {discount && discount.porcentaje > 0 && (
+                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-green-100 text-green-700 border border-green-200">
+                                                                        -{discount.porcentaje}%
+                                                                    </span>
+                                                                )}
                                                             </>
                                                         ) : (
                                                             <span className="text-gray-900 font-bold text-base">

@@ -18,6 +18,13 @@ type Producto = {
   nombre: string;
   descripcion?: string;
   precio: number;
+  precio_promocional?: number | null;
+  promo_activo?: boolean;
+  promo_desde?: string | null;
+  promo_hasta?: string | null;
+  promo_hora_desde?: string | null;
+  promo_hora_hasta?: string | null;
+  promo_dias?: number[] | null;
   imagen_url?: string;
   producto_sugerido?: boolean;
   categoria_nombre?: string;
@@ -291,6 +298,13 @@ function PublicMenuContent() {
             nombre,
             descripcion,
             precio,
+            precio_promocional,
+            promo_activo,
+            promo_desde,
+            promo_hasta,
+            promo_hora_desde,
+            promo_hora_hasta,
+            promo_dias,
             imagen_url,
             producto_sugerido,
             visible_en_menu,

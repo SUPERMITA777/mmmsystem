@@ -70,7 +70,7 @@ export default function PublicProductList({ categorias, onProductClick, descuent
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {cat.productos.map((prod) => {
-                            const discount = getProductDiscount(prod.id, cat.id, descuentos);
+                            const discount = getProductDiscount(prod.id, cat.id, descuentos, prod);
                             const hasPercentDiscount = discount && discount.porcentaje > 0;
                             const precioConDescuento = discount ? discount.precioFinal(prod.precio) : prod.precio;
 
@@ -104,6 +104,11 @@ export default function PublicProductList({ categorias, onProductClick, descuent
                                                     <span className="text-green-400 font-black text-base tracking-tight">
                                                         $ {new Intl.NumberFormat("es-AR").format(precioConDescuento)}
                                                     </span>
+                                                    {discount && discount.porcentaje > 0 && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-green-500/20 text-green-400 border border-green-500/30">
+                                                            -{discount.porcentaje}%
+                                                        </span>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <span className="text-white font-black text-base tracking-tight">

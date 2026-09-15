@@ -14,7 +14,10 @@ import {
     Smartphone,
     Instagram,
     Loader2,
-    Sparkles
+    Sparkles,
+    Pencil,
+    Wand2,
+    X
 } from "lucide-react";
 import { GeneratedFlyer } from "./FlyerResultView";
 
@@ -30,6 +33,10 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [settingAsPopupId, setSettingAsPopupId] = useState<string | null>(null);
     const [popupSuccessId, setPopupSuccessId] = useState<string | null>(null);
+    const [editFlyer, setEditFlyer] = useState<GeneratedFlyer | null>(null);
+    const [editText, setEditText] = useState("");
+    const [editing, setEditing] = useState(false);
+    const [editError, setEditError] = useState("");
 
     useEffect(() => {
         if (sucursalId) {
@@ -121,6 +128,60 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
             }
         } catch (err: any) {
             alert("Error: " + err.message);
+        }
+    };
+
+    const handleEditFlyer = async () => {
+        if (!editFlyer || !editText.trim() || editing) return;
+        setEditing(true);
+        setEditError("");
+
+        try {
+            // Download flyer image as base64
+            const imgRes = await fetch(editFlyer.imagen_url);
+            const imgBlob = await imgRes.blob();
+            const imgBase64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(imgBlob);
+            });
+
+            const res = await fetch("/api/marketing/flyer/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursal_id: sucursalId,
+                    producto_nombre: editFlyer.producto_nombre,
+                    precio: editFlyer.precio,
+                    ingredientes: editFlyer.ingredientes,
+                    estilo: editFlyer.estilo,
+                    formato: editFlyer.formato,
+                    correccion: editText.trim(),
+                    imagen_origen_url: editFlyer.imagen_url,
+                    flyer_origen_id: editFlyer.id,
+                    imagenes_referencia: [{
+                        data: imgBase64,
+                        mimeType: "image/png",
+                        tipo: "Flyer Original",
+                        nombre: "Flyer a corregir",
+                    }],
+                }),
+            });
+
+            const json = await res.json();
+            if (json.success && json.flyer) {
+                // Add new corrected flyer to top of gallery
+                setFlyers((prev) => [json.flyer, ...prev]);
+                setEditFlyer(null);
+                setEditText("");
+                setSelectedFlyer(null);
+            } else {
+                setEditError(json.message || "Error al aplicar correcciones");
+            }
+        } catch (err: any) {
+            setEditError(err.message || "Error de conexión");
+        } finally {
+            setEditing(false);
         }
     };
 
@@ -269,6 +330,14 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
                                     </button>
 
                                     <button
+                                        onClick={() => { setEditFlyer(flyer); setEditText(""); setEditError(""); }}
+                                        className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                        title="Editar con IA"
+                                    >
+                                        <Pencil size={15} />
+                                    </button>
+
+                                    <button
                                         onClick={() => handleDelete(flyer.id)}
                                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Eliminar del historial"
@@ -316,21 +385,139 @@ export default function FlyerGalleryTab({ sucursalId, onGoToGenerator }: FlyerGa
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
                             <button
                                 onClick={() => handleCopy(selectedFlyer.id, selectedFlyer.copy_social)}
-                                className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center gap-1.5"
+                                className="px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-100 flex items-center gap-1.5"
                             >
                                 {copiedId === selectedFlyer.id ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
                                 {copiedId === selectedFlyer.id ? "¡Texto Copiado!" : "Copiar Texto"}
                             </button>
 
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        const f = selectedFlyer;
+                                        setSelectedFlyer(null);
+                                        setEditFlyer(f);
+                                        setEditText("");
+                                        setEditError("");
+                                    }}
+                                    className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800 hover:bg-amber-100 flex items-center gap-1.5 transition-colors"
+                                >
+                                    <Pencil size={14} />
+                                    Editar con IA
+                                </button>
+
+                                <button
+                                    onClick={() => handleDownload(selectedFlyer)}
+                                    className="px-4 py-2 rounded-xl bg-[#7B1FA2] text-white text-xs font-bold hover:bg-purple-700 flex items-center gap-1.5 shadow"
+                                >
+                                    <Download size={14} />
+                                    Descargar Flyer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Edición / Corrección con IA */}
+            {editFlyer && (
+                <div className="fixed inset-0 z-[130] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-amber-50/50">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                                    <Wand2 size={16} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-900 text-sm">Editar Flyer con IA</h3>
+                                    <p className="text-[11px] text-gray-500">{editFlyer.producto_nombre}</p>
+                                </div>
+                            </div>
                             <button
-                                onClick={() => handleDownload(selectedFlyer)}
-                                className="px-4 py-2 rounded-xl bg-[#7B1FA2] text-white text-xs font-bold hover:bg-purple-700 flex items-center gap-1.5 shadow"
+                                onClick={() => !editing && setEditFlyer(null)}
+                                disabled={editing}
+                                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-40"
                             >
-                                <Download size={14} />
-                                Descargar Flyer
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-5 overflow-y-auto space-y-4">
+                            {/* Preview actual */}
+                            <div className="flex gap-4 items-center p-3 rounded-xl bg-gray-50 border border-gray-200">
+                                <img
+                                    src={editFlyer.imagen_url}
+                                    alt={editFlyer.producto_nombre}
+                                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 shadow-sm"
+                                />
+                                <div className="text-xs space-y-1">
+                                    <p className="font-bold text-gray-800">{editFlyer.producto_nombre}</p>
+                                    <p className="text-gray-500">
+                                        Formato: <span className="uppercase font-semibold">{editFlyer.formato.replace(/_/g, " ")}</span>
+                                    </p>
+                                    <p className="text-gray-500">
+                                        Estilo: <span className="capitalize font-semibold">{editFlyer.estilo}</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Campo de instrucciones */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                                    <Pencil size={13} className="text-amber-600" />
+                                    ¿Qué corrección o cambio querés hacer?
+                                </label>
+                                <textarea
+                                    value={editText}
+                                    onChange={(e) => setEditText(e.target.value)}
+                                    placeholder='Ej: Cambiar el texto que dice "Piza" por "Pizza", hacer el fondo más oscuro, agrandar el logo o cambiar el precio a $4.500...'
+                                    rows={4}
+                                    disabled={editing}
+                                    className="w-full p-3 rounded-xl border border-amber-200 bg-white text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 focus:border-transparent transition-all"
+                                />
+                                <p className="text-[11px] text-gray-500 leading-relaxed">
+                                    La IA tomará el flyer original como referencia e interpretará tus correcciones para generar una nueva versión mejorada en el historial.
+                                </p>
+                            </div>
+
+                            {editError && (
+                                <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-200">
+                                    {editError}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => setEditFlyer(null)}
+                                disabled={editing}
+                                className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={handleEditFlyer}
+                                disabled={!editText.trim() || editing}
+                                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                                {editing ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin" />
+                                        Generando correcciones...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Wand2 size={14} />
+                                        Aplicar Correcciones
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

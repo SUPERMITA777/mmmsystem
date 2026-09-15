@@ -55,13 +55,37 @@ export function isValidDiscountTime(d: Descuento): boolean {
     return true;
 }
 
-export function getProductDiscount(productId: string, categoryId: string, descuentos: Descuento[] = []): {
+import { isProductPromoActive, PromoProduct } from "./promoPriceUtils";
+
+export function getProductDiscount(
+    productId: string,
+    categoryId: string,
+    descuentos: Descuento[] = [],
+    producto?: PromoProduct | null
+): {
     id: string;
     porcentaje: number;
     precioFinal: (precio: number) => number;
     no_acumulable: boolean;
     nombre?: string;
 } | null {
+    // 1. Prioridad máxima: Precio promocional temporal configurado en el producto
+    if (producto && isProductPromoActive(producto)) {
+        const regular = Number(producto.precio) || 0;
+        const promo = Number(producto.precio_promocional) || 0;
+        if (regular > 0 && promo > 0 && promo < regular) {
+            const ahorro = regular - promo;
+            const porcentaje = Math.round((ahorro / regular) * 100);
+            return {
+                id: `promo-product-${producto.id || productId}`,
+                porcentaje,
+                precioFinal: () => promo,
+                no_acumulable: true,
+                nombre: "Precio Promocional",
+            };
+        }
+    }
+
     if (!descuentos || descuentos.length === 0) return null;
 
     // Filter valid discounts by time/date/active

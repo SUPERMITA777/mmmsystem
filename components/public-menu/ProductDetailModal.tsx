@@ -192,7 +192,7 @@ export default function ProductDetailModal({
     }, 0);
 
     // Compute discounted price
-    const discount = getProductDiscount(producto.id, producto.categoria_id || "", descuentos);
+    const discount = getProductDiscount(producto.id, producto.categoria_id || "", descuentos, producto as any);
     const precioBase = discount ? discount.precioFinal(producto.precio) : producto.precio;
 
     const totalLinea = (precioBase + calculoAdicionales) * cantidad;
