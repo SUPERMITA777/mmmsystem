@@ -117,6 +117,7 @@ type Pedido = {
   descuento?: number;
   terminal_id?: string | null;
   notas_internas?: string;
+  pago_confirmado?: boolean | null;
 };
 
 const ESTADOS_3_COLUMNAS = [
@@ -143,6 +144,11 @@ const ESTADO_OPTIONS = [
 
 function fmt(n: number) {
   return new Intl.NumberFormat("es-AR").format(n);
+}
+
+// Pedido pagado por transferencia cuyo pago todavía no fue confirmado
+function isTransferenciaPendiente(p: { metodo_pago_nombre?: string | null; pago_confirmado?: boolean | null; estado?: string }) {
+  return /transfer/i.test(p.metodo_pago_nombre || "") && !p.pago_confirmado && p.estado !== "cancelado" && p.estado !== "entregado";
 }
 
 function aggregateAds(adicionales: any[]) {
@@ -203,6 +209,7 @@ export default function PanelPedidosPage() {
     printConfig?.bridge_ip || "127.0.0.1"
   );
   const { playNotificationSound, enableAudio, audioEnabled } = useNotifications();
+  const transferPendientes = hybridPedidos.filter((p: any) => isTransferenciaPendiente(p));
 
   async function fetchDepositosLemon() {
     if (!sucursalId) return;
@@ -285,12 +292,15 @@ export default function PanelPedidosPage() {
 
       const { error: pedError } = await supabase
         .from("pedidos")
-        .update({ estado: "confirmado", pago_confirmado: true })
+        .update({ pago_confirmado: true })
         .eq("id", pedidoId);
 
       if (pedError) throw pedError;
 
-      alert("¡Depósito asociado y pedido confirmado con éxito!");
+      // Si estaba pendiente, pasa a confirmado (no se toca si ya avanzó)
+      await supabase.from("pedidos").update({ estado: "confirmado" }).eq("id", pedidoId).eq("estado", "pendiente");
+
+      alert("¡Transferencia asociada y pedido marcado como pagado!");
       setSelectedDeposito(null);
       fetchDepositosLemon();
       fetchPedidos(true);
@@ -298,6 +308,15 @@ export default function PanelPedidosPage() {
       console.error("Error al asociar depósito:", err);
       alert(`Error al asociar depósito: ${err.message}`);
     }
+  }
+
+  async function marcarTransferenciaRecibida(pedidoId: string) {
+    const { error } = await supabase.from("pedidos").update({ pago_confirmado: true }).eq("id", pedidoId);
+    if (error) {
+      alert(`No se pudo marcar la transferencia: ${error.message}`);
+      return;
+    }
+    fetchPedidos(true);
   }
 
   async function descartarDeposito(depositoId: string) {
@@ -932,12 +951,24 @@ export default function PanelPedidosPage() {
                           ? `Mesa ${(pedido as any).mesas.numero}`
                           : `N°${numCorto}`;
 
+                          const esTransfPend = isTransferenciaPendiente(pedido);
                           return (
                             <div
                               key={pedido.id}
                               onClick={() => setSelectedPedido(pedido)}
-                              className={`w-full text-left rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
+                              className={`w-full text-left rounded-2xl overflow-hidden border transition-all cursor-pointer hover:shadow-lg active:scale-[0.99] ${esTransfPend ? "transfer-blink" : ""} ${selectedPedido?.id === pedido.id ? "border-[#7B1FA2] ring-2 ring-[#7B1FA2]/10 bg-white" : "border-gray-200 bg-white shadow-sm"}`}
                             >
+                              {esTransfPend && (
+                                <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-amber-400 text-amber-950">
+                                  <span className="text-[10px] font-black uppercase tracking-wide">⏳ Transferencia pendiente · ${fmt(Number(pedido.total))}</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); marcarTransferenciaRecibida(pedido.id); }}
+                                    className="text-[10px] font-black bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-0.5 active:scale-95"
+                                  >
+                                    ✓ Recibida
+                                  </button>
+                                </div>
+                              )}
                               {pedido.tipo === "salon" ? (
                                 <div 
                                   className="px-4 py-2 text-center"
@@ -1406,12 +1437,12 @@ export default function PanelPedidosPage() {
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh] animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-yellow-50">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">🍋</span>
+                <span className="text-2xl">{selectedDeposito.fuente === "lemon" || !selectedDeposito.fuente ? "🍋" : "💸"}</span>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">
-                    Depósito Lemon Cash Recibido
+                    Transferencia recibida{selectedDeposito.fuente === "personal_pay" ? " (Personal Pay)" : selectedDeposito.fuente === "lemon" || !selectedDeposito.fuente ? " (Lemon Cash)" : ""}
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">Asociación manual de pago</p>
+                  <p className="text-xs text-slate-500 font-medium">Hay más de un pedido posible: elegí a cuál corresponde</p>
                 </div>
               </div>
               <button 
@@ -1442,13 +1473,15 @@ export default function PanelPedidosPage() {
                   Seleccionar Pedido Abierto para Asociar
                 </h4>
                 
-                {hybridPedidos.filter(p => p.estado === 'pendiente').length === 0 ? (
+                {transferPendientes.length === 0 ? (
                   <p className="text-sm text-slate-500 py-4 text-center italic">
-                    No hay pedidos pendientes en este momento.
+                    No hay transferencias pendientes de cobro en este momento.
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-[35vh] overflow-y-auto pr-1">
-                    {hybridPedidos.filter(p => p.estado === 'pendiente').map(p => {
+                    {[...transferPendientes]
+                      .sort((a, b) => Number(Number(b.total) === Number(selectedDeposito.monto)) - Number(Number(a.total) === Number(selectedDeposito.monto)))
+                      .map(p => {
                       const isSameAmount = Number(p.total) === Number(selectedDeposito.monto);
                       return (
                         <button
