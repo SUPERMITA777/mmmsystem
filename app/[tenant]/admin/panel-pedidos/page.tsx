@@ -1381,13 +1381,23 @@ export default function PanelPedidosPage() {
                     <button onClick={() => cambiarEstado(selectedPedido, "preparando")} className="bg-orange-500 text-white font-bold px-6 py-3 rounded-xl text-sm">Comenzar Cocina</button>
                   )}
                   {selectedPedido.estado === "preparando" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="bg-green-600 text-white font-bold px-6 py-3 rounded-xl text-sm">Marcar Listo</button>
+                    <>
+                      <button onClick={() => cambiarEstado(selectedPedido, "listo")} className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors">Marcar Listo</button>
+                      <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="bg-gray-900 hover:bg-black text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors flex items-center gap-1.5" title="Finalizar y entregar pedido directamente">
+                        ✓ Entregado
+                      </button>
+                    </>
                   )}
                   {selectedPedido.estado === "listo" && (
-                    <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="bg-purple-600 text-white font-bold px-6 py-3 rounded-xl text-sm">Despachar</button>
+                    <>
+                      <button onClick={() => cambiarEstado(selectedPedido, "en_camino")} className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors">Despachar</button>
+                      <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="bg-gray-900 hover:bg-black text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors flex items-center gap-1.5" title="Finalizar y entregar pedido directamente">
+                        ✓ Entregado
+                      </button>
+                    </>
                   )}
                   {selectedPedido.estado === "en_camino" && (
-                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="bg-gray-900 text-white font-bold px-6 py-3 rounded-xl text-sm">Entregado</button>
+                    <button onClick={() => { cambiarEstado(selectedPedido, "entregado"); setSelectedPedido(null); }} className="bg-gray-900 hover:bg-black text-white font-bold px-6 py-3 rounded-xl text-sm transition-colors">Entregado</button>
                   )}
                 </div>
               </div>
