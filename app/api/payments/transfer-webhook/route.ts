@@ -34,8 +34,13 @@ function parseNotification(text: string) {
   const monto = parseFloat(raw);
   if (isNaN(monto)) return null;
 
-  const em = text.slice((m.index || 0) + m[0].length).match(/\s+de\s+(.+?)\s*\.?$/i);
-  return { monto, emisor: em?.[1]?.trim() || "Desconocido" };
+  // Personal Pay: "Recibiste $5.000 💸 Soledad Noemi Veron te envió dinero."
+  const resto = text.slice((m.index || 0) + m[0].length);
+  const em =
+    resto.match(/([^\n$]+?)\s+te\s+envi[óo]\s+dinero/i) ||
+    resto.match(/\s+de\s+(.+?)\s*\.?$/i);
+  const emisor = em?.[1]?.replace(/[^\p{L}\p{N}\s.'-]/gu, "").trim() || "Desconocido";
+  return { monto, emisor };
 }
 
 export async function POST(request: Request) {
@@ -60,6 +65,9 @@ export async function POST(request: Request) {
     let emisor: string | null = body.emisor || null;
 
     if (!monto && texto) {
+      if (!/recibiste|te\s+envi[óo]/i.test(texto)) {
+        return NextResponse.json({ success: true, action: "ignored", reason: "No es una notificación de dinero recibido" });
+      }
       const parsed = parseNotification(texto);
       if (parsed) {
         monto = parsed.monto;
