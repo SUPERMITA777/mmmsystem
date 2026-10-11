@@ -960,13 +960,19 @@ export default function PanelPedidosPage() {
                             >
                               {esTransfPend && (
                                 <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-amber-400 text-amber-950">
-                                  <span className="text-[10px] font-black uppercase tracking-wide">⏳ Transferencia pendiente · ${fmt(Number(pedido.total))}</span>
+                                  <span className="text-[10px] font-black uppercase tracking-wide">⏳ Transferencia PENDIENTE · ${fmt(Number(pedido.total))}</span>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); marcarTransferenciaRecibida(pedido.id); }}
-                                    className="text-[10px] font-black bg-green-600 hover:bg-green-700 text-white rounded-md px-2 py-0.5 active:scale-95"
+                                    className="text-[10px] font-bold bg-white/80 hover:bg-white text-amber-950 border border-amber-600/40 rounded-md px-2 py-0.5 active:scale-95"
+                                    title="Confirmar manualmente que la transferencia llegó"
                                   >
-                                    ✓ Recibida
+                                    Marcar recibida
                                   </button>
+                                </div>
+                              )}
+                              {!esTransfPend && /transfer/i.test(pedido.metodo_pago_nombre || "") && pedido.pago_confirmado && (
+                                <div className="flex items-center px-3 py-1.5 bg-green-600 text-white">
+                                  <span className="text-[10px] font-black uppercase tracking-wide">✓ Transferencia RECIBIDA · ${fmt(Number(pedido.total))}</span>
                                 </div>
                               )}
                               {pedido.tipo === "salon" ? (
