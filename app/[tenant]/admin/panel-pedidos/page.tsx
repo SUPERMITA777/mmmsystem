@@ -249,13 +249,23 @@ export default function PanelPedidosPage() {
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "lemon_deposits", filter: `sucursal_id=eq.${sucursalId}` }, (payload) => {
         console.log("[PanelPedidos] Nuevo depósito Lemon Realtime:", payload.new);
-        fetchDepositosLemon();
+        const fuenteNombre = payload.new.fuente === "personal_pay" ? "Personal Pay" : payload.new.fuente === "lemon" || !payload.new.fuente ? "Lemon Cash" : "transferencia";
+        const emisorTxt = payload.new.emisor && payload.new.emisor !== "Desconocido" ? ` de ${payload.new.emisor}` : "";
+        const montoTxt = payload.new.monto ? `${fmt(Number(payload.new.monto))} pesos` : "";
+
         if (payload.new.estado === "pendiente") {
-          playNotificationSound(true, `Lemon Cash por ${payload.new.emisor || 'desconocido'}`);
+          playNotificationSound(true, `transferencia por ${montoTxt}${emisorTxt}`);
           setSelectedDeposito(payload.new);
         } else {
           if (typeof window !== "undefined" && window.speechSynthesis) {
-            const utterance = new SpeechSynthesisUtterance(`Depósito de ${payload.new.monto} pesos de ${payload.new.emisor || 'desconocido'} confirmado automáticamente.`);
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(`Recibiste una transferencia por ${montoTxt}${emisorTxt}. Pedido confirmado.`);
+            const voices = window.speechSynthesis.getVoices();
+            const preferredVoice = voices.find(v => v.lang === 'es-AR') || 
+                                  voices.find(v => v.lang === 'es-MX') || 
+                                  voices.find(v => v.lang.startsWith('es-'));
+            if (preferredVoice) utterance.voice = preferredVoice;
+            utterance.rate = 0.95;
             window.speechSynthesis.speak(utterance);
           }
           fetchPedidos(true);
@@ -290,9 +300,31 @@ export default function PanelPedidosPage() {
 
       if (depError) throw depError;
 
+      const { data: depData } = await supabase
+        .from("lemon_deposits")
+        .select("emisor, monto, fuente")
+        .eq("id", depositoId)
+        .single();
+
+      const emisorNombre = depData?.emisor && depData.emisor !== "Desconocido" ? depData.emisor : null;
+      const appNombre = depData?.fuente === "personal_pay" ? "Personal Pay" : "Transferencia";
+      const notaEmisor = emisorNombre ? `[${appNombre}: ${emisorNombre}]` : `[${appNombre} confirmada]`;
+
+      // Obtener pedido actual para conservar notas previas
+      const { data: pedData } = await supabase
+        .from("pedidos")
+        .select("notas_internas")
+        .eq("id", pedidoId)
+        .single();
+
+      const nuevasNotas = pedData?.notas_internas ? `${pedData.notas_internas} | ${notaEmisor}` : notaEmisor;
+
       const { error: pedError } = await supabase
         .from("pedidos")
-        .update({ pago_confirmado: true })
+        .update({ 
+          pago_confirmado: true,
+          notas_internas: nuevasNotas 
+        })
         .eq("id", pedidoId);
 
       if (pedError) throw pedError;
@@ -971,8 +1003,13 @@ export default function PanelPedidosPage() {
                                 </div>
                               )}
                               {!esTransfPend && /transfer/i.test(pedido.metodo_pago_nombre || "") && pedido.pago_confirmado && (
-                                <div className="flex items-center px-3 py-1.5 bg-green-600 text-white">
+                                <div className="flex flex-col px-3 py-1.5 bg-green-600 text-white">
                                   <span className="text-[10px] font-black uppercase tracking-wide">✓ Transferencia RECIBIDA · ${fmt(Number(pedido.total))}</span>
+                                  {pedido.notas_internas && pedido.notas_internas.includes("Personal Pay:") && (
+                                    <span className="text-[9px] font-bold text-green-100 truncate">
+                                      👤 {pedido.notas_internas.split("Personal Pay:")[1].replace("]", "").trim()}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                               {pedido.tipo === "salon" ? (
@@ -1280,7 +1317,20 @@ export default function PanelPedidosPage() {
 
                   {/* Payment & timestamps */}
                   <div className="space-y-0 divide-y divide-gray-100 border border-gray-100 rounded-xl bg-white overflow-hidden text-sm text-gray-600">
-                    <div className="px-4 py-3">Pago: {selectedPedido.metodo_pago_nombre || "Efectivo"}</div>
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <span>Pago: <strong className="text-gray-900">{selectedPedido.metodo_pago_nombre || "Efectivo"}</strong></span>
+                      {selectedPedido.pago_confirmado ? (
+                        <span className="text-[10px] font-black uppercase text-green-700 bg-green-100 px-2 py-0.5 rounded-full">✓ Pagado</span>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Pendiente</span>
+                      )}
+                    </div>
+                    {selectedPedido.notas_internas && (
+                      <div className="px-4 py-2.5 bg-slate-50 text-xs">
+                        <span className="font-bold text-gray-500 uppercase text-[9px] block">Detalles de acreditación</span>
+                        <span className="text-gray-800 font-medium">{selectedPedido.notas_internas}</span>
+                      </div>
+                    )}
                     <div className="px-4 py-3">Creado: {formatHora(selectedPedido.created_at)}, hace {getElapsedMinutes(selectedPedido.created_at)} mins.</div>
                     {selectedPedido.tiempo_preparacion_minutos && (
                       <div className="px-4 py-3">Preparación: {selectedPedido.tiempo_preparacion_minutos} minutos.</div>

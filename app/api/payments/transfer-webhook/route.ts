@@ -60,15 +60,18 @@ export async function POST(request: Request) {
     if (!sucursalId) return NextResponse.json({ error: "sucursal_id is required" }, { status: 400 });
 
     const fuente: string = body.fuente || "personal_pay";
-    const texto: string = body.text || body.texto || "";
+    const titulo = body.title || body.titulo || "";
+    const contenido = body.text || body.texto || "";
+    const textoCompleto = `${titulo} ${contenido}`.trim();
+
     let monto: number | null = body.monto ? parseFloat(body.monto) : null;
     let emisor: string | null = body.emisor || null;
 
-    if (!monto && texto) {
-      if (!/recibiste|te\s+envi[óo]/i.test(texto)) {
+    if (!monto && textoCompleto) {
+      if (!/recibiste|te\s+envi[óo]/i.test(textoCompleto)) {
         return NextResponse.json({ success: true, action: "ignored", reason: "No es una notificación de dinero recibido" });
       }
-      const parsed = parseNotification(texto);
+      const parsed = parseNotification(textoCompleto);
       if (parsed) {
         monto = parsed.monto;
         emisor = emisor || parsed.emisor;
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
     // Pedidos por transferencia aún sin cobrar y con el monto exacto
     const { data: candidatos, error: pedErr } = await supabaseAdmin
       .from("pedidos")
-      .select("id, numero_pedido, total, estado, metodo_pago_nombre")
+      .select("id, numero_pedido, total, estado, metodo_pago_nombre, notas_internas")
       .eq("sucursal_id", sucursalId)
       .eq("total", monto)
       .eq("pago_confirmado", false)
@@ -95,9 +98,9 @@ export async function POST(request: Request) {
       .insert({
         sucursal_id: sucursalId,
         monto,
-        emisor,
+        emisor: emisor || "Desconocido",
         fuente,
-        texto_notificacion: texto || `Transferencia de $${monto}`,
+        texto_notificacion: textoCompleto || `Transferencia de $${monto}`,
         estado: unico ? "asociado" : "pendiente",
         pedido_id: unico ? unico.id : null,
       })
@@ -107,7 +110,17 @@ export async function POST(request: Request) {
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
     if (unico) {
-      const { error: updErr } = await supabaseAdmin.from("pedidos").update({ pago_confirmado: true }).eq("id", unico.id);
+      const notaEmisor = emisor && emisor !== "Desconocido" ? `[Transferencia Personal Pay: ${emisor}]` : "[Transferencia confirmada]";
+      const nuevasNotas = unico.notas_internas ? `${unico.notas_internas} | ${notaEmisor}` : notaEmisor;
+
+      const { error: updErr } = await supabaseAdmin
+        .from("pedidos")
+        .update({ 
+          pago_confirmado: true,
+          notas_internas: nuevasNotas
+        })
+        .eq("id", unico.id);
+
       if (updErr) {
         // No se pudo marcar: dejar el aviso pendiente para resolución manual
         await supabaseAdmin.from("lemon_deposits").update({ estado: "pendiente", pedido_id: null }).eq("id", deposito.id);
