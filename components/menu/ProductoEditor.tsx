@@ -166,25 +166,24 @@ export function ProductoEditor({
     if (!sucursalId) return;
     try {
       console.log("[ProductoEditor] Cargando fichas para sucursal:", sucursalId);
-      // Intentar primero local (Local-First)
+      // 1. Mostrar local primero (Local-First rápido)
       const local = await db.fichas_tecnicas.where("sucursal_id").equals(sucursalId).toArray();
       if (local && local.length > 0) {
         console.log("[ProductoEditor] Fichas cargadas desde Dexie:", local.length);
         setFichasTecnicas(local as FichaTecnica[]);
-        return;
       }
 
-      // Fallback a Supabase si no hay nada local
-      console.log("[ProductoEditor] Dexie vacío, consultando Supabase...");
+      // 2. Consultar siempre Supabase para asegurar que recetas nuevas aparezcan
       const { data, error } = await supabase
         .from("fichas_tecnicas")
         .select("id, nombre, costo_total")
         .eq("sucursal_id", sucursalId)
         .order("nombre");
       
-      if (error) throw error;
-      console.log("[ProductoEditor] Fichas cargadas desde Supabase:", data?.length || 0);
-      setFichasTecnicas((data as FichaTecnica[]) || []);
+      if (!error && data) {
+        setFichasTecnicas(data as FichaTecnica[]);
+        await (db.fichas_tecnicas as any).bulkPut(data).catch(() => {});
+      }
     } catch (err) {
       console.error("[ProductoEditor] Error loading recipes:", err);
     }

@@ -144,12 +144,23 @@ export default function NuevaFichaModal({
 
             if (editingFicha) {
                 // Update nombre/descripcion y costo
-                await supabase
+                const { error: updError } = await supabase
                     .from("fichas_tecnicas")
-                    .update({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, costo_total: costoTotal })
+                    .update({
+                        nombre: nombre.trim(),
+                        descripcion: descripcion.trim() || null,
+                        costo_total: costoTotal,
+                        updated_at: new Date().toISOString()
+                    })
                     .eq("id", editingFicha.id);
+                if (updError) throw updError;
+
                 // Delete existing items and re-insert
-                await supabase.from("ficha_tecnica_items").delete().eq("ficha_tecnica_id", editingFicha.id);
+                const { error: delError } = await supabase
+                    .from("ficha_tecnica_items")
+                    .delete()
+                    .eq("ficha_tecnica_id", editingFicha.id);
+                if (delError) throw delError;
             } else {
                 // Create new ficha
                 const { data, error } = await supabase
@@ -166,34 +177,40 @@ export default function NuevaFichaModal({
                 fichaId = data.id;
             }
 
-            // Insert items
+            // Insert items si hay alguno
             if (items.length > 0 && fichaId) {
                 const toInsert = items.map(item => ({
                     ficha_tecnica_id: fichaId,
                     tipo: item.tipo,
                     ingrediente_id: item.tipo === "ingrediente" ? item.ingrediente_id : null,
                     sub_ficha_id: item.tipo === "sub_receta" ? item.sub_ficha_id : null,
-                    cantidad: item.cantidad,
+                    cantidad: Number(item.cantidad) || 0,
                     sucursal_id: sucursalId,
                 }));
-                const { error } = await supabase.from("ficha_tecnica_items").insert(toInsert);
-                if (error) throw error;
+                const { error: itemsError } = await supabase.from("ficha_tecnica_items").insert(toInsert);
+                if (itemsError) throw itemsError;
+            }
 
-                // ACTUALIZACIÓN LOCAL (Dexie) para visibilidad inmediata
-                await db.fichas_tecnicas.put({
-                    id: fichaId,
-                    nombre: nombre.trim(),
-                    descripcion: descripcion.trim() || null,
-                    costo_total: costoTotal,
-                    sucursal_id: sucursalId,
-                    updated_at: new Date().toISOString()
-                });
+            // ACTUALIZACIÓN LOCAL (Dexie) para visibilidad inmediata (SIEMPRE, con o sin items)
+            if (fichaId) {
+                try {
+                    await (db.fichas_tecnicas as any).put({
+                        id: fichaId,
+                        nombre: nombre.trim(),
+                        descripcion: descripcion.trim() || null,
+                        costo_total: costoTotal,
+                        sucursal_id: sucursalId,
+                        updated_at: new Date().toISOString()
+                    });
+                } catch (dexieErr) {
+                    console.warn("[NuevaFichaModal] Advertencia al guardar en Dexie local:", dexieErr);
+                }
             }
 
             onSave();
         } catch (e: any) {
-            console.error(e);
-            alert("Error al guardar la receta: " + e.message);
+            console.error("[NuevaFichaModal] Error al guardar la receta:", e);
+            alert("Error al guardar la receta: " + (e.message || "Error desconocido"));
         } finally {
             setLoading(false);
         }

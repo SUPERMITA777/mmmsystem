@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Plus, ChefHat, Trash2, RefreshCw, TrendingUp, DollarSign, Percent } from "lucide-react";
+import { Plus, ChefHat, Trash2, RefreshCw, TrendingUp, DollarSign, Percent, Check, AlertTriangle, X } from "lucide-react";
 import NuevaFichaModal from "./NuevaFichaModal";
 import { db } from "@/lib/db";
 
@@ -48,27 +48,30 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingFicha, setEditingFicha] = useState<FichaTecnica | null>(null);
     const [activeView, setActiveView] = useState<"recetas" | "rentabilidad">("recetas");
+    const [recalculatingAll, setRecalculatingAll] = useState(false);
+    const [notification, setNotification] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
-    const fetchFichas = useCallback(async () => {
+    const fetchFichas = useCallback(async (forceRemote = false) => {
         if (!sucursalId) return;
         setLoading(true);
         console.log("[FichasTab] Cargando fichas para sucursal:", sucursalId);
         try {
-            // 1. Intentar local
-            const localData = await db.fichas_tecnicas
-                .where("sucursal_id")
-                .equals(sucursalId)
-                .toArray();
-            
-            if (localData.length > 0) {
-                console.log("[FichasTab] Fichas cargadas desde DB Local:", localData.length);
-                setFichas(localData as FichaTecnica[]);
-                setLoading(false);
-                return;
+            // 1. Mostrar local primero para respuesta inmediata
+            if (!forceRemote) {
+                const localData = await db.fichas_tecnicas
+                    .where("sucursal_id")
+                    .equals(sucursalId)
+                    .toArray();
+                
+                if (localData.length > 0) {
+                    console.log("[FichasTab] Fichas cargadas desde DB Local:", localData.length);
+                    setFichas(localData as FichaTecnica[]);
+                    setLoading(false);
+                }
             }
 
-            // 2. Fallback a Supabase
-            console.log("[FichasTab] DB Local vacía, consultando Supabase...");
+            // 2. Consultar siempre Supabase para asegurar datos actualizados
+            console.log("[FichasTab] Consultando fichas desde Supabase...");
             const { data, error } = await supabase
                 .from("fichas_tecnicas")
                 .select("*")
@@ -77,7 +80,13 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
             
             if (error) throw error;
             console.log("[FichasTab] Fichas cargadas desde Supabase:", data?.length || 0);
-            setFichas((data as FichaTecnica[]) || []);
+            const fetched = (data as FichaTecnica[]) || [];
+            setFichas(fetched);
+
+            // Sincronizar en Dexie para caché local
+            if (fetched.length > 0) {
+                await (db.fichas_tecnicas as any).bulkPut(fetched).catch(() => {});
+            }
         } catch (err) {
             console.error("[FichasTab] Error cargando fichas:", err);
         } finally {
@@ -125,12 +134,20 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
         }
     }, [selectedFicha, fetchFichaItems]);
 
+    useEffect(() => {
+        if (notification) {
+            const timer = setTimeout(() => setNotification(null), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [notification]);
+
     async function handleDeleteFicha(ficha: FichaTecnica) {
         if (!confirm(`¿Eliminar la receta "${ficha.nombre}"? Esta acción no se puede deshacer.`)) return;
         await supabase.from("fichas_tecnicas").delete().eq("id", ficha.id);
+        await (db.fichas_tecnicas as any).delete(ficha.id).catch(() => {});
         setSelectedFicha(null);
         setFichaItems([]);
-        fetchFichas();
+        fetchFichas(true);
         fetchProductosConFicha();
     }
 
@@ -148,13 +165,161 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
                 return acc + (item.cantidad * (item.sub_ficha?.costo_total || 0));
             }
         }, 0);
+
         await supabase
             .from("fichas_tecnicas")
-            .update({ costo_total: costo })
+            .update({ costo_total: costo, updated_at: new Date().toISOString() })
             .eq("id", selectedFicha.id);
+
+        try {
+            await (db.fichas_tecnicas as any).update(selectedFicha.id, {
+                costo_total: costo,
+                updated_at: new Date().toISOString()
+            });
+        } catch (err) {
+            console.warn("Error actualizando Dexie:", err);
+        }
+
         setSelectedFicha({ ...selectedFicha, costo_total: costo });
-        fetchFichas();
-        fetchProductosConFicha();
+        await fetchFichas(true);
+        await fetchProductosConFicha();
+        setNotification({
+            type: "success",
+            message: `Costo de "${selectedFicha.nombre}" actualizado a $${new Intl.NumberFormat("es-AR").format(costo)}.`
+        });
+    }
+
+    async function handleRecalcularTodas() {
+        if (!sucursalId) return;
+        setRecalculatingAll(true);
+        try {
+            // 1. Obtener todos los ingredientes frescos de la sucursal
+            const { data: rawIngredientes, error: ingError } = await supabase
+                .from("ingredientes")
+                .select("id, costo_unitario")
+                .eq("sucursal_id", sucursalId);
+
+            if (ingError) throw ingError;
+
+            const costoPorIngrediente = new Map<string, number>();
+            (rawIngredientes || []).forEach(i => {
+                costoPorIngrediente.set(i.id, Number(i.costo_unitario) || 0);
+            });
+
+            // 2. Obtener todas las fichas técnicas
+            const { data: rawFichas, error: fError } = await supabase
+                .from("fichas_tecnicas")
+                .select("*")
+                .eq("sucursal_id", sucursalId);
+
+            if (fError) throw fError;
+            if (!rawFichas || rawFichas.length === 0) {
+                setNotification({ type: "info", message: "No hay recetas cargadas para recalcular." });
+                return;
+            }
+
+            // 3. Obtener todos los ítems de las recetas de la sucursal
+            const { data: rawItems, error: itemsError } = await supabase
+                .from("ficha_tecnica_items")
+                .select("id, ficha_tecnica_id, tipo, cantidad, ingrediente_id, sub_ficha_id")
+                .eq("sucursal_id", sucursalId);
+
+            if (itemsError) throw itemsError;
+
+            // Agrupar items por ficha técnica
+            const itemsPorFicha = new Map<string, typeof rawItems>();
+            (rawItems || []).forEach(item => {
+                const list = itemsPorFicha.get(item.ficha_tecnica_id) || [];
+                list.push(item);
+                itemsPorFicha.set(item.ficha_tecnica_id, list);
+            });
+
+            // 4. Resolver costos recursivamente (manejo de sub-recetas y memoización)
+            const memoCosto = new Map<string, number>();
+
+            function calcularCostoFicha(fichaId: string, stack: Set<string>): number {
+                if (memoCosto.has(fichaId)) {
+                    return memoCosto.get(fichaId)!;
+                }
+                if (stack.has(fichaId)) {
+                    // Prevenir ciclos infinitos
+                    return 0;
+                }
+                stack.add(fichaId);
+
+                const items = itemsPorFicha.get(fichaId) || [];
+                let total = 0;
+
+                for (const it of items) {
+                    const cant = Number(it.cantidad) || 0;
+                    if (it.tipo === "ingrediente" && it.ingrediente_id) {
+                        const cost = costoPorIngrediente.get(it.ingrediente_id) || 0;
+                        total += cant * cost;
+                    } else if (it.tipo === "sub_receta" && it.sub_ficha_id) {
+                        const subCost = calcularCostoFicha(it.sub_ficha_id, new Set(stack));
+                        total += cant * subCost;
+                    }
+                }
+
+                memoCosto.set(fichaId, total);
+                return total;
+            }
+
+            // 5. Calcular nuevo costo para cada ficha
+            const updates: { id: string; costo_total: number }[] = [];
+            const fichasActualizadas: FichaTecnica[] = [];
+
+            for (const ficha of rawFichas) {
+                const nuevoCosto = Math.round(calcularCostoFicha(ficha.id, new Set()) * 100) / 100;
+                updates.push({ id: ficha.id, costo_total: nuevoCosto });
+                fichasActualizadas.push({
+                    ...ficha,
+                    costo_total: nuevoCosto,
+                });
+            }
+
+            // 6. Actualizar en Supabase en paralelo
+            const updatePromises = updates.map(u =>
+                supabase
+                    .from("fichas_tecnicas")
+                    .update({ costo_total: u.costo_total, updated_at: new Date().toISOString() })
+                    .eq("id", u.id)
+            );
+            await Promise.all(updatePromises);
+
+            // 7. Sincronizar Dexie (Local-first)
+            try {
+                await db.fichas_tecnicas.bulkPut(fichasActualizadas);
+            } catch (dexieErr) {
+                console.warn("Error actualizando Dexie:", dexieErr);
+            }
+
+            // 8. Actualizar estados locales de la interfaz
+            setFichas(fichasActualizadas);
+
+            if (selectedFicha) {
+                const selUpdated = fichasActualizadas.find(f => f.id === selectedFicha.id);
+                if (selUpdated) {
+                    setSelectedFicha(selUpdated);
+                    fetchFichaItems(selUpdated.id);
+                }
+            }
+
+            await fetchProductosConFicha();
+
+            setNotification({
+                type: "success",
+                message: `¡Se recalcularon exitosamente ${fichasActualizadas.length} receta${fichasActualizadas.length === 1 ? "" : "s"}!`
+            });
+        } catch (err: any) {
+            console.error("[FichasTab] Error al recalcular recetas:", err);
+            setNotification({
+                type: "error",
+                message: "Error al recalcular recetas: " + (err.message || "desconocido")
+            });
+        } finally {
+            setRecalculatingAll(false);
+        }
     }
 
     const costoCalculado = fichaItems.reduce((acc, item) => {
@@ -167,8 +332,8 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
 
     return (
         <div className="space-y-4">
-            {/* Sub-tabs */}
-            <div className="flex items-center justify-between">
+            {/* Sub-tabs & Action Buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
                     <button
                         onClick={() => setActiveView("recetas")}
@@ -183,15 +348,52 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
                         <TrendingUp size={15} /> Rentabilidad
                     </button>
                 </div>
-                {activeView === "recetas" && (
+                <div className="flex items-center gap-2">
                     <button
-                        onClick={() => { setEditingFicha(null); setIsModalOpen(true); }}
-                        className="flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95"
+                        onClick={handleRecalcularTodas}
+                        disabled={recalculatingAll || fichas.length === 0}
+                        className="flex items-center gap-2 bg-white text-gray-700 border border-gray-200 hover:border-purple-300 hover:text-purple-600 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Recalcula el costo total de todas las recetas en base a los precios actuales de los insumos"
                     >
-                        <Plus size={16} /> Nueva Receta
+                        <RefreshCw size={15} className={recalculatingAll ? "animate-spin text-purple-600" : ""} />
+                        <span>{recalculatingAll ? "Recalculando..." : "Recalcular Todas"}</span>
                     </button>
-                )}
+                    {activeView === "recetas" && (
+                        <button
+                            onClick={() => { setEditingFicha(null); setIsModalOpen(true); }}
+                            className="flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all shadow-md active:scale-95 whitespace-nowrap"
+                        >
+                            <Plus size={16} /> Nueva Receta
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {/* Notification Banner */}
+            {notification && (
+                <div
+                    className={`flex items-center justify-between p-3.5 rounded-2xl text-sm font-semibold transition-all duration-300 ${
+                        notification.type === "success"
+                            ? "bg-green-50 text-green-800 border border-green-200"
+                            : notification.type === "error"
+                            ? "bg-red-50 text-red-800 border border-red-200"
+                            : "bg-blue-50 text-blue-800 border border-blue-200"
+                    }`}
+                >
+                    <div className="flex items-center gap-2">
+                        {notification.type === "success" && <Check size={18} className="text-green-600 shrink-0" />}
+                        {notification.type === "error" && <AlertTriangle size={18} className="text-red-600 shrink-0" />}
+                        {notification.type === "info" && <RefreshCw size={18} className="text-blue-600 shrink-0" />}
+                        <span>{notification.message}</span>
+                    </div>
+                    <button
+                        onClick={() => setNotification(null)}
+                        className="text-gray-400 hover:text-gray-600 p-1"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
 
             {/* VIEW: Fichas Técnicas */}
             {activeView === "recetas" && (
@@ -449,11 +651,9 @@ export default function FichasTecnicasTab({ sucursalId, ingredientes }: Props) {
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingFicha(null); }}
                 onSave={async () => {
-                    await fetchFichas();
+                    await fetchFichas(true);
                     await fetchProductosConFicha();
                     if (selectedFicha) {
-                        const updated = fichas.find(f => f.id === selectedFicha.id);
-                        if (updated) setSelectedFicha(updated);
                         await fetchFichaItems(editingFicha?.id || selectedFicha.id);
                     }
                     setIsModalOpen(false);
