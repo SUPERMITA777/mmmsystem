@@ -16,8 +16,46 @@ function injectScript(file) {
 
 injectScript('injected.js');
 
-// Evitar procesar el mismo pedido múltiples veces
-let procesados = new Set();
+// Evitar procesar el mismo pedido en el mismo estado múltiples veces
+let ultimosEstados = new Map(); // id_py -> rawStatus
+
+// Mapeo automático de estados de PedidosYa hacia MMM SYSTEM
+function mapearEstadoPedidosYa(rawStatus) {
+    if (!rawStatus) return "pendiente";
+    const s = rawStatus.toUpperCase().trim();
+
+    // 1. Entregado / Finalizado / Despachado / Cancelado / Baja
+    if (s.includes("DELIVERED") || 
+        s.includes("PICKED_UP") || 
+        s.includes("IN_DELIVERY") || 
+        s.includes("RECONCILED") || 
+        s.includes("RECONCILIATION") ||
+        s.includes("CANCELLED") ||
+        s.includes("REJECTED")) {
+        return "entregado";
+    }
+
+    // 2. Listo (Comida lista para retirar)
+    if (s.includes("READY") || 
+        s.includes("WAITING_FOR_TRANSPORT") || 
+        s.includes("WAITING_FOR_COURIER") || 
+        s.includes("DRIVER_ARRIVED")) {
+        return "listo";
+    }
+
+    // 3. En Preparación (Aceptado por el restaurante o impreso automáticamente por PeYa)
+    if (s.includes("ACCEPTED") || 
+        s.includes("PREPARING") || 
+        s.includes("IN_PREPARATION") || 
+        s.includes("CONFIRMED") || 
+        s.includes("COOKING") ||
+        s.includes("MODIFIED_BY_VENDOR")) {
+        return "preparando";
+    }
+
+    // 4. Nuevo / Pendiente
+    return "pendiente";
+}
 
 // Escuchar mensajes provenientes de injected.js
 window.addEventListener("message", (event) => {
@@ -196,13 +234,14 @@ function normalizarYEnviarOrden(orden) {
         if (!idPy) return;
 
         const idStr = String(idPy);
-        if (procesados.has(idStr)) return;
+        const rawStatus = (orden.status || orden.deliveryStatus || '').toUpperCase().trim();
 
-        // Si la orden ya está cancelada o rechazada, no la cargamos como nueva
-        const status = (orden.status || orden.deliveryStatus || '').toUpperCase();
-        if (status.includes("CANCELLED") || status.includes("REJECTED")) {
+        // Si ya procesamos esta orden con este mismo estado, no volvemos a enviarla
+        if (ultimosEstados.has(idStr) && ultimosEstados.get(idStr) === rawStatus) {
             return;
         }
+
+        const estadoMmm = mapearEstadoPedidosYa(rawStatus);
 
         // Buscar el NÚMERO VISIBLE REAL de comanda (ej: #1234, 4521, etc.)
         let numeroReal = orden.orderNumber || 
@@ -276,6 +315,8 @@ function normalizarYEnviarOrden(orden) {
 
         const payload = {
             id_py: idStr,
+            status_py: rawStatus,
+            estado_mmm: estadoMmm,
             numero_real: numeroReal ? String(numeroReal).replace(/^#/, '').trim() : null,
             cliente: clienteNombre,
             telefono: clienteTelefono,
@@ -286,7 +327,7 @@ function normalizarYEnviarOrden(orden) {
             items: items.length > 0 ? items : [{ nombre: "Pedido PedidosYa", cantidad: 1, precio: total, adicionales: [] }]
         };
 
-        console.log(`✨ [MMM System Linker] ¡Nueva orden detectada #${payload.numero_real || idStr}! Enviando a MMM SYSTEM...`, payload);
+        console.log(`✨ [MMM System Linker] Pedido #${payload.numero_real || idStr} (${rawStatus} ➔ ${estadoMmm}). Enviando a MMM SYSTEM...`, payload);
 
         // Manejar envío verificando contexto válido de la extensión
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
@@ -296,10 +337,10 @@ function normalizarYEnviarOrden(orden) {
                     return;
                 }
                 if (res && res.success) {
-                    console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} cargado exitosamente en el panel.`);
-                    procesados.add(idStr);
+                    console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} actualizado a '${estadoMmm}' en el panel.`);
+                    ultimosEstados.set(idStr, rawStatus);
                 } else {
-                    console.error(`❌ [MMM System Linker] Error cargando pedido #${idStr}:`, res?.error);
+                    console.error(`❌ [MMM System Linker] Error actualizando pedido #${idStr}:`, res?.error);
                 }
             });
         }

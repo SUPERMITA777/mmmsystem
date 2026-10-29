@@ -174,7 +174,7 @@ async function enviarASupabase(pedidoPY) {
 
     // 1. Verificar si el pedido ya existe por su nota o id de PedidosYa
     const idPyStr = String(pedidoPY.id_py);
-    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(idPyStr)}*&select=id,numero_pedido`, {
+    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(idPyStr)}*&select=id,numero_pedido,estado`, {
         method: "GET",
         headers
     });
@@ -182,8 +182,25 @@ async function enviarASupabase(pedidoPY) {
     if (resCheck.ok) {
         const exist = await resCheck.json();
         if (exist && exist.length > 0) {
-            console.log(`[MMM PY] El pedido ${idPyStr} ya existe en Supabase (${exist[0].numero_pedido}). Se omite.`);
-            return { data: exist[0].id, numeroPedido: exist[0].numero_pedido };
+            const pedidoExistente = exist[0];
+            const nuevoEstado = pedidoPY.estado_mmm;
+
+            // Si cambió el estado en PedidosYa respecto al que tiene en MMM SYSTEM, actualizarlo inmediatamente
+            if (nuevoEstado && pedidoExistente.estado !== nuevoEstado) {
+                console.log(`[MMM PY] 🔄 Actualizando estado de comanda #${pedidoExistente.numero_pedido} (${idPyStr}): ${pedidoExistente.estado} ➔ ${nuevoEstado}`);
+                await fetch(`${supabaseUrl}/rest/v1/pedidos?id=eq.${pedidoExistente.id}`, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({
+                        estado: nuevoEstado,
+                        updated_at: new Date().toISOString()
+                    })
+                });
+                return { data: pedidoExistente.id, numeroPedido: pedidoExistente.numero_pedido, statusUpdated: true };
+            }
+
+            console.log(`[MMM PY] El pedido ${idPyStr} (${pedidoExistente.numero_pedido}) ya existe con estado '${pedidoExistente.estado}'.`);
+            return { data: pedidoExistente.id, numeroPedido: pedidoExistente.numero_pedido };
         }
     }
 
@@ -209,7 +226,7 @@ async function enviarASupabase(pedidoPY) {
         cliente_telefono: pedidoPY.telefono || "0000000000",
         cliente_direccion: pedidoPY.direccion || "",
         tipo: 'delivery',
-        estado: 'pendiente',
+        estado: pedidoPY.estado_mmm || 'preparando',
         origen: 'pedidosya',
         subtotal: subtotal,
         costo_envio: 0,
