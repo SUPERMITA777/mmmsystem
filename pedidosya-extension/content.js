@@ -72,7 +72,13 @@ function extraerProductosCatalogo(data) {
         if (typeof p.price === 'number') precio = p.price;
         else if (typeof p.price === 'string') precio = parseFloat(p.price);
         else if (p.pricing && typeof p.pricing.price === 'number') precio = p.pricing.price;
+        else if (p.pricing && typeof p.pricing.amount === 'number') precio = p.pricing.amount;
         else if (p.basePrice) precio = parseFloat(p.basePrice);
+        else if (p.amount) precio = parseFloat(p.amount);
+        else if (p.unitPrice) precio = parseFloat(p.unitPrice);
+        else if (p.salePrice) precio = parseFloat(p.salePrice);
+        else if (p.vendorPrice) precio = parseFloat(p.vendorPrice);
+        else if (p.finalPrice) precio = parseFloat(p.finalPrice);
 
         const descripcion = p.description || p.desc || "";
         const imagenUrl = p.imageUrl || p.image || p.picture || (Array.isArray(p.images) && p.images[0]?.url) || "";
