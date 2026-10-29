@@ -1,15 +1,17 @@
 {
     "manifest_version": 3,
     "name": "MMM System - PedidosYa Linker",
-    "version": "2.1",
-    "description": "Captura automática de pedidos de PedidosYa hacia MMM SYSTEM vía Network Interceptor.",
+    "version": "2.2",
+    "description": "Captura automática de pedidos y sincronización de catálogo de PedidosYa hacia MMM SYSTEM.",
     "permissions": [
         "storage"
     ],
     "host_permissions": [
         "https://*.supabase.co/*",
         "https://*.pedidosya.com/*",
-        "https://*.restaurant-partners.com/*"
+        "https://*.restaurant-partners.com/*",
+        "https://*.vercel.app/*",
+        "http://localhost:*/*"
     ],
     "background": {
         "service_worker": "background.js"

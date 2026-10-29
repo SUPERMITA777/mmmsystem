@@ -1,7 +1,7 @@
 // injected.js - Corre en el contexto real de la ventana de PedidosYa Portal
-// Intercepta únicamente las llamadas de órdenes / entregas en vivo
+// Intercepta las llamadas de órdenes en vivo y el catálogo de productos
 (function() {
-    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal");
+    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.2");
 
     function notificarExtension(payload) {
         window.postMessage({
@@ -10,11 +10,11 @@
         }, "*");
     }
 
-    function esUrlRelevante(url) {
+    function esUrlOrdenes(url) {
         if (!url || typeof url !== 'string') return false;
         const u = url.toLowerCase();
 
-        // 1. Descartar explícitamente catálogos, configuraciones, traducciones e impresiones
+        // Descartar explícitamente catálogos, configuraciones, traducciones e impresiones
         if (u.includes("catalogs") || 
             u.includes("products") || 
             u.includes("categories") || 
@@ -32,11 +32,29 @@
             return false;
         }
 
-        // 2. Aceptar únicamente endpoints de pedidos / deliveries
+        // Aceptar únicamente endpoints de pedidos / deliveries
         return u.includes("deliveries-web") || 
                u.includes("/deliveries") || 
                u.includes("/orders") || 
                u.includes("live-orders");
+    }
+
+    function esUrlCatalogo(url) {
+        if (!url || typeof url !== 'string') return false;
+        const u = url.toLowerCase();
+
+        // Descartar ruido
+        if (u.includes("translations") || 
+            u.includes("printing") || 
+            u.includes("escpos") || 
+            u.includes("assets") || 
+            u.includes("locize")) {
+            return false;
+        }
+
+        // Aceptar llamadas que traen productos o catálogo
+        return (u.includes("products") || u.includes("catalogs") || u.includes("/menu/")) &&
+               (u.includes("vendor-api") || u.includes("restaurant-partners") || u.includes("portal-app"));
     }
 
     // 1. Interceptar Fetch
@@ -47,12 +65,20 @@
             const rawUrl = args[0];
             const url = typeof rawUrl === 'string' ? rawUrl : (rawUrl?.url || '');
             
-            if (esUrlRelevante(url)) {
+            if (esUrlOrdenes(url)) {
                 const clone = response.clone();
                 clone.json().then(data => {
                     if (data) {
                         console.log("📦 [MMM Interceptor Fetch] Capturada respuesta de órdenes:", url);
-                        notificarExtension({ url, data });
+                        notificarExtension({ tipo: "ORDEN_PY", url, data });
+                    }
+                }).catch(() => {});
+            } else if (esUrlCatalogo(url)) {
+                const clone = response.clone();
+                clone.json().then(data => {
+                    if (data) {
+                        console.log("📋 [MMM Interceptor Fetch] Capturado catálogo de productos de PedidosYa");
+                        notificarExtension({ tipo: "CATALOGO_PY", url, data });
                     }
                 }).catch(() => {});
             }
@@ -72,10 +98,14 @@
     XMLHttpRequest.prototype.send = function() {
         this.addEventListener('load', function() {
             try {
-                if (esUrlRelevante(this._url)) {
+                if (esUrlOrdenes(this._url)) {
                     const data = JSON.parse(this.responseText);
                     console.log("📦 [MMM Interceptor XHR] Capturada respuesta de órdenes:", this._url);
-                    notificarExtension({ url: this._url, data });
+                    notificarExtension({ tipo: "ORDEN_PY", url: this._url, data });
+                } else if (esUrlCatalogo(this._url)) {
+                    const data = JSON.parse(this.responseText);
+                    console.log("📋 [MMM Interceptor XHR] Capturado catálogo de productos de PedidosYa");
+                    notificarExtension({ tipo: "CATALOGO_PY", url: this._url, data });
                 }
             } catch (e) {}
         });

@@ -4,7 +4,8 @@
 const DEFAULT_CONFIG = {
     supabaseUrl: "https://xnupjsxbvyirpeagbloe.supabase.co",
     supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhudXBqc3hidnlpcnBlYWdibG9lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDY0OTg2OSwiZXhwIjoyMDg2MjI1ODY5fQ.abuUcTgjLUnHZqagnlk10l8BpsCnDg3q_IRPUg5hKw0",
-    sucursalId: "9d1bfdb8-cb79-4568-b2bc-5f04f1888462" // MMM Pizza
+    sucursalId: "9d1bfdb8-cb79-4568-b2bc-5f04f1888462", // MMM Pizza
+    apiUrl: "https://mmmsystem.vercel.app"
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -15,7 +16,66 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true; // Canal abierto para respuesta asíncrona
     }
+
+    if (request.action === "PEDIDOSYA_CATALOG_DETECTED") {
+        const productos = request.payload?.productos || [];
+        chrome.storage.local.set({
+            pedidosya_catalog: productos,
+            pedidosya_catalog_time: Date.now()
+        }, () => {
+            console.log(`[MMM PY] ${productos.length} productos guardados en caché local.`);
+        });
+        sendResponse({ success: true, count: productos.length });
+        return false;
+    }
+
+    if (request.action === "SYNC_CATALOG_PEDIDOSYA") {
+        sincronizarCatalogo(request.payload?.productos)
+            .then(res => sendResponse({ success: true, ...res }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+
+        return true;
+    }
 });
+
+async function sincronizarCatalogo(productosDirectos) {
+    const stored = await chrome.storage.sync.get(['sucursalId', 'apiUrl']);
+    const local = await chrome.storage.local.get(['pedidosya_catalog']);
+
+    const sucursalId = stored.sucursalId || DEFAULT_CONFIG.sucursalId;
+    const apiUrl = stored.apiUrl || DEFAULT_CONFIG.apiUrl;
+    const productos = productosDirectos || local.pedidosya_catalog || [];
+
+    if (!sucursalId) {
+        throw new Error("No hay código de vinculación de sucursal configurado.");
+    }
+
+    if (!productos || productos.length === 0) {
+        throw new Error("No hay productos detectados en el catálogo de PedidosYa todavía. Abre o recarga la pestaña de PedidosYa.");
+    }
+
+    console.log(`[MMM PY] Enviando ${productos.length} productos a sincronizar en MMM SYSTEM (${apiUrl})...`);
+
+    const response = await fetch(`${apiUrl}/api/pedidosya/sync-catalog`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            sucursal_id: sucursalId,
+            productos: productos
+        })
+    });
+
+    if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`Error del servidor (${response.status}): ${errText}`);
+    }
+
+    const data = await response.json();
+    console.log("[MMM PY] ✅ Catálogo sincronizado:", data);
+    return data;
+}
 
 async function enviarASupabase(pedidoPY) {
     const stored = await chrome.storage.sync.get(['supabaseUrl', 'supabaseKey', 'sucursalId']);

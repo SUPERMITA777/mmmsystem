@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.1 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.2 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -24,13 +24,91 @@ window.addEventListener("message", (event) => {
         return;
     }
 
-    const { url, data } = event.data.payload || {};
+    const { tipo, url, data } = event.data.payload || {};
     if (!data) return;
 
-    procesarDatosDeRed(data, url);
+    if (tipo === "CATALOGO_PY") {
+        procesarCatalogo(data, url);
+    } else {
+        procesarDatosDeRed(data, url);
+    }
 });
 
-// Validación estricta: sólo pedidos reales de clientes, NUNCA productos del catálogo ni tablas de configuración
+// Extraer lista de productos desde los diferentes formatos de catálogo de PedidosYa
+function extraerProductosCatalogo(data) {
+    let prods = [];
+
+    if (Array.isArray(data)) {
+        prods = data;
+    } else if (data.products && Array.isArray(data.products)) {
+        prods = data.products;
+    } else if (data.items && Array.isArray(data.items)) {
+        prods = data.items;
+    } else if (data.categories && Array.isArray(data.categories)) {
+        data.categories.forEach(c => {
+            if (Array.isArray(c.products)) prods.push(...c.products);
+            if (Array.isArray(c.items)) prods.push(...c.items);
+        });
+    } else if (data.sections && Array.isArray(data.sections)) {
+        data.sections.forEach(s => {
+            if (Array.isArray(s.products)) prods.push(...s.products);
+            if (Array.isArray(s.items)) prods.push(...s.items);
+        });
+    }
+
+    const resultado = [];
+    const vistos = new Set();
+
+    prods.forEach(p => {
+        if (!p || typeof p !== 'object') return;
+        const nombre = p.name || p.title || p.productName;
+        if (!nombre || typeof nombre !== 'string') return;
+
+        const cleanNombre = nombre.trim();
+        if (vistos.has(cleanNombre.toLowerCase())) return;
+        vistos.add(cleanNombre.toLowerCase());
+
+        let precio = 0;
+        if (typeof p.price === 'number') precio = p.price;
+        else if (typeof p.price === 'string') precio = parseFloat(p.price);
+        else if (p.pricing && typeof p.pricing.price === 'number') precio = p.pricing.price;
+        else if (p.basePrice) precio = parseFloat(p.basePrice);
+
+        const descripcion = p.description || p.desc || "";
+        const imagenUrl = p.imageUrl || p.image || p.picture || (Array.isArray(p.images) && p.images[0]?.url) || "";
+        const idPy = p.id || p.productId || p.code || "";
+
+        resultado.push({
+            id_py: String(idPy),
+            nombre: cleanNombre,
+            descripcion: descripcion.trim(),
+            precio: precio || 0,
+            imagen_url: imagenUrl
+        });
+    });
+
+    return resultado;
+}
+
+function procesarCatalogo(data, url) {
+    try {
+        const productos = extraerProductosCatalogo(data);
+        if (!productos || productos.length === 0) return;
+
+        console.log(`📋 [MMM System Linker] Catálogo detectado (${productos.length} productos).`);
+
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({
+                action: "PEDIDOSYA_CATALOG_DETECTED",
+                payload: { productos }
+            });
+        }
+    } catch (e) {
+        console.error("Error procesando catálogo:", e);
+    }
+}
+
+// Validación estricta: sólo pedidos reales de clientes, NUNCA productos del catálogo
 function esPedidoValido(obj) {
     if (!obj || typeof obj !== 'object') return false;
 
