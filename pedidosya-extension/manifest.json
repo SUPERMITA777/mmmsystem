@@ -1,13 +1,15 @@
 {
     "manifest_version": 3,
     "name": "MMM System - PedidosYa Linker",
-    "version": "1.0",
-    "description": "Se conecta a Supabase para mandar los nuevos pedidos de PedidosYa Partner Portal hacia MMM SYSTEM automáticamente.",
+    "version": "2.0",
+    "description": "Captura automática de pedidos de PedidosYa hacia MMM SYSTEM vía Network Interceptor.",
     "permissions": [
         "storage"
     ],
     "host_permissions": [
-        "https://*.supabase.co/*"
+        "https://*.supabase.co/*",
+        "https://*.pedidosya.com/*",
+        "https://*.restaurant-partners.com/*"
     ],
     "background": {
         "service_worker": "background.js"
@@ -26,6 +28,19 @@
             ],
             "js": [
                 "content.js"
+            ],
+            "run_at": "document_start"
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "injected.js"
+            ],
+            "matches": [
+                "https://portal-app.pedidosya.com/*",
+                "https://*.pedidosya.com/*",
+                "https://*.pedidosya.com.ar/*"
             ]
         }
     ],

@@ -1,168 +1,143 @@
-// content.js - Inyectado en el Partner Portal de PedidosYa
+// content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.0 Iniciado");
 
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa Iniciado (v1.1)");
-
-// Guardamos en memoria los IDs de pedidos ya enviados en esta sesión para no duplicar
-let procesados = new Set();
-let ultimaDeteccion = Date.now();
-
-// 1. Iniciamos Observador de Cambios en el DOM (Mucho más rápido que setInterval)
-const observer = new MutationObserver((mutations) => {
-    // Evitamos ejecutarlo demasiadas veces seguidas si hay muchas mutaciones
-    if (Date.now() - ultimaDeteccion > 2000) {
-        ultimaDeteccion = Date.now();
-        buscarPedidosNuevos();
+// Inyectar el script interceptor en el DOM de la página
+function injectScript(file) {
+    try {
+        const s = document.createElement('script');
+        s.setAttribute('type', 'text/javascript');
+        s.setAttribute('src', chrome.runtime.getURL(file));
+        (document.head || document.documentElement).appendChild(s);
+        s.onload = () => s.remove();
+    } catch (e) {
+        console.error("Error inyectando script:", e);
     }
+}
+
+injectScript('injected.js');
+
+// Escuchar los mensajes del script inyectado
+let procesados = new Set();
+
+window.addEventListener("message", (event) => {
+    if (event.source !== window || !event.data || event.data.source !== "MMM_PY_INTERCEPTOR") {
+        return;
+    }
+
+    const { url, data } = event.data.payload || {};
+    if (!data) return;
+
+    procesarDatosDeRed(data);
 });
 
-// Empezamos a observar cambios en todo el cuerpo de la página
-observer.observe(document.body, { childList: true, subtree: true });
-
-// También mantenemos un interval de seguridad por si acaso nada cambia en el DOM pero hay algo ahí
-setInterval(buscarPedidosNuevos, 15000);
-
-function buscarPedidosNuevos() {
-    // console.log("🔍 Escaneando pedidos...");
-
-    // Selectores variados para tarjetas de pedidos (PedidosYa cambia mucho los nombres de clase)
-    const selectores = [
-        'div[data-testid="order-card"]',
-        '.order-card',
-        '[class*="OrderCard"]',
-        '[class*="order-card"]',
-        'div:has(button):has(span:contains("#"))', // Selectores lógicos (experimental)
-        'div[role="listitem"]', // A veces las tarjetas están en una lista
-    ];
-
-    let tarjetasPedidos = [];
-    selectores.forEach(selector => {
-        try {
-            const encontrados = document.querySelectorAll(selector);
-            tarjetasPedidos = [...tarjetasPedidos, ...Array.from(encontrados)];
-        } catch (e) { /* selector no soportado */ }
-    });
-
-    // Si no encontramos nada con selectores, buscamos manualmente CUALQUIER div que parezca un pedido
-    if (tarjetasPedidos.length === 0) {
-        const divs = document.querySelectorAll('div');
-        divs.forEach(d => {
-            const txt = d.innerText || "";
-            // Si tiene un # algo, un precio y botones de aceptar/rechazar, es un pedido
-            if (txt.includes("#") && (txt.includes("Aceptar") || txt.includes("Confirmar")) && txt.length < 1000) {
-                tarjetasPedidos.push(d);
-            }
-        });
+function procesarDatosDeRed(data) {
+    // La respuesta puede ser un array de órdenes o un objeto con lista
+    let ordenes = [];
+    if (Array.isArray(data)) {
+        ordenes = data;
+    } else if (data.orders && Array.isArray(data.orders)) {
+        ordenes = data.orders;
+    } else if (data.deliveries && Array.isArray(data.deliveries)) {
+        ordenes = data.deliveries;
+    } else if (data.items && Array.isArray(data.items)) {
+        ordenes = [data];
+    } else if (data.id || data.orderId) {
+        ordenes = [data];
     }
 
-    // Filtrar duplicados de la lista de elementos encontrados
-    const unicos = [...new Set(tarjetasPedidos)];
-
-    unicos.forEach(tarjeta => {
-        procesarTarjetaPedido(tarjeta);
+    ordenes.forEach(orden => {
+        normalizarYEnviarOrden(orden);
     });
 }
 
-function procesarTarjetaPedido(tarjeta) {
+function normalizarYEnviarOrden(orden) {
     try {
-        const textoTarjeta = tarjeta.innerText || "";
+        const idPy = orden.id || orden.orderId || orden.shortId || orden.deliveryId || orden.code;
+        if (!idPy) return;
 
-        // Evitar procesar lo que claramente no es un pedido nuevo
-        if (textoTarjeta.toLowerCase().includes("finalizado") ||
-            textoTarjeta.toLowerCase().includes("cancelado") ||
-            textoTarjeta.toLowerCase().includes("entregado") ||
-            textoTarjeta.length < 50) {
+        const idStr = String(idPy);
+        if (procesados.has(idStr)) return;
+
+        // Si la orden ya está cancelada o rechazada, no la cargamos como nueva
+        const status = (orden.status || '').toUpperCase();
+        if (status.includes("CANCELLED") || status.includes("REJECTED")) {
             return;
         }
 
-        // 3. Extraer el ID del pedido (Flexibilizado)
-        // Buscamos algo tipo #1234 o directamente una secuencia larga de números/letras
-        const matchId = textoTarjeta.match(/#([a-zA-Z0-9\-]+)/) || textoTarjeta.match(/([a-zA-Z0-9]{8,12})/);
-        if (!matchId) return;
+        // Datos del cliente
+        const clienteNombre = orden.customer?.name || 
+                              orden.customer?.fullName || 
+                              orden.customerName || 
+                              orden.user?.name || 
+                              "Cliente PedidosYa";
 
-        const idPedidoPy = matchId[1] || matchId[0];
+        const clienteTelefono = orden.customer?.phone || orden.customerPhone || "0000000000";
+        const clienteDireccion = orden.customer?.address?.street || orden.address || "";
 
-        if (procesados.has(idPedidoPy)) {
-            return;
+        // Totales
+        const total = parseFloat(orden.total || orden.totalAmount || orden.pricing?.total || orden.payment?.total || 0);
+
+        // Método de pago
+        let metodoPago = "Online / Pagado";
+        const paymentMethod = (orden.payment?.method || orden.paymentMethod || '').toLowerCase();
+        if (paymentMethod.includes("cash") || paymentMethod.includes("efectivo")) {
+            metodoPago = "Efectivo";
         }
 
-        console.log(`🍟 DEBUG: Analizando posible pedido ID: ${idPedidoPy}`);
+        // Ítems / Productos
+        const rawItems = orden.items || orden.products || orden.orderItems || [];
+        const items = [];
 
-        // 4. Extraer Datos
-        let nombreCliente = "Cliente PedidosYa";
-        const lineas = textoTarjeta.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        rawItems.forEach(item => {
+            const nombre = item.name || item.productName || item.title || "Producto PedidosYa";
+            const cantidad = parseInt(item.quantity || item.qty || 1);
+            const precio = parseFloat(item.price || item.unitPrice || 0);
+            
+            // Adicionales / toppings / gustos
+            const adicionales = [];
+            const subitems = item.options || item.modifiers || item.subItems || item.toppings || [];
+            subitems.forEach(sub => {
+                const subNombre = sub.name || sub.title;
+                if (subNombre) adicionales.push(subNombre);
+            });
 
-        if (lineas.length > 0) {
-            // Lógica para encontrar el nombre: suele ser la línea antes o después del ID
-            const idxId = lineas.findIndex(l => l.includes(idPedidoPy));
-            if (idxId !== -1) {
-                if (idxId > 0 && lineas[idxId - 1].length > 3) nombreCliente = lineas[idxId - 1];
-                else if (idxId < lineas.length - 1) nombreCliente = lineas[idxId + 1];
-            } else {
-                nombreCliente = lineas[0];
-            }
-        }
+            const notasItem = item.notes || item.comment || "";
 
-        let total = 0;
-        const matchTotal = textoTarjeta.match(/\$\s?([0-9.,]+)/);
-        if (matchTotal) {
-            total = parseFloat(matchTotal[1].replace(/\./g, '').replace(',', '.'));
-        }
+            items.push({
+                nombre,
+                cantidad,
+                precio,
+                adicionales,
+                notas: notasItem
+            });
+        });
 
-        let metodoPago = "Efectivo";
-        if (textoTarjeta.toLowerCase().includes("online") ||
-            textoTarjeta.toLowerCase().includes("pagado") ||
-            textoTarjeta.toLowerCase().includes("pre-pagado") ||
-            textoTarjeta.toLowerCase().includes("voucher") ||
-            textoTarjeta.toLowerCase().includes("tarjeta")) {
-            metodoPago = "Online / Pagado";
-        }
+        // Notas del pedido completo
+        const notas = orden.notes || orden.comment || orden.deliveryNotes || `ID PedidosYa: ${idStr}`;
 
-        // 5. Extraer Items
-        const itemsEncontrados = [];
-        for (let linea of lineas) {
-            // Patrones comunes: "1x Coca", "2 x Pizza", "1 Cantidad"
-            const mQty = linea.match(/^(\d+)\s?[xX×]\s+(.+)/i) || linea.match(/^(\d+)\s+([a-zA-Z].+)/);
-            if (mQty) {
-                const cantidad = parseInt(mQty[1]);
-                let nombreProd = mQty[2].trim();
-                nombreProd = nombreProd.split('$')[0].trim();
-
-                if (nombreProd.toLowerCase().includes("minuto") ||
-                    nombreProd.toLowerCase().includes("km") ||
-                    nombreProd.toLowerCase().includes("distancia")) {
-                    continue;
-                }
-
-                itemsEncontrados.push({
-                    cantidad: cantidad,
-                    nombre: nombreProd,
-                    precio: 0,
-                    adicionales: []
-                });
-            }
-        }
-
-        const pedidoData = {
-            id_py: idPedidoPy,
-            cliente: nombreCliente,
-            total: total,
+        const payload = {
+            id_py: idStr,
+            cliente: clienteNombre,
+            telefono: clienteTelefono,
+            direccion: clienteDireccion,
+            total,
             metodo_pago: metodoPago,
-            items: itemsEncontrados
+            notas,
+            items: items.length > 0 ? items : [{ nombre: "Pedido PedidosYa", cantidad: 1, precio: total, adicionales: [] }]
         };
 
-        console.log(`🚀 DEBUG: Intentando enviar pedido ${idPedidoPy} a Supabase...`, pedidoData);
+        console.log(`✨ [MMM System Linker] ¡Nueva orden detectada #${idStr}! Enviando a MMM SYSTEM...`, payload);
 
-        chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload: pedidoData }, (response) => {
-            if (response && response.success) {
-                console.log(`✅ Pedido ${idPedidoPy} enviado exitosamente!`);
-                procesados.add(idPedidoPy);
+        chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload }, (res) => {
+            if (res && res.success) {
+                console.log(`✅ [MMM System Linker] Pedido #${idStr} cargado exitosamente en el panel.`);
+                procesados.add(idStr);
             } else {
-                console.error(`❌ Error al enviar pedido ${idPedidoPy}:`, response?.error);
+                console.error(`❌ [MMM System Linker] Error cargando pedido #${idStr}:`, res?.error);
             }
         });
 
-    } catch (error) {
-        console.error("Error scrapeando tarjeta de pedido:", error);
+    } catch (e) {
+        console.error("Error parseando orden interceptada:", e);
     }
 }
-
