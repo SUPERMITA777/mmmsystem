@@ -68,13 +68,27 @@ async function consultarAccionesPendientes() {
         "Content-Type": "application/json"
     };
 
-    const res = await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?sucursal_id=eq.${sucursalId}&estado=eq.pendiente&limit=5&order=created_at.asc`, {
+    let res = await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?sucursal_id=eq.${sucursalId}&estado=eq.pendiente&limit=5&order=created_at.asc`, {
         method: "GET",
         headers
     });
 
     if (!res.ok) return [];
-    const acciones = await res.json().catch(() => []);
+    let acciones = await res.json().catch(() => []);
+
+    // Si no hay pendientes, chequear si hay alguna con error reciente para reintentar
+    if (!acciones || acciones.length === 0) {
+        const resErr = await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?sucursal_id=eq.${sucursalId}&estado=eq.error&limit=2&order=created_at.desc`, {
+            headers
+        });
+        if (resErr.ok) {
+            const errs = await resErr.json().catch(() => []);
+            if (errs && errs.length > 0) {
+                acciones = errs;
+            }
+        }
+    }
+
     if (!acciones || acciones.length === 0) return [];
 
     // Marcar como procesando para evitar llamadas duplicadas

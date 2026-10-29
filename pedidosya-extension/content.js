@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.6 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.7 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {

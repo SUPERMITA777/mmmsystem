@@ -1,10 +1,11 @@
 // injected.js - Corre en el contexto real de la ventana de PedidosYa Portal
 // Intercepta órdenes, catálogo y ejecuta sincronización bidireccional (precios y disponibilidad)
 (function() {
-    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.6");
+    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.7");
 
     window.__MMM_PY_TOKEN = null;
     window.__MMM_PY_CATALOG_BASE_URL = null;
+    window.__MMM_PY_CATALOG_ID = null;
     window.__MMM_PY_PRODUCTS_MAP = new Map();
     window.__MMM_PY_PRODUCTS_DATA = new Map();
 
@@ -17,9 +18,10 @@
             .replace(/[^a-z0-9]/g, "");
     }
 
-    // Recuperar token, base URL y mapa de productos guardados previamente
+    // Recuperar datos guardados previamente
     try {
         window.__MMM_PY_CATALOG_BASE_URL = localStorage.getItem("__MMM_PY_CATALOG_BASE_URL") || null;
+        window.__MMM_PY_CATALOG_ID = localStorage.getItem("__MMM_PY_CATALOG_ID") || null;
         window.__MMM_PY_TOKEN = localStorage.getItem("__MMM_PY_TOKEN") || null;
 
         const savedMap = localStorage.getItem("__MMM_PY_PRODUCTS_MAP");
@@ -28,7 +30,7 @@
             for (const [k, v] of Object.entries(parsed)) {
                 window.__MMM_PY_PRODUCTS_MAP.set(k, String(v));
             }
-            console.log(`📦 [MMM Interceptor] Restaurados ${window.__MMM_PY_PRODUCTS_MAP.size} índices de productos desde almacenamiento local.`);
+            console.log(`📦 [MMM Interceptor] Restaurados ${window.__MMM_PY_PRODUCTS_MAP.size} productos desde memoria local.`);
         }
     } catch(e) {}
 
@@ -37,6 +39,23 @@
             source: "MMM_PY_INTERCEPTOR",
             payload: payload
         }, "*");
+    }
+
+    function esProductoValido(node) {
+        if (!node || typeof node !== 'object') return false;
+        const id = node.id || node.productId || node.catalogProductId || node.code;
+        const name = node.name || node.title || node.productName;
+        if (!name || typeof name !== 'string' || !id) return false;
+
+        // Si es contenedor de categorías o productos, no es producto hoja
+        if (Array.isArray(node.products) || Array.isArray(node.items) || Array.isArray(node.categories)) {
+            return false;
+        }
+        if (node.categoryType || node.subCategories) {
+            return false;
+        }
+
+        return true;
     }
 
     // Desempaquetador recursivo universal de productos
@@ -53,7 +72,7 @@
                 return;
             }
 
-            // Recorrer posibles contenedores de catálogo
+            // Recorrer contenedores
             if (Array.isArray(node.products)) walk(node.products);
             if (Array.isArray(node.items)) walk(node.items);
             if (Array.isArray(node.categories)) walk(node.categories);
@@ -62,10 +81,8 @@
             if (Array.isArray(node.elements)) walk(node.elements);
             if (Array.isArray(node.data)) walk(node.data);
 
-            const id = node.id || node.productId || node.catalogProductId || node.code;
-            const name = node.name || node.title || node.productName;
-
-            if (name && typeof name === 'string' && id) {
+            if (esProductoValido(node)) {
+                const id = node.id || node.productId || node.catalogProductId || node.code;
                 const sId = String(id).trim();
                 if (!seen.has(sId)) {
                     seen.add(sId);
@@ -81,6 +98,7 @@
     function registrarProductosEnMapa(data) {
         if (!data) return;
         const list = aplanarProductos(data);
+        if (list.length === 0) return;
 
         list.forEach(p => {
             const id = p.id || p.productId || p.catalogProductId || p.code;
@@ -96,7 +114,9 @@
             }
         });
 
-        // Guardar en localStorage para disponibilidad instantánea entre recargas
+        console.log(`🗺️ [MMM PY] Mapa de productos actualizado: ${window.__MMM_PY_PRODUCTS_MAP.size} entradas registradas.`);
+
+        // Guardar en localStorage
         try {
             const obj = {};
             for (const [k, v] of window.__MMM_PY_PRODUCTS_MAP.entries()) {
@@ -106,14 +126,50 @@
         } catch(e) {}
     }
 
-    function resolverEndpointProductos(baseUrl) {
-        if (!baseUrl) return null;
-        // Detectar /catalogs/{id} y armar /products
-        const catalogMatch = baseUrl.match(/(.*?\/catalogs\/[^\/\?]+)/);
-        if (catalogMatch) {
-            return `${catalogMatch[1]}/products`;
+    function inspeccionarRespuestaCatalogo(url, data) {
+        if (!data || typeof data !== 'object') return;
+
+        // Detectar catalogId en la respuesta
+        if (Array.isArray(data.catalogs) && data.catalogs[0]?.id) {
+            window.__MMM_PY_CATALOG_ID = String(data.catalogs[0].id);
+            try { localStorage.setItem("__MMM_PY_CATALOG_ID", window.__MMM_PY_CATALOG_ID); } catch(e) {}
+            console.log("🔑 [MMM PY] Catalog ID detectado en payload:", window.__MMM_PY_CATALOG_ID);
         }
-        return baseUrl.replace(/\/(products|categories|sections).*$/, '') + '/products';
+
+        if (url) {
+            const m = url.match(/\/catalogs\/(\d+)/);
+            if (m && m[1]) {
+                window.__MMM_PY_CATALOG_ID = m[1];
+                try { localStorage.setItem("__MMM_PY_CATALOG_ID", window.__MMM_PY_CATALOG_ID); } catch(e) {}
+            }
+        }
+    }
+
+    function resolverEndpointProductos(baseUrl) {
+        const catalogId = window.__MMM_PY_CATALOG_ID || localStorage.getItem("__MMM_PY_CATALOG_ID") || "252084";
+
+        if (baseUrl) {
+            // Caso 1: URL de vendors (.../vendors/{id}/catalogs)
+            if (baseUrl.includes('/vendors/')) {
+                const prefix = baseUrl.split('/vendors/')[0];
+                return `${prefix}/catalogs/${catalogId}/products`;
+            }
+
+            // Caso 2: URL ya contiene /catalogs/{id}
+            const match = baseUrl.match(/(.*?\/catalogs\/\d+)/);
+            if (match) {
+                return `${match[1]}/products`;
+            }
+
+            // Caso 3: URL base de platforms
+            const platMatch = baseUrl.match(/(https?:\/\/[^\/]+\/api\/\d+\/platforms\/[^\/]+)/);
+            if (platMatch) {
+                return `${platMatch[1]}/catalogs/${catalogId}/products`;
+            }
+        }
+
+        // Fallback estándar de PedidosYa Argentina
+        return `https://vendor-api-ar.us.restaurant-partners.com/api/5/platforms/PY_AR/catalogs/${catalogId}/products`;
     }
 
     function extraerToken(headers) {
@@ -184,7 +240,7 @@
 
         extraerToken(options.headers);
 
-        if (url.includes("catalogs") && (url.includes("products") || url.includes("platforms") || url.includes("categories"))) {
+        if (url.includes("catalogs") || (url.includes("platforms") && url.includes("products"))) {
             window.__MMM_PY_CATALOG_BASE_URL = url.split("?")[0];
             try { localStorage.setItem("__MMM_PY_CATALOG_BASE_URL", window.__MMM_PY_CATALOG_BASE_URL); } catch(e) {}
         }
@@ -203,7 +259,8 @@
                 const clone = response.clone();
                 clone.json().then(data => {
                     if (data) {
-                        console.log("📋 [MMM Interceptor Fetch] Capturado catálogo de productos de PedidosYa:", data);
+                        console.log("📋 [MMM Interceptor Fetch] URL:", url, data);
+                        inspeccionarRespuestaCatalogo(url, data);
                         registrarProductosEnMapa(data);
                         notificarExtension({ tipo: "CATALOGO_PY", url, data });
                     }
@@ -234,7 +291,7 @@
     XMLHttpRequest.prototype.send = function() {
         this.addEventListener('load', function() {
             try {
-                if (this._url && this._url.includes("catalogs") && (this._url.includes("products") || this._url.includes("platforms") || this._url.includes("categories"))) {
+                if (this._url && (this._url.includes("catalogs") || (this._url.includes("platforms") && this._url.includes("products")))) {
                     window.__MMM_PY_CATALOG_BASE_URL = this._url.split("?")[0];
                     try { localStorage.setItem("__MMM_PY_CATALOG_BASE_URL", window.__MMM_PY_CATALOG_BASE_URL); } catch(e) {}
                 }
@@ -245,7 +302,8 @@
                     notificarExtension({ tipo: "ORDEN_PY", url: this._url, data });
                 } else if (esUrlCatalogo(this._url)) {
                     const data = JSON.parse(this.responseText);
-                    console.log("📋 [MMM Interceptor XHR] Capturado catálogo de productos de PedidosYa:", data);
+                    console.log("📋 [MMM Interceptor XHR] URL:", this._url, data);
+                    inspeccionarRespuestaCatalogo(this._url, data);
                     registrarProductosEnMapa(data);
                     notificarExtension({ tipo: "CATALOGO_PY", url: this._url, data });
                 }
@@ -254,7 +312,7 @@
         return originalXhrSend.apply(this, arguments);
     };
 
-    // Resolver ID numérico de forma resiliente
+    // Resolver ID numérico de forma inteligente
     async function resolverIdProducto(action) {
         let targetId = action.id_py;
         if (targetId && /^\d+$/.test(String(targetId))) {
@@ -265,15 +323,16 @@
         const norm = normalizar(nombre);
         const lower = nombre.toLowerCase();
 
-        // 1. Búsqueda directa en memoria
+        // 1. Clave exacta normalizada
         if (norm && window.__MMM_PY_PRODUCTS_MAP.has(norm)) {
             return window.__MMM_PY_PRODUCTS_MAP.get(norm);
         }
+        // 2. Clave minúsculas
         if (lower && window.__MMM_PY_PRODUCTS_MAP.has(lower)) {
             return window.__MMM_PY_PRODUCTS_MAP.get(lower);
         }
 
-        // 2. Coincidencia difusa en memoria
+        // 3. Coincidencia difusa / subcadena
         for (const [k, v] of window.__MMM_PY_PRODUCTS_MAP.entries()) {
             if (k && norm && (k.includes(norm) || norm.includes(k))) {
                 console.log(`🔍 [MMM PY] Coincidencia difusa encontrada para '${nombre}':`, k, "->", v);
@@ -281,14 +340,15 @@
             }
         }
 
-        // 3. Esperar hasta 4 segundos por si las peticiones de catálogo están cargando
-        console.log(`⏳ [MMM PY] Esperando resolución de ID para '${nombre}'...`);
-        for (let i = 0; i < 8; i++) {
-            await new Promise(r => setTimeout(r, 500));
-            if (norm && window.__MMM_PY_PRODUCTS_MAP.has(norm)) return window.__MMM_PY_PRODUCTS_MAP.get(norm);
-            if (lower && window.__MMM_PY_PRODUCTS_MAP.has(lower)) return window.__MMM_PY_PRODUCTS_MAP.get(lower);
+        // 4. Coincidencia por palabras clave significativas (ej. "cancha" + "piedra")
+        const palabras = norm.match(/[a-z0-9]{4,}/g) || [];
+        if (palabras.length > 0) {
             for (const [k, v] of window.__MMM_PY_PRODUCTS_MAP.entries()) {
-                if (k && norm && (k.includes(norm) || norm.includes(k))) return v;
+                const todasPresentes = palabras.every(p => k.includes(p));
+                if (todasPresentes) {
+                    console.log(`🔍 [MMM PY] Coincidencia por palabras clave para '${nombre}':`, k, "->", v);
+                    return v;
+                }
             }
         }
 
@@ -310,23 +370,41 @@
             const token = window.__MMM_PY_TOKEN;
             const baseUrl = window.__MMM_PY_CATALOG_BASE_URL;
 
-            if (!baseUrl) {
-                throw new Error("Aún no se ha detectado la URL del catálogo de PedidosYa. Por favor abre la sección de Menú en PedidosYa una vez.");
+            let targetId = await resolverIdProducto(action);
+
+            // Si no se encuentra en memoria, consultar catálogo completo a la API de PedidosYa en segundo plano
+            if (!targetId && token) {
+                const endpoint = resolverEndpointProductos(baseUrl);
+                console.log(`🔍 [MMM PY] Buscando '${action.datos?.nombre}' en catálogo completo de PedidosYa:`, endpoint);
+                try {
+                    const cRes = await originalFetch(`${endpoint}?sizeSupport=true&includeVendorOverrides=true`, {
+                        headers: { "Authorization": token, "Content-Type": "application/json" }
+                    });
+                    if (cRes && cRes.ok) {
+                        const cData = await cRes.json();
+                        registrarProductosEnMapa(cData);
+                        notificarExtension({ tipo: "CATALOGO_PY", url: endpoint, data: cData });
+                        targetId = await resolverIdProducto(action);
+                    }
+                } catch(e) {
+                    console.warn("[MMM PY] Consulta de catálogo completo falló:", e);
+                }
             }
 
-            const targetId = await resolverIdProducto(action);
             if (!targetId || !/^\d+$/.test(String(targetId))) {
-                throw new Error(`No se pudo resolver el ID numérico de '${action.datos?.nombre || action.id_py}' en PedidosYa. Abre la sección de Menú en PedidosYa.`);
+                throw new Error(`No se pudo resolver el ID numérico de '${action.datos?.nombre || action.id_py}' en PedidosYa.`);
             }
+
+            const productsBase = resolverEndpointProductos(baseUrl);
+            const productUrl = `${productsBase}/${targetId}`;
+            const rawProd = window.__MMM_PY_PRODUCTS_DATA.get(String(targetId)) || {};
+
+            console.log(`⚡ [MMM PY] Ejecutando '${action.tipo_accion}' en URL:`, productUrl, "ID:", targetId);
 
             const headers = {
                 "Content-Type": "application/json"
             };
             if (token) headers["Authorization"] = token;
-
-            const productsBase = resolverEndpointProductos(baseUrl);
-            const productUrl = `${productsBase}/${targetId}`;
-            const rawProd = window.__MMM_PY_PRODUCTS_DATA.get(String(targetId)) || {};
 
             let res;
             if (action.tipo_accion === "CAMBIAR_DISPONIBILIDAD") {
@@ -346,7 +424,7 @@
                         headers,
                         credentials: "include",
                         body: JSON.stringify({ available: disponible, isAvailable: disponible })
-                    });
+                    }).catch(() => null);
                 }
             } else if (action.tipo_accion === "ACTUALIZAR_PRECIO") {
                 const precio = parseFloat(action.datos?.precio || 0);
@@ -400,8 +478,8 @@
                     success: true
                 }, "*");
             } else {
-                const errText = res ? await res.text().catch(() => "") : "Sin respuesta del servidor";
-                throw new Error(`PedidosYa respondió (${res?.status}): ${errText}`);
+                const errText = res ? await res.text().catch(() => "") : "Sin respuesta del servidor (Network/CORS error)";
+                throw new Error(`PedidosYa respondió (${res?.status || 'Network Error'}): ${errText}`);
             }
 
         } catch (err) {
