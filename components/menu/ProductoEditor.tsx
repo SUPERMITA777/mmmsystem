@@ -263,7 +263,13 @@ export function ProductoEditor({
         {(() => {
           const matchPy = formData?.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
           const idPy = matchPy ? matchPy[1] : null;
-          if (!idPy) return null;
+          const isPeya = Boolean(
+            idPy || 
+            formData?.nombre_interno?.startsWith("[PY]") || 
+            formData?.nombre?.toLowerCase().includes("peya") ||
+            categorias?.find(c => c.id === formData?.categoria_id)?.nombre?.toLowerCase().includes("pedidosya")
+          );
+          if (!isPeya) return null;
           return (
             <div className="mx-6 mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between text-xs text-red-900">
               <div className="flex items-center gap-2.5">
@@ -271,7 +277,7 @@ export function ProductoEditor({
                 <div>
                   <div className="font-bold text-red-950 flex items-center gap-1.5">
                     <span>Vinculado con PedidosYa</span>
-                    <span className="text-[10px] text-red-600 font-mono">(ID: {idPy})</span>
+                    {idPy && <span className="text-[10px] text-red-600 font-mono">(ID: {idPy})</span>}
                   </div>
                   <div className="text-[11px] text-red-700">
                     Al guardar, los cambios de <strong>Precio</strong> y <strong>Activo (Stock)</strong> se enviarán a PedidosYa automáticamente.

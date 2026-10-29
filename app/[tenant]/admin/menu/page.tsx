@@ -292,29 +292,46 @@ export default function MenuPage() {
       }
 
       // 3. Si el producto está vinculado con PedidosYa, encolar sincronización bidireccional
-      const matchPy = pData.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
-      if (matchPy && matchPy[1]) {
-        const idPy = matchPy[1];
+      const catPeya = categorias.find(c => c.nombre.toLowerCase().includes("pedidosya"));
+      const isPeya = Boolean(
+        pData.categoria_id === catPeya?.id ||
+        pData.nombre_interno?.startsWith("[PY]") ||
+        pData.nombre?.toLowerCase().includes("peya") ||
+        pData.descripcion?.includes("ID PY:")
+      );
+
+      if (isPeya) {
+        const matchPy = pData.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
+        const idPy = matchPy ? matchPy[1] : null;
+
         try {
           await supabase.from("pedidosya_acciones").insert([
             {
               sucursal_id: sucursalId,
               producto_id: pData.id,
-              id_py: idPy,
+              id_py: idPy || pData.nombre,
               tipo_accion: "ACTUALIZAR_PRECIO",
-              datos: { precio: pData.precio },
+              datos: { 
+                precio: pData.precio,
+                nombre: pData.nombre,
+                id_py: idPy
+              },
               estado: "pendiente"
             },
             {
               sucursal_id: sucursalId,
               producto_id: pData.id,
-              id_py: idPy,
+              id_py: idPy || pData.nombre,
               tipo_accion: "CAMBIAR_DISPONIBILIDAD",
-              datos: { disponible: pData.activo },
+              datos: { 
+                disponible: pData.activo,
+                nombre: pData.nombre,
+                id_py: idPy
+              },
               estado: "pendiente"
             }
           ]);
-          console.log("[PeYa Sync] Acción encolada para actualizar en PedidosYa:", idPy);
+          console.log("[PeYa Sync] ✅ Acción encolada para actualizar en PedidosYa:", pData.nombre, idPy);
         } catch (e) {
           console.warn("[PeYa Sync] Error encolando acción:", e);
         }
