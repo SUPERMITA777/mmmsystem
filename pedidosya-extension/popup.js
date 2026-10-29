@@ -1,30 +1,60 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Cargar los datos almacenados
-    chrome.storage.sync.get(['supabaseUrl', 'supabaseKey', 'sucursalId'], (result) => {
-        if (result.supabaseUrl) document.getElementById('supabaseUrl').value = result.supabaseUrl;
-        if (result.supabaseKey) document.getElementById('supabaseKey').value = result.supabaseKey;
-        if (result.sucursalId) document.getElementById('sucursalId').value = result.sucursalId;
+    const sucursalSelect = document.getElementById('sucursalSelect');
+    const customIdBox = document.getElementById('customIdBox');
+    const sucursalIdInput = document.getElementById('sucursalId');
+    const saveBtn = document.getElementById('saveBtn');
+    const status = document.getElementById('status');
+
+    // 1. Cargar la sucursal guardada (por defecto MMM Pizza)
+    chrome.storage.sync.get(['sucursalId'], (result) => {
+        const currentId = result.sucursalId || "9d1bfdb8-cb79-4568-b2bc-5f04f1888462";
+        
+        let found = false;
+        for (let option of sucursalSelect.options) {
+            if (option.value === currentId) {
+                sucursalSelect.value = currentId;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            sucursalSelect.value = "custom";
+            customIdBox.style.display = "block";
+            sucursalIdInput.value = currentId;
+        }
     });
 
-    // Botón guardar
-    document.getElementById('saveBtn').addEventListener('click', () => {
-        const url = document.getElementById('supabaseUrl').value.trim();
-        const key = document.getElementById('supabaseKey').value.trim();
-        const sucursal = document.getElementById('sucursalId').value.trim();
+    // 2. Controlar si se selecciona "Otro ID"
+    sucursalSelect.addEventListener('change', () => {
+        if (sucursalSelect.value === 'custom') {
+            customIdBox.style.display = 'block';
+            sucursalIdInput.focus();
+        } else {
+            customIdBox.style.display = 'none';
+        }
+    });
+
+    // 3. Botón guardar
+    saveBtn.addEventListener('click', () => {
+        let chosenId = sucursalSelect.value;
+        if (chosenId === 'custom') {
+            chosenId = sucursalIdInput.value.trim();
+        }
+
+        if (!chosenId) {
+            alert("Por favor selecciona o ingresa un ID de sucursal.");
+            return;
+        }
 
         chrome.storage.sync.set({
-            supabaseUrl: url,
-            supabaseKey: key,
-            sucursalId: sucursal
+            sucursalId: chosenId
         }, () => {
-            const status = document.getElementById('status');
             status.style.display = 'block';
             setTimeout(() => {
                 status.style.display = 'none';
-            }, 2000);
-
-            // Notificar al content script/background si es necesario
-            chrome.runtime.sendMessage({ action: "CONFIG_UPDATED" });
+                window.close(); // Cierra el popup automáticamente
+            }, 1200);
         });
     });
 });

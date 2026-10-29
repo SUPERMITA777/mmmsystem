@@ -14,7 +14,7 @@
         }
         h2 {
             margin-top: 0;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 800;
             color: #0f172a;
             display: flex;
@@ -29,24 +29,32 @@
         }
         label {
             display: block;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 700;
             margin-bottom: 4px;
             color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        input {
+        select, input {
             width: 100%;
             box-sizing: border-box;
-            padding: 8px;
+            padding: 8px 10px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             font-size: 13px;
             font-family: inherit;
+            background: white;
+            color: #1e293b;
         }
-        input:focus {
+        select:focus, input:focus {
             outline: none;
             border-color: #ea580c;
-            box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.1);
+            box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15);
+        }
+        .custom-id-box {
+            margin-top: 6px;
+            display: none;
         }
         button {
             width: 100%;
@@ -58,25 +66,36 @@
             font-weight: 700;
             cursor: pointer;
             transition: background-color 0.2s;
+            margin-top: 4px;
         }
         button:hover {
             background-color: #c2410c;
         }
         #status {
-            margin-top: 12px;
+            margin-top: 10px;
             font-size: 12px;
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
             color: #16a34a;
             display: none;
         }
+        .badge {
+            display: inline-block;
+            background: #e2e8f0;
+            color: #475569;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+        }
         .footer {
-            margin-top: 16px;
+            margin-top: 14px;
             font-size: 11px;
-            color: #94a3b8;
+            color: #64748b;
             text-align: center;
             border-top: 1px solid #e2e8f0;
-            padding-top: 12px;
+            padding-top: 10px;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -84,25 +103,28 @@
     <h2><span class="icon">🍕</span> MMM SYSTEM Linker</h2>
         
     <div class="form-group">
-        <label for="supabaseUrl">Supabase URL</label>
-        <input type="text" id="supabaseUrl" placeholder="https://xyz.supabase.co">
-    </div>
-    
-    <div class="form-group">
-        <label for="supabaseKey">Supabase Anon Key</label>
-        <input type="password" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIs...">
-    </div>
-    
-    <div class="form-group">
-        <label for="sucursalId">Sucursal ID (UUID)</label>
-        <input type="text" id="sucursalId" placeholder="Ej: 123e4567-e89b-12d3...">
+        <label for="sucursalSelect">Negocio / Sucursal</label>
+        <select id="sucursalSelect">
+            <option value="9d1bfdb8-cb79-4568-b2bc-5f04f1888462">🍕 mmm pizza</option>
+            <option value="15cc8387-26f9-457c-b27e-f3029d1654f2">🍽️ Don Juan</option>
+            <option value="5c44d258-a402-48d8-bbdc-00d6cd86ac22">🍽️ BARTOLOME</option>
+            <option value="e18afa9b-0563-40e7-bad4-47478961dc26">🍽️ clubdespechadas</option>
+            <option value="a4b45a88-833a-471e-9cc4-9584b70e1866">🔥 BRASAS</option>
+            <option value="cd2a3d5f-73ca-4d82-9798-c9d3ece8d886">🎨 SABOR y ARTE</option>
+            <option value="deca5270-098e-471e-aac7-5752b7b4358a">🍴 Resto Fran</option>
+            <option value="dc46d3ea-db2b-40d6-8a02-bb164bcd76f0">⛰️ IRUYA</option>
+            <option value="custom">✏️ Otro ID (manual)...</option>
+        </select>
+        <div id="customIdBox" class="custom-id-box">
+            <input type="text" id="sucursalId" placeholder="Pegar UUID de sucursal">
+        </div>
     </div>
 
-    <button id="saveBtn">Guardar Configuración</button>
-    <div id="status">✅ Guardado correctamente</div>
+    <button id="saveBtn">Guardar y Vincular</button>
+    <div id="status">✅ Guardado para este local</div>
 
     <div class="footer">
-        Para que funcione, mantené abierta la pestaña del "Partner Portal" de PedidosYa en esta computadora.
+        Al recibir un pedido en PedidosYa, entrará automáticamente al panel de la sucursal seleccionada.
     </div>
 
     <script src="popup.js"></script>
