@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "MMM System - PedidosYa Linker",
-    "version": "2.9",
+    "version": "2.10",
     "description": "Sincronización total de pedidos, catálogo y actualización de precios/stock bidireccional con PedidosYa.",
     "permissions": [
         "storage"

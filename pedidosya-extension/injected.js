@@ -1,7 +1,7 @@
 // injected.js - Corre en el contexto real de la ventana de PedidosYa Portal
 // Intercepta órdenes, catálogo y ejecuta sincronización bidireccional (precios y disponibilidad)
 (function() {
-    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.9");
+    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.10");
 
     window.__MMM_PY_TOKEN = null;
     window.__MMM_PY_CATALOG_BASE_URL = null;

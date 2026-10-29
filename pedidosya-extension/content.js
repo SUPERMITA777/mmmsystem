@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.9 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.10 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -357,11 +357,34 @@ function normalizarYEnviarOrden(orden) {
         }
 
         // Datos del cliente
-        const clienteNombre = orden.customer?.name || 
-                              orden.customer?.fullName || 
-                              orden.customerName || 
-                              orden.user?.name || 
-                              "Cliente PedidosYa";
+        let rawClienteNombre = "";
+        if (orden.customer) {
+            if (orden.customer.name) {
+                rawClienteNombre = orden.customer.name;
+            } else if (orden.customer.fullName) {
+                rawClienteNombre = orden.customer.fullName;
+            } else if (orden.customer.firstName || orden.customer.lastName) {
+                rawClienteNombre = `${orden.customer.firstName || ''} ${orden.customer.lastName || ''}`.trim();
+            }
+        }
+        if (!rawClienteNombre) {
+            rawClienteNombre = orden.customerName || 
+                               orden.clientName || 
+                               orden.recipient?.name || 
+                               orden.delivery?.customer?.name || 
+                               orden.delivery?.customerName ||
+                               orden.user?.name || 
+                               (orden.user?.firstName ? `${orden.user.firstName || ''} ${orden.user.lastName || ''}`.trim() : "") ||
+                               "";
+        }
+
+        let clienteNombre = "";
+        if (rawClienteNombre && rawClienteNombre.trim()) {
+            const clean = rawClienteNombre.trim();
+            clienteNombre = clean.toLowerCase().includes("(peya)") ? clean : `${clean} (peya)`;
+        } else {
+            clienteNombre = "Cliente (peya)";
+        }
 
         const clienteTelefono = orden.customer?.phone || orden.customerPhone || "0000000000";
         const clienteDireccion = orden.customer?.address?.street || orden.address || "";

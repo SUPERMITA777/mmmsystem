@@ -297,10 +297,73 @@ async function enviarASupabase(pedidoPY) {
     const subtotal = pedidoPY.total || 0;
     const total = pedidoPY.total || 0;
 
+    // Gestionar / registrar el cliente en la tabla 'clientes' de la base de datos
+    let clienteId = null;
+    let clienteNombreFinal = (pedidoPY.cliente || "Cliente (peya)").trim();
+    if (!clienteNombreFinal.toLowerCase().includes("(peya)")) {
+        clienteNombreFinal = `${clienteNombreFinal} (peya)`;
+    }
+    const clienteTelefono = pedidoPY.telefono || "";
+    const cleanPhone = clienteTelefono.replace(/[^0-9]/g, '');
+
+    try {
+        if (cleanPhone && cleanPhone.length >= 6) {
+            const resCli = await fetch(`${supabaseUrl}/rest/v1/clientes?sucursal_id=eq.${sucursalId}&telefono=eq.${encodeURIComponent(cleanPhone)}&select=id,total_pedidos,total_gastado`, {
+                method: "GET",
+                headers
+            });
+            if (resCli.ok) {
+                const cliData = await resCli.json().catch(() => []);
+                if (cliData && cliData.length > 0) {
+                    clienteId = cliData[0].id;
+                    const prevPedidos = cliData[0].total_pedidos || 0;
+                    const prevGastado = cliData[0].total_gastado || 0;
+                    await fetch(`${supabaseUrl}/rest/v1/clientes?id=eq.${clienteId}`, {
+                        method: "PATCH",
+                        headers,
+                        body: JSON.stringify({
+                            nombre: clienteNombreFinal,
+                            direccion: pedidoPY.direccion || undefined,
+                            total_pedidos: prevPedidos + 1,
+                            total_gastado: prevGastado + total,
+                            updated_at: new Date().toISOString()
+                        })
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        // Si no existe el cliente, crearlo en la base de datos
+        if (!clienteId && clienteNombreFinal && clienteNombreFinal !== "Cliente (peya)") {
+            const resNewCli = await fetch(`${supabaseUrl}/rest/v1/clientes`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    sucursal_id: sucursalId,
+                    nombre: clienteNombreFinal,
+                    telefono: cleanPhone || clienteTelefono,
+                    direccion: pedidoPY.direccion || "",
+                    total_pedidos: 1,
+                    total_gastado: total
+                })
+            });
+            if (resNewCli.ok) {
+                const newCliData = await resNewCli.json().catch(() => []);
+                if (newCliData && newCliData.length > 0) {
+                    clienteId = newCliData[0].id;
+                    console.log(`[MMM PY] 👤 Cliente registrado en base de datos: ${clienteNombreFinal} (#${clienteId})`);
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[MMM PY] Aviso gestionando cliente en base de datos:", e);
+    }
+
     const pedidoBody = {
         sucursal_id: sucursalId,
         numero_pedido: numeroPedido,
-        cliente_nombre: pedidoPY.cliente || "Cliente PedidosYa",
+        cliente_id: clienteId,
+        cliente_nombre: clienteNombreFinal,
         cliente_telefono: pedidoPY.telefono || "0000000000",
         cliente_direccion: pedidoPY.direccion || "",
         tipo: 'delivery',
