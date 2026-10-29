@@ -1,5 +1,12 @@
 // background.js - Service worker de la extensión MMM System PedidosYa Linker
 
+// Valores por defecto preconfigurados para MMM SYSTEM (MMM Pizza)
+const DEFAULT_CONFIG = {
+    supabaseUrl: "https://xnupjsxbvyirpeagbloe.supabase.co",
+    supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhudXBqc3hidnlpcnBlYWdibG9lIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDY0OTg2OSwiZXhwIjoyMDg2MjI1ODY5fQ.abuUcTgjLUnHZqagnlk10l8BpsCnDg3q_IRPUg5hKw0",
+    sucursalId: "9d1bfdb8-cb79-4568-b2bc-5f04f1888462" // MMM Pizza
+};
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "SEND_PEDIDO_SUPABASE") {
         enviarASupabase(request.payload)
@@ -11,13 +18,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function enviarASupabase(pedidoPY) {
-    const config = await chrome.storage.sync.get(['supabaseUrl', 'supabaseKey', 'sucursalId']);
+    const stored = await chrome.storage.sync.get(['supabaseUrl', 'supabaseKey', 'sucursalId']);
 
-    if (!config.supabaseUrl || !config.supabaseKey || !config.sucursalId) {
+    const supabaseUrl = stored.supabaseUrl || DEFAULT_CONFIG.supabaseUrl;
+    const supabaseKey = stored.supabaseKey || DEFAULT_CONFIG.supabaseKey;
+    const sucursalId = stored.sucursalId || DEFAULT_CONFIG.sucursalId;
+
+    if (!supabaseUrl || !supabaseKey || !sucursalId) {
         throw new Error("Credenciales de Supabase no configuradas en el popup de la extensión.");
     }
-
-    const { supabaseUrl, supabaseKey, sucursalId } = config;
 
     const headers = {
         "apikey": supabaseKey,
