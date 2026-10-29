@@ -52,6 +52,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true;
     }
+
+    if (request.action === "EXECUTE_PY_HTTP") {
+        const { url, method, headers, body } = request.payload || {};
+        (async () => {
+            try {
+                const fetchOpts = {
+                    method: method || "GET",
+                    headers: headers || {}
+                };
+                if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
+                    fetchOpts.body = typeof body === "string" ? body : JSON.stringify(body);
+                }
+                const res = await fetch(url, fetchOpts);
+                const status = res.status;
+                const ok = res.ok || status === 204;
+                let data = null;
+                let text = "";
+                try {
+                    text = await res.text();
+                    data = JSON.parse(text);
+                } catch(e) {
+                    data = text;
+                }
+                console.log(`[MMM PY Background] HTTP ${method || 'GET'} ${url} -> Status ${status}`);
+                sendResponse({ success: true, ok, status, data, rawText: text });
+            } catch (err) {
+                console.error("[MMM PY Background] Error ejecutando HTTP:", err);
+                sendResponse({ success: false, ok: false, error: err.message });
+            }
+        })();
+        return true;
+    }
 });
 
 async function consultarAccionesPendientes() {

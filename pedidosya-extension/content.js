@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.7 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.8 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -77,6 +77,27 @@ window.addEventListener("message", (event) => {
                 action: "UPDATE_PEDIDOSYA_ACTION",
                 payload: { actionId, success, error }
             });
+        }
+    } else if (event.data.source === "MMM_PY_HTTP_REQUEST") {
+        const { requestId, payload } = event.data;
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({
+                action: "EXECUTE_PY_HTTP",
+                payload: payload
+            }, (res) => {
+                const response = res || { ok: false, error: chrome.runtime?.lastError?.message || "Error en background" };
+                window.postMessage({
+                    source: "MMM_PY_HTTP_RESPONSE",
+                    requestId: requestId,
+                    response: response
+                }, "*");
+            });
+        } else {
+            window.postMessage({
+                source: "MMM_PY_HTTP_RESPONSE",
+                requestId: requestId,
+                response: { ok: false, error: "Extensión no disponible en content.js" }
+            }, "*");
         }
     }
 });

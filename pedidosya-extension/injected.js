@@ -1,7 +1,7 @@
 // injected.js - Corre en el contexto real de la ventana de PedidosYa Portal
 // Intercepta órdenes, catálogo y ejecuta sincronización bidireccional (precios y disponibilidad)
 (function() {
-    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.7");
+    console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal v2.8");
 
     window.__MMM_PY_TOKEN = null;
     window.__MMM_PY_CATALOG_BASE_URL = null;
@@ -395,6 +395,50 @@
                 throw new Error(`No se pudo resolver el ID numérico de '${action.datos?.nombre || action.id_py}' en PedidosYa.`);
             }
 
+            function sendHttp(payload) {
+                return new Promise((resolve) => {
+                    const requestId = "req_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+
+                    function onMsg(ev) {
+                        if (ev.source === window && ev.data && ev.data.source === "MMM_PY_HTTP_RESPONSE" && ev.data.requestId === requestId) {
+                            window.removeEventListener("message", onMsg);
+                            clearTimeout(timer);
+                            resolve(ev.data.response);
+                        }
+                    }
+
+                    const timer = setTimeout(async () => {
+                        window.removeEventListener("message", onMsg);
+                        console.warn("[MMM PY] Background no respondió a tiempo, probando fetch directo sin credentials...");
+                        try {
+                            const fetchOpts = {
+                                method: payload.method || "GET",
+                                headers: payload.headers || {}
+                            };
+                            if (payload.body && (payload.method === "POST" || payload.method === "PUT" || payload.method === "PATCH")) {
+                                fetchOpts.body = typeof payload.body === "string" ? payload.body : JSON.stringify(payload.body);
+                            }
+                            const r = await originalFetch(payload.url, fetchOpts);
+                            const st = r.status;
+                            const ok = r.ok || st === 204;
+                            const tx = await r.text().catch(() => "");
+                            let dt = null;
+                            try { dt = JSON.parse(tx); } catch(e) { dt = tx; }
+                            resolve({ success: true, ok, status: st, data: dt, rawText: tx });
+                        } catch(e) {
+                            resolve({ success: false, ok: false, error: e.message });
+                        }
+                    }, 5000);
+
+                    window.addEventListener("message", onMsg);
+                    window.postMessage({
+                        source: "MMM_PY_HTTP_REQUEST",
+                        requestId: requestId,
+                        payload: payload
+                    }, "*");
+                });
+            }
+
             const productsBase = resolverEndpointProductos(baseUrl);
             const productUrl = `${productsBase}/${targetId}`;
             const rawProd = window.__MMM_PY_PRODUCTS_DATA.get(String(targetId)) || {};
@@ -406,25 +450,38 @@
             };
             if (token) headers["Authorization"] = token;
 
-            let res;
+            // Lista de URLs candidatas a intentar
+            const candidateUrls = [productUrl];
+            if (productUrl.includes("/catalogs/")) {
+                const altUrl = productUrl.replace(/\/catalogs\/\d+\/products\//, '/catalogs/products/') + (productUrl.includes('?') ? '&' : '?') + 'vendorId=288326&locale=es';
+                if (!candidateUrls.includes(altUrl)) candidateUrls.push(altUrl);
+            }
+
+            let res = null;
+
             if (action.tipo_accion === "CAMBIAR_DISPONIBILIDAD") {
                 const disponible = Boolean(action.datos?.disponible);
                 console.log(`[MMM PY] Cambiando disponibilidad de #${targetId} (${action.datos?.nombre || ''}) a: ${disponible}`);
 
-                res = await originalFetch(`${productUrl}/availability`, {
-                    method: "PATCH",
-                    headers,
-                    credentials: "include",
-                    body: JSON.stringify({ isAvailable: disponible, available: disponible })
-                }).catch(() => null);
-
-                if (!res || !res.ok) {
-                    res = await originalFetch(productUrl, {
+                for (const u of candidateUrls) {
+                    const cleanUrl = u.split('?')[0];
+                    // 1. Probar /availability
+                    res = await sendHttp({
+                        url: `${cleanUrl}/availability`,
                         method: "PATCH",
                         headers,
-                        credentials: "include",
-                        body: JSON.stringify({ available: disponible, isAvailable: disponible })
-                    }).catch(() => null);
+                        body: { isAvailable: disponible, available: disponible }
+                    });
+                    if (res && res.ok) break;
+
+                    // 2. Probar PATCH directo al producto
+                    res = await sendHttp({
+                        url: u,
+                        method: "PATCH",
+                        headers,
+                        body: { available: disponible, isAvailable: disponible }
+                    });
+                    if (res && res.ok) break;
                 }
             } else if (action.tipo_accion === "ACTUALIZAR_PRECIO") {
                 const precio = parseFloat(action.datos?.precio || 0);
@@ -432,7 +489,7 @@
 
                 const payload = { 
                     price: precio, 
-                    pricing: { price: precio },
+                    pricing: { price: precio, amount: precio },
                     vendorOverrides: { price: precio }
                 };
 
@@ -440,33 +497,39 @@
                     payload.sizes = rawProd.sizes.map(s => ({
                         ...s,
                         price: precio,
-                        vendorOverrides: { ...(s.vendorOverrides || {}), price: precio }
+                        vendorOverrides: { ...(s.vendorOverrides || {}), price: precio },
+                        pricing: { ...(s.pricing || {}), price: precio, amount: precio }
                     }));
                 }
 
-                res = await originalFetch(productUrl, {
-                    method: "PATCH",
-                    headers,
-                    credentials: "include",
-                    body: JSON.stringify(payload)
-                }).catch(() => null);
-
-                if (!res || !res.ok) {
-                    res = await originalFetch(`${productUrl}/price`, {
-                        method: "PUT",
-                        headers,
-                        credentials: "include",
-                        body: JSON.stringify({ price: precio })
-                    }).catch(() => null);
-                }
-
-                if (!res || !res.ok) {
-                    res = await originalFetch(`${productUrl}/pricing`, {
+                for (const u of candidateUrls) {
+                    // 1. Probar PATCH completo al producto
+                    res = await sendHttp({
+                        url: u,
                         method: "PATCH",
                         headers,
-                        credentials: "include",
-                        body: JSON.stringify({ price: precio })
-                    }).catch(() => null);
+                        body: payload
+                    });
+                    if (res && res.ok) break;
+
+                    const cleanUrl = u.split('?')[0];
+                    // 2. Probar PUT /price
+                    res = await sendHttp({
+                        url: `${cleanUrl}/price`,
+                        method: "PUT",
+                        headers,
+                        body: { price: precio }
+                    });
+                    if (res && res.ok) break;
+
+                    // 3. Probar PATCH /pricing
+                    res = await sendHttp({
+                        url: `${cleanUrl}/pricing`,
+                        method: "PATCH",
+                        headers,
+                        body: { price: precio }
+                    });
+                    if (res && res.ok) break;
                 }
             }
 
@@ -478,8 +541,8 @@
                     success: true
                 }, "*");
             } else {
-                const errText = res ? await res.text().catch(() => "") : "Sin respuesta del servidor (Network/CORS error)";
-                throw new Error(`PedidosYa respondió (${res?.status || 'Network Error'}): ${errText}`);
+                const errText = res?.rawText || res?.error || `Status: ${res?.status || 'Network Error'}`;
+                throw new Error(`PedidosYa respondió (${res?.status || 'Error'}): ${errText}`);
             }
 
         } catch (err) {
