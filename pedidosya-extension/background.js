@@ -10,7 +10,7 @@ const DEFAULT_CONFIG = {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "SEND_PEDIDO_SUPABASE") {
         enviarASupabase(request.payload)
-            .then(res => sendResponse({ success: true, data: res }))
+            .then(res => sendResponse({ success: true, ...res }))
             .catch(err => sendResponse({ success: false, error: err.message }));
 
         return true; // Canal abierto para respuesta asíncrona
@@ -37,7 +37,7 @@ async function enviarASupabase(pedidoPY) {
 
     // 1. Verificar si el pedido ya existe por su nota o id de PedidosYa
     const idPyStr = String(pedidoPY.id_py);
-    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(idPyStr)}*&select=id`, {
+    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(idPyStr)}*&select=id,numero_pedido`, {
         method: "GET",
         headers
     });
@@ -45,15 +45,22 @@ async function enviarASupabase(pedidoPY) {
     if (resCheck.ok) {
         const exist = await resCheck.json();
         if (exist && exist.length > 0) {
-            console.log(`[MMM PY] El pedido ${idPyStr} ya existe en Supabase (ID: ${exist[0].id}). Se omite.`);
-            return exist[0].id;
+            console.log(`[MMM PY] El pedido ${idPyStr} ya existe en Supabase (${exist[0].numero_pedido}). Se omite.`);
+            return { data: exist[0].id, numeroPedido: exist[0].numero_pedido };
         }
     }
 
-    // 2. Armar número de pedido único legible
-    const yearPart = new Date().getFullYear().toString().slice(-2);
-    const shortPy = idPyStr.length > 6 ? idPyStr.slice(-6) : idPyStr;
-    const numeroPedido = `PY-${yearPart}${shortPy}`;
+    // 2. Armar el número de comanda REAL
+    // Si viene el número real de comanda de PeYa (ej: "1234"), lo mostramos directamente como PY-#1234
+    // Si no, usamos los últimos dígitos del ID
+    let numeroPedido = "";
+    if (pedidoPY.numero_real) {
+        numeroPedido = `PY-#${pedidoPY.numero_real}`;
+    } else {
+        const cleanId = idPyStr.replace(/[^a-zA-Z0-9]/g, '');
+        const shortPy = cleanId.length > 5 ? cleanId.slice(-5).toUpperCase() : cleanId.toUpperCase();
+        numeroPedido = `PY-${shortPy}`;
+    }
 
     const subtotal = pedidoPY.total || 0;
     const total = pedidoPY.total || 0;
@@ -165,5 +172,5 @@ async function enviarASupabase(pedidoPY) {
     }
 
     console.log(`[MMM PY] ✅ Pedido #${numeroPedido} impactado con éxito en MMM SYSTEM (ID: ${dbPedidoId})`);
-    return dbPedidoId;
+    return { data: dbPedidoId, numeroPedido };
 }

@@ -31,7 +31,6 @@ window.addEventListener("message", (event) => {
 });
 
 function procesarDatosDeRed(data) {
-    // La respuesta puede ser un array de órdenes o un objeto con lista
     let ordenes = [];
     if (Array.isArray(data)) {
         ordenes = data;
@@ -41,7 +40,7 @@ function procesarDatosDeRed(data) {
         ordenes = data.deliveries;
     } else if (data.items && Array.isArray(data.items)) {
         ordenes = [data];
-    } else if (data.id || data.orderId) {
+    } else if (data.id || data.orderId || data.orderNumber) {
         ordenes = [data];
     }
 
@@ -63,6 +62,18 @@ function normalizarYEnviarOrden(orden) {
         if (status.includes("CANCELLED") || status.includes("REJECTED")) {
             return;
         }
+
+        // Buscar el NÚMERO VISIBLE REAL de comanda (ej: #1234, 4521, etc.)
+        const numeroReal = orden.orderNumber || 
+                           orden.order_number || 
+                           orden.displayNumber || 
+                           orden.displayId || 
+                           orden.shortNumber || 
+                           orden.shortOrderNumber || 
+                           orden.ticketNumber || 
+                           orden.shortId || 
+                           orden.code || 
+                           null;
 
         // Datos del cliente
         const clienteNombre = orden.customer?.name || 
@@ -117,6 +128,7 @@ function normalizarYEnviarOrden(orden) {
 
         const payload = {
             id_py: idStr,
+            numero_real: numeroReal ? String(numeroReal).replace(/^#/, '').trim() : null,
             cliente: clienteNombre,
             telefono: clienteTelefono,
             direccion: clienteDireccion,
@@ -126,11 +138,11 @@ function normalizarYEnviarOrden(orden) {
             items: items.length > 0 ? items : [{ nombre: "Pedido PedidosYa", cantidad: 1, precio: total, adicionales: [] }]
         };
 
-        console.log(`✨ [MMM System Linker] ¡Nueva orden detectada #${idStr}! Enviando a MMM SYSTEM...`, payload);
+        console.log(`✨ [MMM System Linker] ¡Nueva orden detectada #${payload.numero_real || idStr}! Enviando a MMM SYSTEM...`, payload);
 
         chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload }, (res) => {
             if (res && res.success) {
-                console.log(`✅ [MMM System Linker] Pedido #${idStr} cargado exitosamente en el panel.`);
+                console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} cargado exitosamente en el panel.`);
                 procesados.add(idStr);
             } else {
                 console.error(`❌ [MMM System Linker] Error cargando pedido #${idStr}:`, res?.error);
