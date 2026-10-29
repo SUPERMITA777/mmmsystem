@@ -98,7 +98,7 @@
                 const clone = response.clone();
                 clone.json().then(data => {
                     if (data) {
-                        console.log("📋 [MMM Interceptor Fetch] Capturado catálogo de productos de PedidosYa");
+                        console.log("📋 [MMM Interceptor Fetch] Capturado catálogo de productos de PedidosYa:", data);
                         notificarExtension({ tipo: "CATALOGO_PY", url, data });
                     }
                 }).catch(() => {});
@@ -137,7 +137,7 @@
                     notificarExtension({ tipo: "ORDEN_PY", url: this._url, data });
                 } else if (esUrlCatalogo(this._url)) {
                     const data = JSON.parse(this.responseText);
-                    console.log("📋 [MMM Interceptor XHR] Capturado catálogo de productos de PedidosYa");
+                    console.log("📋 [MMM Interceptor XHR] Capturado catálogo de productos de PedidosYa:", data);
                     notificarExtension({ tipo: "CATALOGO_PY", url: this._url, data });
                 }
             } catch (e) {}

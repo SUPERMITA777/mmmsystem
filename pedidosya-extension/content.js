@@ -99,6 +99,74 @@ setInterval(() => {
     });
 }, 12000);
 
+function parseNumeroPrecio(val) {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+        const clean = val.replace(/[^0-9.,]/g, '').trim();
+        if (!clean) return 0;
+        if (clean.includes(',') && clean.includes('.')) {
+            return parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+        }
+        if (clean.includes(',')) {
+            return parseFloat(clean.replace(',', '.'));
+        }
+        return parseFloat(clean);
+    }
+    return 0;
+}
+
+function extraerPrecioProducto(p) {
+    if (!p || typeof p !== 'object') return 0;
+
+    // 1. Directo en p.price o p.pricing
+    let precio = parseNumeroPrecio(p.price) || 
+                 parseNumeroPrecio(p.pricing?.price) || 
+                 parseNumeroPrecio(p.pricing?.amount) || 
+                 parseNumeroPrecio(p.vendorPrice) || 
+                 parseNumeroPrecio(p.salePrice) || 
+                 parseNumeroPrecio(p.basePrice) || 
+                 parseNumeroPrecio(p.unitPrice) || 
+                 parseNumeroPrecio(p.amount) || 
+                 parseNumeroPrecio(p.finalPrice);
+    if (precio > 0) return precio;
+
+    // 2. En vendorOverrides (Delivery Hero / PedidosYa v5)
+    if (p.vendorOverrides && typeof p.vendorOverrides === 'object') {
+        const vo = p.vendorOverrides;
+        precio = parseNumeroPrecio(vo.price) || 
+                 parseNumeroPrecio(vo.pricing?.price) || 
+                 parseNumeroPrecio(vo.pricing?.amount) || 
+                 parseNumeroPrecio(vo.vendorPrice) || 
+                 parseNumeroPrecio(vo.basePrice);
+        if (precio > 0) return precio;
+    }
+
+    // 3. En sizes (Delivery Hero con sizeSupport=true)
+    if (Array.isArray(p.sizes) && p.sizes.length > 0) {
+        for (const s of p.sizes) {
+            precio = parseNumeroPrecio(s.price) || 
+                     parseNumeroPrecio(s.vendorPrice) || 
+                     parseNumeroPrecio(s.pricing?.price) || 
+                     parseNumeroPrecio(s.pricing?.amount) || 
+                     parseNumeroPrecio(s.vendorOverrides?.price);
+            if (precio > 0) return precio;
+        }
+    }
+
+    // 4. En variants
+    if (Array.isArray(p.variants) && p.variants.length > 0) {
+        for (const v of p.variants) {
+            precio = parseNumeroPrecio(v.price) || 
+                     parseNumeroPrecio(v.pricing?.price) || 
+                     parseNumeroPrecio(v.pricing?.amount);
+            if (precio > 0) return precio;
+        }
+    }
+
+    return 0;
+}
+
 // Extraer lista de productos desde los diferentes formatos de catálogo de PedidosYa
 function extraerProductosCatalogo(data) {
     let prods = [];
@@ -133,18 +201,7 @@ function extraerProductosCatalogo(data) {
         if (vistos.has(cleanNombre.toLowerCase())) return;
         vistos.add(cleanNombre.toLowerCase());
 
-        let precio = 0;
-        if (typeof p.price === 'number') precio = p.price;
-        else if (typeof p.price === 'string') precio = parseFloat(p.price);
-        else if (p.pricing && typeof p.pricing.price === 'number') precio = p.pricing.price;
-        else if (p.pricing && typeof p.pricing.amount === 'number') precio = p.pricing.amount;
-        else if (p.basePrice) precio = parseFloat(p.basePrice);
-        else if (p.amount) precio = parseFloat(p.amount);
-        else if (p.unitPrice) precio = parseFloat(p.unitPrice);
-        else if (p.salePrice) precio = parseFloat(p.salePrice);
-        else if (p.vendorPrice) precio = parseFloat(p.vendorPrice);
-        else if (p.finalPrice) precio = parseFloat(p.finalPrice);
-
+        const precio = extraerPrecioProducto(p);
         const descripcion = p.description || p.desc || "";
         const imagenUrl = p.imageUrl || p.image || p.picture || (Array.isArray(p.images) && p.images[0]?.url) || "";
         const idPy = p.id || p.productId || p.code || "";

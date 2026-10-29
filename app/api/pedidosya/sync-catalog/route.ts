@@ -68,21 +68,29 @@ export async function POST(req: NextRequest) {
       const idPy = item.id_py || item.id || "";
 
       const key = nombre.toLowerCase();
-      const existing = prodsByName.get(key);
+      let existing = prodsByName.get(key);
+      if (!existing && idPy) {
+        existing = (existingProds || []).find(p => p.descripcion?.includes(`ID PY: ${idPy}`));
+      }
 
       if (existing) {
         // Actualizar precio y asegurar que esté disponible para administración pero oculto al cliente
+        const updateFields: any = {
+          descripcion: descripcion || existing.descripcion,
+          imagen_url: imagenUrl || existing.imagen_url,
+          visible_en_menu: false,
+          producto_oculto: true,
+          activo: true,
+          updated_at: new Date().toISOString()
+        };
+
+        if (precio > 0) {
+          updateFields.precio = precio;
+        }
+
         await supabaseAdmin
           .from("productos")
-          .update({
-            precio: precio > 0 ? precio : existing.precio,
-            descripcion: descripcion || existing.descripcion,
-            imagen_url: imagenUrl || existing.imagen_url,
-            visible_en_menu: false,
-            producto_oculto: true,
-            activo: true,
-            updated_at: new Date().toISOString()
-          })
+          .update(updateFields)
           .eq("id", existing.id);
 
         actualizados++;
