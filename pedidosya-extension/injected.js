@@ -1,5 +1,5 @@
-// injected.js - Corre en el contexto real de la ventana de PedidosYa
-// Intercepta las respuestas fetch y XMLHttpRequest
+// injected.js - Corre en el contexto real de la ventana de PedidosYa Portal
+// Intercepta únicamente las llamadas de órdenes / entregas en vivo
 (function() {
     console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal");
 
@@ -13,11 +13,30 @@
     function esUrlRelevante(url) {
         if (!url || typeof url !== 'string') return false;
         const u = url.toLowerCase();
-        return u.includes("deliveries") || 
-               u.includes("orders") || 
-               u.includes("live-orders") || 
-               u.includes("vendor-api") || 
-               u.includes("restaurant-partners");
+
+        // 1. Descartar explícitamente catálogos, configuraciones, traducciones e impresiones
+        if (u.includes("catalogs") || 
+            u.includes("products") || 
+            u.includes("categories") || 
+            u.includes("translations") || 
+            u.includes("printing") || 
+            u.includes("escpos") || 
+            u.includes("restaurants") || 
+            u.includes("dine-in") || 
+            u.includes("schedules") || 
+            u.includes("reviews") || 
+            u.includes("assets") || 
+            u.includes("auth") ||
+            u.includes("feedback") ||
+            u.includes("locize")) {
+            return false;
+        }
+
+        // 2. Aceptar únicamente endpoints de pedidos / deliveries
+        return u.includes("deliveries-web") || 
+               u.includes("/deliveries") || 
+               u.includes("/orders") || 
+               u.includes("live-orders");
     }
 
     // 1. Interceptar Fetch
@@ -32,7 +51,7 @@
                 const clone = response.clone();
                 clone.json().then(data => {
                     if (data) {
-                        console.log("📦 [MMM Interceptor Fetch] Capturada respuesta de:", url, data);
+                        console.log("📦 [MMM Interceptor Fetch] Capturada respuesta de órdenes:", url);
                         notificarExtension({ url, data });
                     }
                 }).catch(() => {});
@@ -55,7 +74,7 @@
             try {
                 if (esUrlRelevante(this._url)) {
                     const data = JSON.parse(this.responseText);
-                    console.log("📦 [MMM Interceptor XHR] Capturada respuesta de:", this._url, data);
+                    console.log("📦 [MMM Interceptor XHR] Capturada respuesta de órdenes:", this._url);
                     notificarExtension({ url: this._url, data });
                 }
             } catch (e) {}

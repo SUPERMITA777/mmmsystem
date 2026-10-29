@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.0 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.1 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -16,7 +16,7 @@ function injectScript(file) {
 
 injectScript('injected.js');
 
-// Escuchar los mensajes del script inyectado
+// Evitar procesar el mismo pedido múltiples veces
 let procesados = new Set();
 
 window.addEventListener("message", (event) => {
@@ -27,25 +27,55 @@ window.addEventListener("message", (event) => {
     const { url, data } = event.data.payload || {};
     if (!data) return;
 
-    procesarDatosDeRed(data);
+    procesarDatosDeRed(data, url);
 });
 
-function procesarDatosDeRed(data) {
-    let ordenes = [];
-    if (Array.isArray(data)) {
-        ordenes = data;
-    } else if (data.orders && Array.isArray(data.orders)) {
-        ordenes = data.orders;
-    } else if (data.deliveries && Array.isArray(data.deliveries)) {
-        ordenes = data.deliveries;
-    } else if (data.items && Array.isArray(data.items)) {
-        ordenes = [data];
-    } else if (data.id || data.orderId || data.orderNumber) {
-        ordenes = [data];
+// Validación estricta: sólo pedidos reales de clientes, NUNCA productos del catálogo ni tablas de configuración
+function esPedidoValido(obj) {
+    if (!obj || typeof obj !== 'object') return false;
+
+    // Si tiene campos de catálogo/producto de menú, descartar inmediatamente
+    if (obj.categoryId || obj.modifierGroupIds || obj.barcode || obj.sectionId || obj.platformCatalogId) {
+        return false;
     }
 
-    ordenes.forEach(orden => {
-        normalizarYEnviarOrden(orden);
+    // Debe tener un identificador
+    const id = obj.id || obj.orderId || obj.deliveryId;
+    if (!id) return false;
+
+    // Debe tener estado de pedido, datos de cliente, items, o total válido
+    const hasStatus = !!(obj.status || obj.deliveryStatus || obj.state);
+    const hasCustomer = !!(obj.customer || obj.customerName || obj.user);
+    const hasItems = Array.isArray(obj.items || obj.products || obj.orderItems) && (obj.items?.length > 0 || obj.products?.length > 0);
+    const total = parseFloat(obj.total || obj.totalAmount || obj.pricing?.total || obj.payment?.total || 0);
+
+    // Si no tiene status ni cliente ni items y el total es 0, no es un pedido de cliente
+    if (!hasStatus && !hasCustomer && (!hasItems || total === 0)) {
+        return false;
+    }
+
+    return true;
+}
+
+function procesarDatosDeRed(data, url) {
+    let candidatos = [];
+
+    if (Array.isArray(data)) {
+        candidatos = data;
+    } else if (data.deliveries && Array.isArray(data.deliveries)) {
+        candidatos = data.deliveries;
+    } else if (data.orders && Array.isArray(data.orders)) {
+        candidatos = data.orders;
+    } else if (data.items && Array.isArray(data.items) && (data.customer || data.status || data.deliveryId || data.orderId)) {
+        candidatos = [data];
+    } else if (data.id && (data.customer || data.status || data.deliveryId || data.orderId)) {
+        candidatos = [data];
+    }
+
+    candidatos.forEach(item => {
+        if (esPedidoValido(item)) {
+            normalizarYEnviarOrden(item);
+        }
     });
 }
 
@@ -58,22 +88,29 @@ function normalizarYEnviarOrden(orden) {
         if (procesados.has(idStr)) return;
 
         // Si la orden ya está cancelada o rechazada, no la cargamos como nueva
-        const status = (orden.status || '').toUpperCase();
+        const status = (orden.status || orden.deliveryStatus || '').toUpperCase();
         if (status.includes("CANCELLED") || status.includes("REJECTED")) {
             return;
         }
 
         // Buscar el NÚMERO VISIBLE REAL de comanda (ej: #1234, 4521, etc.)
-        const numeroReal = orden.orderNumber || 
-                           orden.order_number || 
-                           orden.displayNumber || 
-                           orden.displayId || 
-                           orden.shortNumber || 
-                           orden.shortOrderNumber || 
-                           orden.ticketNumber || 
-                           orden.shortId || 
-                           orden.code || 
-                           null;
+        let numeroReal = orden.orderNumber || 
+                         orden.order_number || 
+                         orden.displayNumber || 
+                         orden.displayId || 
+                         orden.shortNumber || 
+                         orden.shortOrderNumber || 
+                         orden.ticketNumber || 
+                         orden.posId ||
+                         null;
+
+        // Si no viene campo específico pero 'code' o 'shortId' no es el uuid gigante, usarlo
+        if (!numeroReal && orden.code && String(orden.code).length <= 8) {
+            numeroReal = orden.code;
+        }
+        if (!numeroReal && orden.shortId && String(orden.shortId).length <= 8) {
+            numeroReal = orden.shortId;
+        }
 
         // Datos del cliente
         const clienteNombre = orden.customer?.name || 
@@ -140,14 +177,21 @@ function normalizarYEnviarOrden(orden) {
 
         console.log(`✨ [MMM System Linker] ¡Nueva orden detectada #${payload.numero_real || idStr}! Enviando a MMM SYSTEM...`, payload);
 
-        chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload }, (res) => {
-            if (res && res.success) {
-                console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} cargado exitosamente en el panel.`);
-                procesados.add(idStr);
-            } else {
-                console.error(`❌ [MMM System Linker] Error cargando pedido #${idStr}:`, res?.error);
-            }
-        });
+        // Manejar envío verificando contexto válido de la extensión
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({ action: "SEND_PEDIDO_SUPABASE", payload }, (res) => {
+                if (chrome.runtime.lastError) {
+                    console.warn("Aviso extensión:", chrome.runtime.lastError.message);
+                    return;
+                }
+                if (res && res.success) {
+                    console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} cargado exitosamente en el panel.`);
+                    procesados.add(idStr);
+                } else {
+                    console.error(`❌ [MMM System Linker] Error cargando pedido #${idStr}:`, res?.error);
+                }
+            });
+        }
 
     } catch (e) {
         console.error("Error parseando orden interceptada:", e);

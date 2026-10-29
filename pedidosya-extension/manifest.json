@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "MMM System - PedidosYa Linker",
-    "version": "2.0",
+    "version": "2.1",
     "description": "Captura automática de pedidos de PedidosYa hacia MMM SYSTEM vía Network Interceptor.",
     "permissions": [
         "storage"
