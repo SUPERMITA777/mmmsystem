@@ -72,8 +72,17 @@ export function CategoriasList({
                 categoria.activo ? "bg-green-500" : "bg-red-500"
                 }`}
             />
-            <span className="flex-1 text-sm font-medium truncate">
-              {categoria.nombre}
+            <span className="flex-1 text-sm font-medium truncate flex items-center gap-1.5">
+              <span>{categoria.nombre}</span>
+              {categoria.nombre.toLowerCase().includes("pedidosya") && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-black tracking-wide uppercase shrink-0 ${
+                  categoriaSeleccionada === categoria.id
+                    ? "bg-red-500 text-white"
+                    : "bg-red-100 text-red-700 border border-red-200"
+                }`}>
+                  🛵 PeYa
+                </span>
+              )}
             </span>
 
             {/* Action Icons - Visible on Hover */}

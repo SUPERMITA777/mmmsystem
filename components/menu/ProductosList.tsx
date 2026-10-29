@@ -76,13 +76,27 @@ export function ProductosList({
             >
               <div
                 className={`w-2 h-2 rounded-full shrink-0 ${
-                  (producto.activo && producto.visible_en_menu && !producto.producto_oculto) 
-                    ? "bg-green-500" 
-                    : "bg-red-500"
+                  !producto.activo
+                    ? "bg-red-500"
+                    : (producto.visible_en_menu && !producto.producto_oculto)
+                    ? "bg-green-500"
+                    : "bg-amber-500"
                 }`}
+                title={
+                  !producto.activo
+                    ? "Inactivo"
+                    : (producto.visible_en_menu && !producto.producto_oculto)
+                    ? "Visible para clientes"
+                    : "Oculto al cliente (Activo para admin / PeYa)"
+                }
               />
               <div className="flex-1 min-w-0 flex items-center gap-1.5">
                 <span className="text-sm font-medium truncate">{producto.nombre}</span>
+                {producto.activo && (!producto.visible_en_menu || producto.producto_oculto) && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 bg-blue-100 text-blue-800 border border-blue-300" title="Visible para administración y delivery, oculto en carta web">
+                    PEYA / OCULTO
+                  </span>
+                )}
                 {producto.promo_activo && producto.precio_promocional != null && (
                   <span
                     className={`px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 ${
