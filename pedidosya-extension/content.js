@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.8 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.9 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -17,11 +17,11 @@ function injectScript(file) {
 injectScript('injected.js');
 
 // Evitar procesar el mismo pedido en el mismo estado múltiples veces
-let ultimosEstados = new Map(); // id_py -> rawStatus
+let ultimosEstados = new Map(); // id_py_estado -> true
 
 // Mapeo automático de estados de PedidosYa hacia MMM SYSTEM
 function mapearEstadoPedidosYa(rawStatus) {
-    if (!rawStatus) return "pendiente";
+    if (!rawStatus) return "preparando";
     const s = rawStatus.toUpperCase().trim();
 
     // 1. Entregado / Finalizado / Despachado / Cancelado / Baja
@@ -31,30 +31,24 @@ function mapearEstadoPedidosYa(rawStatus) {
         s.includes("RECONCILED") || 
         s.includes("RECONCILIATION") ||
         s.includes("CANCELLED") ||
+        s.includes("CANCELED") ||
         s.includes("REJECTED")) {
         return "entregado";
     }
 
-    // 2. Listo (Comida lista para retirar)
+    // 2. Listo (Comida lista para retirar / rider asignado o esperando)
     if (s.includes("READY") || 
         s.includes("WAITING_FOR_TRANSPORT") || 
         s.includes("WAITING_FOR_COURIER") || 
-        s.includes("DRIVER_ARRIVED")) {
+        s.includes("COURIER_ARRIVED") ||
+        s.includes("DRIVER_ARRIVED") ||
+        s.includes("NEAR_STORE")) {
         return "listo";
     }
 
-    // 3. En Preparación (Aceptado por el restaurante o impreso automáticamente por PeYa)
-    if (s.includes("ACCEPTED") || 
-        s.includes("PREPARING") || 
-        s.includes("IN_PREPARATION") || 
-        s.includes("CONFIRMED") || 
-        s.includes("COOKING") ||
-        s.includes("MODIFIED_BY_VENDOR")) {
-        return "preparando";
-    }
-
-    // 4. Nuevo / Pendiente
-    return "pendiente";
+    // 3. Todo pedido entrante / recibido / aceptado / impreso en PedidosYa: EN PREPARACIÓN
+    // PedidosYa no utiliza confirmación manual en MMM: al entrar e imprimirse se cocina directamente
+    return "preparando";
 }
 
 // Escuchar mensajes provenientes de injected.js
@@ -335,12 +329,13 @@ function normalizarYEnviarOrden(orden) {
         const idStr = String(idPy);
         const rawStatus = (orden.status || orden.deliveryStatus || '').toUpperCase().trim();
 
-        // Si ya procesamos esta orden con este mismo estado, no volvemos a enviarla
-        if (ultimosEstados.has(idStr) && ultimosEstados.get(idStr) === rawStatus) {
+        const estadoMmm = mapearEstadoPedidosYa(rawStatus);
+
+        // Si ya procesamos esta orden con este mismo estado mapeado, no volvemos a enviarla
+        const estadoKey = `${idStr}_${estadoMmm}`;
+        if (ultimosEstados.has(estadoKey)) {
             return;
         }
-
-        const estadoMmm = mapearEstadoPedidosYa(rawStatus);
 
         // Buscar el NÚMERO VISIBLE REAL de comanda (ej: #1234, 4521, etc.)
         let numeroReal = orden.orderNumber || 
@@ -437,7 +432,7 @@ function normalizarYEnviarOrden(orden) {
                 }
                 if (res && res.success) {
                     console.log(`✅ [MMM System Linker] Pedido #${res.numeroPedido || idStr} actualizado a '${estadoMmm}' en el panel.`);
-                    ultimosEstados.set(idStr, rawStatus);
+                    ultimosEstados.set(estadoKey, true);
                 } else {
                     console.error(`❌ [MMM System Linker] Error actualizando pedido #${idStr}:`, res?.error);
                 }

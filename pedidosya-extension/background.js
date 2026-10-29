@@ -251,7 +251,8 @@ async function enviarASupabase(pedidoPY) {
 
     // 1. Verificar si el pedido ya existe por su nota o id de PedidosYa
     const idPyStr = String(pedidoPY.id_py);
-    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(idPyStr)}*&select=id,numero_pedido,estado`, {
+    const cleanId = idPyStr.replace(/^oma_/i, '');
+    const resCheck = await fetch(`${supabaseUrl}/rest/v1/pedidos?sucursal_id=eq.${sucursalId}&notas=like.*${encodeURIComponent(cleanId)}*&select=id,numero_pedido,estado`, {
         method: "GET",
         headers
     });
