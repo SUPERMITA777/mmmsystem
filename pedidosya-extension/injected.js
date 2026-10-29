@@ -1,13 +1,23 @@
 // injected.js - Corre en el contexto real de la ventana de PedidosYa
-// Intercepta las respuestas fetch y XMLHttpRequest de orders/deliveries
+// Intercepta las respuestas fetch y XMLHttpRequest
 (function() {
     console.log("🚀 [MMM System Linker] Interceptor de red inyectado en PedidosYa Portal");
 
-    function notificarExtension(data) {
+    function notificarExtension(payload) {
         window.postMessage({
             source: "MMM_PY_INTERCEPTOR",
-            payload: data
+            payload: payload
         }, "*");
+    }
+
+    function esUrlRelevante(url) {
+        if (!url || typeof url !== 'string') return false;
+        const u = url.toLowerCase();
+        return u.includes("deliveries") || 
+               u.includes("orders") || 
+               u.includes("live-orders") || 
+               u.includes("vendor-api") || 
+               u.includes("restaurant-partners");
     }
 
     // 1. Interceptar Fetch
@@ -15,19 +25,19 @@
     window.fetch = async function(...args) {
         const response = await originalFetch.apply(this, args);
         try {
-            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-            if (url.includes("deliveries-web") || url.includes("orders") || url.includes("deliveries")) {
+            const rawUrl = args[0];
+            const url = typeof rawUrl === 'string' ? rawUrl : (rawUrl?.url || '');
+            
+            if (esUrlRelevante(url)) {
                 const clone = response.clone();
                 clone.json().then(data => {
                     if (data) {
-                        // console.log("📦 [MMM Interceptor] Datos interceptados de:", url, data);
+                        console.log("📦 [MMM Interceptor Fetch] Capturada respuesta de:", url, data);
                         notificarExtension({ url, data });
                     }
                 }).catch(() => {});
             }
-        } catch (e) {
-            // Ignorar errores silenciosamente para no romper la app de PedidosYa
-        }
+        } catch (e) {}
         return response;
     };
 
@@ -36,16 +46,16 @@
     const originalXhrSend = XMLHttpRequest.prototype.send;
 
     XMLHttpRequest.prototype.open = function(method, url) {
-        this._url = url;
+        this._url = typeof url === 'string' ? url : '';
         return originalXhrOpen.apply(this, arguments);
     };
 
     XMLHttpRequest.prototype.send = function() {
         this.addEventListener('load', function() {
             try {
-                if (this._url && (this._url.includes("deliveries-web") || this._url.includes("orders") || this._url.includes("deliveries"))) {
+                if (esUrlRelevante(this._url)) {
                     const data = JSON.parse(this.responseText);
-                    // console.log("📦 [MMM Interceptor XHR] Datos interceptados de:", this._url, data);
+                    console.log("📦 [MMM Interceptor XHR] Capturada respuesta de:", this._url, data);
                     notificarExtension({ url: this._url, data });
                 }
             } catch (e) {}
