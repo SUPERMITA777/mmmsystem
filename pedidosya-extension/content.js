@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.2 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.3 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -19,20 +19,47 @@ injectScript('injected.js');
 // Evitar procesar el mismo pedido múltiples veces
 let procesados = new Set();
 
+// Escuchar mensajes provenientes de injected.js
 window.addEventListener("message", (event) => {
-    if (event.source !== window || !event.data || event.data.source !== "MMM_PY_INTERCEPTOR") {
-        return;
-    }
+    if (event.source !== window || !event.data) return;
 
-    const { tipo, url, data } = event.data.payload || {};
-    if (!data) return;
+    if (event.data.source === "MMM_PY_INTERCEPTOR") {
+        const { tipo, url, data } = event.data.payload || {};
+        if (!data) return;
 
-    if (tipo === "CATALOGO_PY") {
-        procesarCatalogo(data, url);
-    } else {
-        procesarDatosDeRed(data, url);
+        if (tipo === "CATALOGO_PY") {
+            procesarCatalogo(data, url);
+        } else {
+            procesarDatosDeRed(data, url);
+        }
+    } else if (event.data.source === "MMM_PY_ACTION_RESULT") {
+        const { actionId, success, error } = event.data;
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+            chrome.runtime.sendMessage({
+                action: "UPDATE_PEDIDOSYA_ACTION",
+                payload: { actionId, success, error }
+            });
+        }
     }
 });
+
+// Polling de acciones pendientes desde MMM SYSTEM hacia PedidosYa (cada 12 segundos)
+setInterval(() => {
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) return;
+
+    chrome.runtime.sendMessage({ action: "POLL_PEDIDOSYA_ACTIONS" }, (res) => {
+        if (chrome.runtime.lastError) return;
+        if (res && res.success && Array.isArray(res.acciones) && res.acciones.length > 0) {
+            console.log(`⚡ [MMM System Linker] Se recibieron ${res.acciones.length} acciones para ejecutar en PedidosYa:`, res.acciones);
+            res.acciones.forEach(action => {
+                window.postMessage({
+                    source: "MMM_PY_EXECUTE_ACTION",
+                    action: action
+                }, "*");
+            });
+        }
+    });
+}, 12000);
 
 // Extraer lista de productos desde los diferentes formatos de catálogo de PedidosYa
 function extraerProductosCatalogo(data) {

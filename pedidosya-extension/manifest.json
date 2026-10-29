@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "MMM System - PedidosYa Linker",
-    "version": "2.2",
-    "description": "Captura automática de pedidos y sincronización de catálogo de PedidosYa hacia MMM SYSTEM.",
+    "version": "2.3",
+    "description": "Captura automática de pedidos, catálogo y actualización bidireccional de precios y stock con PedidosYa.",
     "permissions": [
         "storage"
     ],

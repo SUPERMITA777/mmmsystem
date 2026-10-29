@@ -36,7 +36,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true;
     }
+
+    if (request.action === "POLL_PEDIDOSYA_ACTIONS") {
+        consultarAccionesPendientes()
+            .then(acciones => sendResponse({ success: true, acciones }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+
+        return true;
+    }
+
+    if (request.action === "UPDATE_PEDIDOSYA_ACTION") {
+        actualizarResultadoAccion(request.payload)
+            .then(() => sendResponse({ success: true }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+
+        return true;
+    }
 });
+
+async function consultarAccionesPendientes() {
+    const stored = await chrome.storage.sync.get(['supabaseUrl', 'supabaseKey', 'sucursalId']);
+    const supabaseUrl = stored.supabaseUrl || DEFAULT_CONFIG.supabaseUrl;
+    const supabaseKey = stored.supabaseKey || DEFAULT_CONFIG.supabaseKey;
+    const sucursalId = stored.sucursalId || DEFAULT_CONFIG.sucursalId;
+
+    if (!sucursalId) return [];
+
+    const headers = {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json"
+    };
+
+    const res = await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?sucursal_id=eq.${sucursalId}&estado=eq.pendiente&limit=5&order=created_at.asc`, {
+        method: "GET",
+        headers
+    });
+
+    if (!res.ok) return [];
+    const acciones = await res.json().catch(() => []);
+    if (!acciones || acciones.length === 0) return [];
+
+    // Marcar como procesando para evitar llamadas duplicadas
+    const ids = acciones.map(a => a.id);
+    for (const id of ids) {
+        await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?id=eq.${id}`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ estado: "procesando" })
+        }).catch(() => {});
+    }
+
+    return acciones;
+}
+
+async function actualizarResultadoAccion(payload) {
+    const { actionId, success, error } = payload || {};
+    if (!actionId) return;
+
+    const stored = await chrome.storage.sync.get(['supabaseUrl', 'supabaseKey']);
+    const supabaseUrl = stored.supabaseUrl || DEFAULT_CONFIG.supabaseUrl;
+    const supabaseKey = stored.supabaseKey || DEFAULT_CONFIG.supabaseKey;
+
+    const headers = {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json"
+    };
+
+    await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?id=eq.${actionId}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+            estado: success ? "procesado" : "error",
+            mensaje_error: error || null,
+            processed_at: new Date().toISOString()
+        })
+    });
+}
 
 async function sincronizarCatalogo(productosDirectos) {
     const stored = await chrome.storage.sync.get(['sucursalId', 'apiUrl']);

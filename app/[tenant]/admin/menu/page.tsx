@@ -291,6 +291,35 @@ export default function MenuPage() {
         }
       }
 
+      // 3. Si el producto está vinculado con PedidosYa, encolar sincronización bidireccional
+      const matchPy = pData.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
+      if (matchPy && matchPy[1]) {
+        const idPy = matchPy[1];
+        try {
+          await supabase.from("pedidosya_acciones").insert([
+            {
+              sucursal_id: sucursalId,
+              producto_id: pData.id,
+              id_py: idPy,
+              tipo_accion: "ACTUALIZAR_PRECIO",
+              datos: { precio: pData.precio },
+              estado: "pendiente"
+            },
+            {
+              sucursal_id: sucursalId,
+              producto_id: pData.id,
+              id_py: idPy,
+              tipo_accion: "CAMBIAR_DISPONIBILIDAD",
+              datos: { disponible: pData.activo },
+              estado: "pendiente"
+            }
+          ]);
+          console.log("[PeYa Sync] Acción encolada para actualizar en PedidosYa:", idPy);
+        } catch (e) {
+          console.warn("[PeYa Sync] Error encolando acción:", e);
+        }
+      }
+
       alert("Producto actualizado correctamente");
       if (categoriaSeleccionada) loadProductos(categoriaSeleccionada);
     } catch (error) {
