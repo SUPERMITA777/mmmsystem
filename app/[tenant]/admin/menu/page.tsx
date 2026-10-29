@@ -295,13 +295,14 @@ export default function MenuPage() {
       const catPeya = categorias.find(c => c.nombre.toLowerCase().includes("pedidosya"));
       const isPeya = Boolean(
         pData.categoria_id === catPeya?.id ||
-        pData.nombre_interno?.startsWith("[PY]") ||
+        pData.nombre_interno?.startsWith("[PY") ||
         pData.nombre?.toLowerCase().includes("peya") ||
         pData.descripcion?.includes("ID PY:")
       );
 
       if (isPeya) {
-        const matchPy = pData.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
+        const matchPy = pData.nombre_interno?.match(/\[PY:([a-zA-Z0-9_-]+)\]/i) ||
+                        pData.descripcion?.match(/ID PY:\s*([a-zA-Z0-9_-]+)/i);
         const idPy = matchPy ? matchPy[1] : null;
 
         try {

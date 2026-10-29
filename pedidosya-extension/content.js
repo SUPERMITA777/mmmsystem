@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.3 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.6 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -167,28 +167,48 @@ function extraerPrecioProducto(p) {
     return 0;
 }
 
-// Extraer lista de productos desde los diferentes formatos de catálogo de PedidosYa
-function extraerProductosCatalogo(data) {
-    let prods = [];
+// Desempaquetador universal recursivo de productos de catálogo
+function aplanarProductos(data) {
+    const list = [];
+    const seen = new Set();
+    if (!data) return list;
 
-    if (Array.isArray(data)) {
-        prods = data;
-    } else if (data.products && Array.isArray(data.products)) {
-        prods = data.products;
-    } else if (data.items && Array.isArray(data.items)) {
-        prods = data.items;
-    } else if (data.categories && Array.isArray(data.categories)) {
-        data.categories.forEach(c => {
-            if (Array.isArray(c.products)) prods.push(...c.products);
-            if (Array.isArray(c.items)) prods.push(...c.items);
-        });
-    } else if (data.sections && Array.isArray(data.sections)) {
-        data.sections.forEach(s => {
-            if (Array.isArray(s.products)) prods.push(...s.products);
-            if (Array.isArray(s.items)) prods.push(...s.items);
-        });
+    function walk(node) {
+        if (!node || typeof node !== 'object') return;
+
+        if (Array.isArray(node)) {
+            for (const item of node) walk(item);
+            return;
+        }
+
+        // Explorar posibles contenedores de catálogo
+        if (Array.isArray(node.products)) walk(node.products);
+        if (Array.isArray(node.items)) walk(node.items);
+        if (Array.isArray(node.categories)) walk(node.categories);
+        if (Array.isArray(node.sections)) walk(node.sections);
+        if (Array.isArray(node.catalogProducts)) walk(node.catalogProducts);
+        if (Array.isArray(node.elements)) walk(node.elements);
+        if (Array.isArray(node.data)) walk(node.data);
+
+        const id = node.id || node.productId || node.catalogProductId || node.code;
+        const name = node.name || node.title || node.productName;
+
+        if (name && typeof name === 'string' && id) {
+            const sId = String(id).trim();
+            if (!seen.has(sId)) {
+                seen.add(sId);
+                list.push(node);
+            }
+        }
     }
 
+    walk(data);
+    return list;
+}
+
+// Extraer lista de productos desde los diferentes formatos de catálogo de PedidosYa
+function extraerProductosCatalogo(data) {
+    const prods = aplanarProductos(data);
     const resultado = [];
     const vistos = new Set();
 
@@ -198,13 +218,14 @@ function extraerProductosCatalogo(data) {
         if (!nombre || typeof nombre !== 'string') return;
 
         const cleanNombre = nombre.trim();
-        if (vistos.has(cleanNombre.toLowerCase())) return;
-        vistos.add(cleanNombre.toLowerCase());
+        const norm = cleanNombre.toLowerCase();
+        if (vistos.has(norm)) return;
+        vistos.add(norm);
 
         const precio = extraerPrecioProducto(p);
         const descripcion = p.description || p.desc || "";
         const imagenUrl = p.imageUrl || p.image || p.picture || (Array.isArray(p.images) && p.images[0]?.url) || "";
-        const idPy = p.id || p.productId || p.code || "";
+        const idPy = p.id || p.productId || p.catalogProductId || p.code || "";
 
         resultado.push({
             id_py: String(idPy),

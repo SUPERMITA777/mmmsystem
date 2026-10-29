@@ -75,14 +75,22 @@ export async function POST(req: NextRequest) {
 
       if (existing) {
         // Actualizar precio y asegurar que esté disponible para administración pero oculto al cliente
+        const baseDesc = descripcion || existing.descripcion || "";
+        const cleanDesc = baseDesc.replace(/\s*\(ID PY:[^\)]+\)/i, "").trim();
+        const finalDesc = idPy ? `${cleanDesc} (ID PY: ${idPy})`.trim() : cleanDesc;
+
         const updateFields: any = {
-          descripcion: descripcion || existing.descripcion,
+          descripcion: finalDesc,
           imagen_url: imagenUrl || existing.imagen_url,
           visible_en_menu: false,
           producto_oculto: true,
           activo: true,
           updated_at: new Date().toISOString()
         };
+
+        if (idPy) {
+          updateFields.nombre_interno = `[PY:${idPy}] ${nombre}`;
+        }
 
         if (precio > 0) {
           updateFields.precio = precio;
@@ -100,7 +108,7 @@ export async function POST(req: NextRequest) {
           sucursal_id,
           categoria_id: categoriaId,
           nombre,
-          nombre_interno: `[PY] ${nombre}`,
+          nombre_interno: idPy ? `[PY:${idPy}] ${nombre}` : `[PY] ${nombre}`,
           descripcion: idPy ? `${descripcion} (ID PY: ${idPy})` : descripcion,
           precio,
           costo_fijo: 0,

@@ -151,7 +151,38 @@ async function sincronizarCatalogo(productosDirectos) {
 
     const data = await response.json();
     console.log("[MMM PY] ✅ Catálogo sincronizado:", data);
+
+    // Reactivar cualquier acción que hubiera fallado previamente por falta de catálogo
+    const supabaseUrl = stored.supabaseUrl || DEFAULT_CONFIG.supabaseUrl;
+    const supabaseKey = stored.supabaseKey || DEFAULT_CONFIG.supabaseKey;
+    reactivarAccionesConError(sucursalId, supabaseUrl, supabaseKey);
+
     return data;
+}
+
+async function reactivarAccionesConError(sucursalId, supabaseUrl, supabaseKey) {
+    try {
+        const headers = {
+            "apikey": supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json"
+        };
+        const res = await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?sucursal_id=eq.${sucursalId}&estado=eq.error&limit=10&order=created_at.desc`, {
+            headers
+        });
+        if (!res.ok) return;
+        const errActions = await res.json().catch(() => []);
+        for (const act of errActions) {
+            if (act.mensaje_error && act.mensaje_error.includes("No se pudo resolver el ID")) {
+                console.log(`[MMM PY] 🔄 Reactivando acción previa para reintento: #${act.id} (${act.tipo_accion})`);
+                await fetch(`${supabaseUrl}/rest/v1/pedidosya_acciones?id=eq.${act.id}`, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({ estado: "pendiente", mensaje_error: null })
+                }).catch(() => {});
+            }
+        }
+    } catch(e) {}
 }
 
 async function enviarASupabase(pedidoPY) {
