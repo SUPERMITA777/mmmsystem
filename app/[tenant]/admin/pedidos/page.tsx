@@ -78,8 +78,42 @@ export default function PedidosPage() {
             .range((page - 1) * perPage, page * perPage - 1);
 
         if (filtroEstado) query = query.eq("estado", filtroEstado);
-        if (filtroTipo) query = query.eq("tipo", filtroTipo);
-        if (filtroMetodoPago) query = query.eq("metodo_pago_nombre", filtroMetodoPago);
+
+        // Filtro Modalidad
+        if (filtroTipo === "delivery_peya") {
+            query = query.eq("tipo", "delivery").or("origen.eq.pedidosya,numero_pedido.ilike.PY-%");
+        } else if (filtroTipo === "takeaway_peya") {
+            query = query.eq("tipo", "takeaway").or("origen.eq.pedidosya,numero_pedido.ilike.PY-%");
+        } else if (filtroTipo === "delivery") {
+            query = query.eq("tipo", "delivery").neq("origen", "pedidosya").not("numero_pedido", "ilike", "PY-%");
+        } else if (filtroTipo === "takeaway") {
+            query = query.eq("tipo", "takeaway").neq("origen", "pedidosya").not("numero_pedido", "ilike", "PY-%");
+        } else if (filtroTipo === "salon") {
+            query = query.eq("tipo", "salon");
+        }
+
+        // Filtro Metodo de Pago (robusto, no sensible a mayúsculas/minúsculas)
+        if (filtroMetodoPago === "ONLINE TARJETA (PEYA)") {
+            query = query.or("metodo_pago_nombre.ilike.%ONLINE%PEYA%,and(origen.eq.pedidosya,metodo_pago_nombre.ilike.%ONLINE%)");
+        } else if (filtroMetodoPago === "EFECTIVO (PEYA)") {
+            query = query.or("metodo_pago_nombre.ilike.%EFECTIVO%PEYA%,and(origen.eq.pedidosya,metodo_pago_nombre.ilike.%EFECTIVO%)");
+        } else if (filtroMetodoPago === "EFECTIVO") {
+            query = query.ilike("metodo_pago_nombre", "%efectivo%")
+                         .not("metodo_pago_nombre", "ilike", "%peya%")
+                         .neq("origen", "pedidosya")
+                         .not("numero_pedido", "ilike", "PY-%");
+        } else if (filtroMetodoPago === "ONLINE TARJETA") {
+            query = query.ilike("metodo_pago_nombre", "%online%")
+                         .not("metodo_pago_nombre", "ilike", "%peya%")
+                         .neq("origen", "pedidosya")
+                         .not("numero_pedido", "ilike", "PY-%");
+        } else if (filtroMetodoPago === "TRANSFERENCIA") {
+            query = query.ilike("metodo_pago_nombre", "%transferencia%");
+        } else if (filtroMetodoPago === "TARJETA DE DÉBITO") {
+            query = query.ilike("metodo_pago_nombre", "%débito%");
+        } else if (filtroMetodoPago === "TARJETA DE CRÉDITO") {
+            query = query.ilike("metodo_pago_nombre", "%crédito%");
+        }
 
         if (filtroFecha === "hoy") {
             const hoyStr = getArgentinaDate();
@@ -236,6 +270,8 @@ export default function PedidosPage() {
                     <legend className="text-[10px] text-gray-500 px-1">Modalidad</legend>
                     <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
                         <option value="">Todos</option>
+                        <option value="delivery_peya">Delivery (PeYa)</option>
+                        <option value="takeaway_peya">Take Away (PeYa)</option>
                         <option value="delivery">Delivery</option>
                         <option value="takeaway">Take Away</option>
                         <option value="salon">Salón</option>
