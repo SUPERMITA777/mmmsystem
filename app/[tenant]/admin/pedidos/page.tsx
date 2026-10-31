@@ -131,6 +131,28 @@ export default function PedidosPage() {
         }
     }
 
+    async function cambiarMetodoPago(pedido: Pedido, nuevoMetodo: string) {
+        try {
+            const isConfirmed = nuevoMetodo.toUpperCase().includes("ONLINE") || 
+                                nuevoMetodo.toUpperCase().includes("TRANSFERENCIA") ||
+                                nuevoMetodo.toUpperCase().includes("TARJETA");
+            const { error } = await supabase
+                .from("pedidos")
+                .update({ 
+                    metodo_pago_nombre: nuevoMetodo,
+                    pago_confirmado: isConfirmed,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", pedido.id);
+            if (error) throw error;
+            setSelectedPedido(prev => prev ? { ...prev, metodo_pago_nombre: nuevoMetodo } : null);
+            fetchPedidos();
+        } catch (error) {
+            console.error("Error al cambiar método de pago:", error);
+            alert("Error al cambiar el método de pago");
+        }
+    }
+
     const totalPages = Math.ceil(total / perPage);
 
     function formatDate(d: string) {
@@ -222,8 +244,11 @@ export default function PedidosPage() {
                     <legend className="text-[10px] text-gray-500 px-1">Pago</legend>
                     <select value={filtroMetodoPago} onChange={e => { setFiltroMetodoPago(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
                         <option value="">Todos</option>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Transferencia">Transferencia</option>
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="ONLINE TARJETA">Online Tarjeta</option>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="TARJETA DE DÉBITO">Tarjeta Débito</option>
+                        <option value="TARJETA DE CRÉDITO">Tarjeta Crédito</option>
                     </select>
                 </fieldset>
             </div>
@@ -268,7 +293,15 @@ export default function PedidosPage() {
                                         </span>
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className="text-[10px] font-bold text-gray-600 uppercase">
+                                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider ${
+                                            p.metodo_pago_nombre?.toUpperCase().includes("ONLINE")
+                                                ? "bg-purple-100 text-purple-700 border border-purple-200"
+                                                : p.metodo_pago_nombre?.toUpperCase().includes("EFECTIVO")
+                                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                                : p.metodo_pago_nombre?.toUpperCase().includes("TRANSFERENCIA")
+                                                ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                                : "bg-gray-100 text-gray-700"
+                                        }`}>
                                             {p.metodo_pago_nombre || "—"}
                                         </span>
                                     </td>

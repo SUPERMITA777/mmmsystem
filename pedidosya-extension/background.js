@@ -373,8 +373,8 @@ async function enviarASupabase(pedidoPY) {
         costo_envio: 0,
         propina: 0,
         total: total,
-        metodo_pago_nombre: pedidoPY.metodo_pago || "Online / Pagado",
-        pago_confirmado: (pedidoPY.metodo_pago || "").toLowerCase().includes("online"),
+        metodo_pago_nombre: pedidoPY.metodo_pago || "ONLINE TARJETA",
+        pago_confirmado: (pedidoPY.metodo_pago || "").toUpperCase().includes("ONLINE"),
         notas: `ID PedidosYa: ${idPyStr}`
     };
 

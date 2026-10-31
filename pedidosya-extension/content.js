@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.10 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.11 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -392,11 +392,52 @@ function normalizarYEnviarOrden(orden) {
         // Totales
         const total = parseFloat(orden.total || orden.totalAmount || orden.pricing?.total || orden.payment?.total || 0);
 
-        // Método de pago
-        let metodoPago = "Online / Pagado";
-        const paymentMethod = (orden.payment?.method || orden.paymentMethod || '').toLowerCase();
-        if (paymentMethod.includes("cash") || paymentMethod.includes("efectivo")) {
-            metodoPago = "Efectivo";
+        // Método de pago (discriminación robusta entre EFECTIVO y ONLINE TARJETA)
+        let metodoPago = "ONLINE TARJETA";
+
+        const candidatePaymentTexts = [
+            orden.paymentMethod,
+            orden.paymentType,
+            orden.paymentMode,
+            orden.payment?.method,
+            orden.payment?.type,
+            orden.payment?.name,
+            orden.payment?.title,
+            orden.payment?.description,
+            orden.collectionType
+        ];
+
+        if (Array.isArray(orden.payments)) {
+            orden.payments.forEach(p => {
+                if (p) candidatePaymentTexts.push(p.method, p.type, p.name, p.description);
+            });
+        }
+
+        const paymentAllText = candidatePaymentTexts.filter(Boolean).map(c => String(c).toLowerCase()).join(" ");
+
+        const isCashOnDelivery = orden.cashOnDelivery === true || 
+                                 orden.isPrepaid === false || 
+                                 orden.prepaid === false || 
+                                 orden.payment?.isPrepaid === false || 
+                                 orden.payment?.prepaid === false ||
+                                 orden.collectionType === "VENDOR" || 
+                                 orden.collectionType === "RESTAURANT";
+
+        const hasCashKeyword = paymentAllText.includes("cash") || 
+                               paymentAllText.includes("efectivo") || 
+                               paymentAllText.includes("cod");
+
+        const rawAllNotes = `${orden.notes || ''} ${orden.comment || ''} ${orden.deliveryNotes || ''} ${orden.driverNotes || ''}`.toLowerCase();
+        const hasCashInNotes = rawAllNotes.includes("abona con") || 
+                               rawAllNotes.includes("paga con") || 
+                               rawAllNotes.includes("pago en efectivo") || 
+                               rawAllNotes.includes("vuelto de") || 
+                               rawAllNotes.includes("cambio de");
+
+        if (isCashOnDelivery || hasCashKeyword || hasCashInNotes) {
+            metodoPago = "EFECTIVO";
+        } else {
+            metodoPago = "ONLINE TARJETA";
         }
 
         // Ítems / Productos
