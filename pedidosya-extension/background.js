@@ -366,14 +366,14 @@ async function enviarASupabase(pedidoPY) {
         cliente_nombre: clienteNombreFinal,
         cliente_telefono: pedidoPY.telefono || "0000000000",
         cliente_direccion: pedidoPY.direccion || "",
-        tipo: 'delivery',
+        tipo: pedidoPY.tipo || 'delivery',
         estado: pedidoPY.estado_mmm || 'preparando',
         origen: 'pedidosya',
         subtotal: subtotal,
         costo_envio: 0,
         propina: 0,
         total: total,
-        metodo_pago_nombre: pedidoPY.metodo_pago || "ONLINE TARJETA",
+        metodo_pago_nombre: pedidoPY.metodo_pago || "ONLINE TARJETA (PEYA)",
         pago_confirmado: (pedidoPY.metodo_pago || "").toUpperCase().includes("ONLINE"),
         notas: `ID PedidosYa: ${idPyStr}`
     };

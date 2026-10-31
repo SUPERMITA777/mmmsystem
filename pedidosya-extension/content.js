@@ -1,5 +1,5 @@
 // content.js - Inyectado en portal-app.pedidosya.com / partner.pedidosya.com
-console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.11 Iniciado");
+console.log("🍕 MMM SYSTEM LINKER: Monitor de PedidosYa v2.12 Iniciado");
 
 // Inyectar el script interceptor en el DOM de la página
 function injectScript(file) {
@@ -435,9 +435,9 @@ function normalizarYEnviarOrden(orden) {
                                rawAllNotes.includes("cambio de");
 
         if (isCashOnDelivery || hasCashKeyword || hasCashInNotes) {
-            metodoPago = "EFECTIVO";
+            metodoPago = "EFECTIVO (PEYA)";
         } else {
-            metodoPago = "ONLINE TARJETA";
+            metodoPago = "ONLINE TARJETA (PEYA)";
         }
 
         // Ítems / Productos
@@ -471,10 +471,21 @@ function normalizarYEnviarOrden(orden) {
         // Notas del pedido completo
         const notas = orden.notes || orden.comment || orden.deliveryNotes || `ID PedidosYa: ${idStr}`;
 
+        // Modalidad de venta (Delivery vs Take Away / Pickup)
+        const typeStr = String(orden.type || orden.orderType || orden.deliveryType || orden.shippingType || orden.fulfillmentType || '').toUpperCase();
+        const isPickup = orden.isPickup === true || 
+                         orden.pickup === true || 
+                         typeStr.includes("PICKUP") || 
+                         typeStr.includes("TAKEAWAY") || 
+                         typeStr.includes("TAKE_AWAY") || 
+                         typeStr.includes("COLLECTION");
+        const tipoPedido = isPickup ? "takeaway" : "delivery";
+
         const payload = {
             id_py: idStr,
             status_py: rawStatus,
             estado_mmm: estadoMmm,
+            tipo: tipoPedido,
             numero_real: numeroReal ? String(numeroReal).replace(/^#/, '').trim() : null,
             cliente: clienteNombre,
             telefono: clienteTelefono,

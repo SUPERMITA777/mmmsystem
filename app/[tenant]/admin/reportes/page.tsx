@@ -263,7 +263,11 @@ export default function ReportesPage() {
 
     // Group by Payment Method
     const metodosDist = pedidos.reduce((acc: any, p) => {
-        const key = p.metodo_pago_nombre || (p.metodos_pago as any)?.nombre || "Efectivo";
+        let key = p.metodo_pago_nombre || (p.metodos_pago as any)?.nombre || "Efectivo";
+        const isPeya = p.origen === "pedidosya" || p.numero_pedido?.startsWith("PY-");
+        if (isPeya && !key.toUpperCase().includes("(PEYA)")) {
+            key = `${key} (PEYA)`;
+        }
         if (!acc[key]) acc[key] = { label: key, value: 0, count: 0, propina: 0, envio: 0 };
         acc[key].value += Number(p.total || 0);
         acc[key].count += 1;
@@ -275,15 +279,27 @@ export default function ReportesPage() {
 
     // Group by Modality
     const modalidadDist = pedidos.reduce((acc: any, p) => {
-        const key = p.tipo || "otro";
+        const isPeya = p.origen === "pedidosya" || p.numero_pedido?.startsWith("PY-");
+        const rawTipo = (p.tipo || "otro").toLowerCase();
+        let key = "OTRO";
+        if (rawTipo.includes("delivery")) {
+            key = isPeya ? "DELIVERY (PEYA)" : "DELIVERY";
+        } else if (rawTipo.includes("takeaway") || rawTipo.includes("take away") || rawTipo.includes("retiro")) {
+            key = isPeya ? "TAKE AWAY (PEYA)" : "TAKE AWAY";
+        } else if (rawTipo.includes("salon") || rawTipo.includes("mesa")) {
+            key = "SALÓN";
+        } else {
+            key = isPeya ? `${rawTipo.toUpperCase()} (PEYA)` : rawTipo.toUpperCase();
+        }
         acc[key] = (acc[key] || 0) + 1;
         return acc;
     }, {});
-    const modArray = [
-        { label: "Delivery", value: modalidadDist.delivery || 0 },
-        { label: "Take Away", value: modalidadDist.takeaway || 0 },
-        { label: "Salón", value: modalidadDist.salon || 0 },
-    ].filter(m => m.value > 0);
+    const modArray = Object.entries(modalidadDist)
+        .map(([label, value]: [string, any]) => ({ label, value }))
+        .filter(m => m.value > 0)
+        .sort((a, b) => b.value - a.value);
+
+    const MOD_COLORS = ["#f97316", "#fb923c", "#9333ea", "#a855f7", "#06b6d4", "#38bdf8", "#10b981", "#64748b"];
 
     // Group items for Ventas tab
     const productStats = items.reduce((acc: any, item) => {
@@ -520,7 +536,7 @@ export default function ReportesPage() {
                                                 colors={COLORS}
                                             />
                                             <div className="flex-1 space-y-3">
-                                                {metodosArray.slice(0, 4).map((m: any, i) => (
+                                                {metodosArray.slice(0, 8).map((m: any, i) => (
                                                     <div key={i} className="flex items-center justify-between group">
                                                         <div className="flex items-center gap-2">
                                                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
@@ -536,12 +552,12 @@ export default function ReportesPage() {
                                     <div className="bg-white rounded-[2rem] border border-gray-100 p-8 shadow-sm">
                                         <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-6 border-b border-gray-50 pb-4">Modalidades de Venta</h4>
                                         <div className="flex items-center gap-10">
-                                            <DonutChart data={modArray} colors={["#f97316", "#9333ea", "#06b6d4"]} />
+                                            <DonutChart data={modArray} colors={MOD_COLORS} />
                                             <div className="flex-1 space-y-3">
                                                 {modArray.map((m, i) => (
                                                     <div key={i} className="flex items-center justify-between">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ["#f97316", "#9333ea", "#06b6d4"][i] }} />
+                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: MOD_COLORS[i % MOD_COLORS.length] }} />
                                                             <span className="text-xs font-bold text-gray-500 uppercase">{m.label}</span>
                                                         </div>
                                                         <span className="text-xs font-black text-gray-900">{m.value} pedidos</span>

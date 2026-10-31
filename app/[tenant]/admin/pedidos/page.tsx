@@ -16,6 +16,7 @@ type Pedido = {
     cliente_direccion: string;
     total: number;
     metodo_pago_nombre: string;
+    origen?: string;
     created_at: string;
     mesa_id?: string | null;
     pedido_items: { id: string; nombre_producto: string; cantidad: number; precio_unitario: number }[];
@@ -244,6 +245,8 @@ export default function PedidosPage() {
                     <legend className="text-[10px] text-gray-500 px-1">Pago</legend>
                     <select value={filtroMetodoPago} onChange={e => { setFiltroMetodoPago(e.target.value); setPage(1); }} className="bg-transparent outline-none text-sm text-gray-900 min-w-[140px]">
                         <option value="">Todos</option>
+                        <option value="ONLINE TARJETA (PEYA)">Online Tarjeta (PeYa)</option>
+                        <option value="EFECTIVO (PEYA)">Efectivo (PeYa)</option>
                         <option value="EFECTIVO">Efectivo</option>
                         <option value="ONLINE TARJETA">Online Tarjeta</option>
                         <option value="TRANSFERENCIA">Transferencia</option>
@@ -283,8 +286,16 @@ export default function PedidosPage() {
                                     <td className="px-4 py-3 font-bold text-gray-900">{p.numero_pedido}</td>
                                     <td className="px-4 py-3 text-gray-700">{p.cliente_nombre || "—"}</td>
                                     <td className="px-4 py-3">
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${TIPO_BADGE[p.tipo] || "bg-gray-100 text-gray-600"}`}>
-                                            {p.tipo}
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                            (p.origen === 'pedidosya' || p.numero_pedido?.startsWith('PY-'))
+                                                ? p.tipo === 'takeaway'
+                                                    ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                                    : "bg-orange-100 text-orange-800 border border-orange-200"
+                                                : TIPO_BADGE[p.tipo] || "bg-gray-100 text-gray-600"
+                                        }`}>
+                                            {(p.origen === 'pedidosya' || p.numero_pedido?.startsWith('PY-'))
+                                                ? p.tipo === 'takeaway' ? "TAKE AWAY (PEYA)" : "DELIVERY (PEYA)"
+                                                : p.tipo}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3">
