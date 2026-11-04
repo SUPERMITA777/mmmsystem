@@ -18,6 +18,11 @@ interface PanelSettings {
         confirmado: string;
         listo: string;
         entregado: string;
+        pedidosya?: string;
+        silenciar_confirmado?: boolean;
+        silenciar_listo?: boolean;
+        silenciar_entregado?: boolean;
+        silenciar_pedidosya?: boolean;
     };
     promo_qr_text?: string;
     promo_qr_image_url?: string;
@@ -54,7 +59,12 @@ export default function OrderPanelSettingsModal({
         whatsapp_templates: {
             confirmado: "¡Hola! Tu pedido ya fue confirmado y se encuentra en preparación. Te avisaremos cuando esté en camino!",
             listo: "TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!",
-            entregado: "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido."
+            entregado: "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido.",
+            pedidosya: "¡Hola! Recibimos tu pedido de PedidosYa y ya se encuentra en preparación. ¡Muchas gracias por elegirnos!",
+            silenciar_confirmado: false,
+            silenciar_listo: false,
+            silenciar_entregado: false,
+            silenciar_pedidosya: false
         },
         promo_qr_text: "#GRACIAS POR ELEGIRNOS",
         bridge_ip: "127.0.0.1"
@@ -64,7 +74,19 @@ export default function OrderPanelSettingsModal({
 
     useEffect(() => {
         if (initialSettings) {
-            setSettings(initialSettings);
+            setSettings({
+                ...initialSettings,
+                whatsapp_templates: {
+                    confirmado: initialSettings.whatsapp_templates?.confirmado ?? "¡Hola! Tu pedido ya fue confirmado y se encuentra en preparación. Te avisaremos cuando esté en camino!",
+                    listo: initialSettings.whatsapp_templates?.listo ?? "TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!",
+                    entregado: initialSettings.whatsapp_templates?.entregado ?? "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido.",
+                    pedidosya: initialSettings.whatsapp_templates?.pedidosya ?? "¡Hola! Recibimos tu pedido de PedidosYa y ya se encuentra en preparación. ¡Muchas gracias por elegirnos!",
+                    silenciar_confirmado: !!initialSettings.whatsapp_templates?.silenciar_confirmado,
+                    silenciar_listo: !!initialSettings.whatsapp_templates?.silenciar_listo,
+                    silenciar_entregado: !!initialSettings.whatsapp_templates?.silenciar_entregado,
+                    silenciar_pedidosya: !!initialSettings.whatsapp_templates?.silenciar_pedidosya,
+                }
+            });
         }
     }, [initialSettings]);
 
@@ -391,35 +413,150 @@ export default function OrderPanelSettingsModal({
 
                     {/* WhatsApp Notifications */}
                     <section className="space-y-4 pt-4 border-t border-gray-100">
-                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <MessageSquare size={14} /> <span>Notificaciones por WhatsApp</span>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                <MessageSquare size={14} /> <span>Notificaciones por WhatsApp</span>
+                            </div>
+                            <span className="text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full font-medium">
+                                Variables: %NOMBRE% y %PEDIDO%
+                            </span>
                         </div>
 
-                        <div className="space-y-6">
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">De "Nuevo" a "En Preparación"</label>
+                        <div className="space-y-5">
+                            {/* De Nuevo a En Preparacion */}
+                            <div className="space-y-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[11px] text-gray-700 font-bold uppercase tracking-tight">
+                                        De "Nuevo" a "En Preparación" (Web / Local)
+                                    </label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-gray-700 select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!settings.whatsapp_templates?.silenciar_confirmado}
+                                            onChange={e => setSettings({
+                                                ...settings,
+                                                whatsapp_templates: { ...(settings.whatsapp_templates || {}), silenciar_confirmado: e.target.checked } as any
+                                            })}
+                                            className="w-3.5 h-3.5 rounded border-gray-300 text-[#7B1FA2] focus:ring-[#7B1FA2]"
+                                        />
+                                        <span>Silenciar</span>
+                                    </label>
+                                </div>
                                 <textarea
                                     value={settings.whatsapp_templates?.confirmado || ""}
                                     onChange={e => setSettings({
                                         ...settings,
                                         whatsapp_templates: { ...(settings.whatsapp_templates || {}), confirmado: e.target.value } as any
                                     })}
-                                    className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
+                                    className="w-full h-16 bg-white border border-gray-200 rounded-lg p-2.5 text-xs resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
                                     placeholder="Mensaje al confirmar..."
                                 />
                             </div>
 
-                            <div className="space-y-1">
-                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">De "En Preparación" a "Listo"</label>
+                            {/* De En Preparacion a Listo */}
+                            <div className="space-y-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[11px] text-gray-700 font-bold uppercase tracking-tight">
+                                        De "En Preparación" a "Listo / En Camino"
+                                    </label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-gray-700 select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!settings.whatsapp_templates?.silenciar_listo}
+                                            onChange={e => setSettings({
+                                                ...settings,
+                                                whatsapp_templates: { ...(settings.whatsapp_templates || {}), silenciar_listo: e.target.checked } as any
+                                            })}
+                                            className="w-3.5 h-3.5 rounded border-gray-300 text-[#7B1FA2] focus:ring-[#7B1FA2]"
+                                        />
+                                        <span>Silenciar</span>
+                                    </label>
+                                </div>
                                 <textarea
                                     value={settings.whatsapp_templates?.listo || ""}
                                     onChange={e => setSettings({
                                         ...settings,
                                         whatsapp_templates: { ...(settings.whatsapp_templates || {}), listo: e.target.value } as any
                                     })}
-                                    className="w-full h-24 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm font-bold uppercase resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
+                                    className="w-full h-16 bg-white border border-gray-200 rounded-lg p-2.5 text-xs font-bold uppercase resize-none focus:ring-2 focus:ring-[#7B1FA2]/20 outline-none"
                                     placeholder="Mensaje al estar listo..."
                                 />
+                            </div>
+
+                            {/* PedidosYa Saludo / Confirmacion */}
+                            <div className="space-y-1.5 bg-red-50/40 p-3.5 rounded-xl border border-red-100">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] bg-red-600 text-white font-extrabold px-1.5 py-0.5 rounded tracking-wide">
+                                            PEDIDOSYA
+                                        </span>
+                                        <label className="text-[11px] text-gray-800 font-bold uppercase tracking-tight">
+                                            Saludo / Confirmación
+                                        </label>
+                                    </div>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-gray-700 select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!settings.whatsapp_templates?.silenciar_pedidosya}
+                                            onChange={e => setSettings({
+                                                ...settings,
+                                                whatsapp_templates: { ...(settings.whatsapp_templates || {}), silenciar_pedidosya: e.target.checked } as any
+                                            })}
+                                            className="w-3.5 h-3.5 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                        />
+                                        <span className="font-semibold text-red-700">Silenciar</span>
+                                    </label>
+                                </div>
+                                <textarea
+                                    value={settings.whatsapp_templates?.pedidosya ?? ""}
+                                    onChange={e => setSettings({
+                                        ...settings,
+                                        whatsapp_templates: { ...(settings.whatsapp_templates || {}), pedidosya: e.target.value } as any
+                                    })}
+                                    className="w-full h-20 bg-white border border-red-200 rounded-lg p-2.5 text-xs resize-none focus:ring-2 focus:ring-red-400/20 outline-none"
+                                    placeholder="Ej: ¡Hola! Recibimos tu pedido de PedidosYa y ya se encuentra en preparación. ¡Muchas gracias por elegirnos!"
+                                />
+                                <p className="text-[10px] text-gray-500 italic">
+                                    Texto enviado al cliente de PedidosYa al recibir o confirmar su orden. Marca 'Silenciar' para evitar abrir WhatsApp automáticamente.
+                                </p>
+                            </div>
+
+                            {/* Pedido Finalizado / Entregado */}
+                            <div className="space-y-1.5 bg-emerald-50/40 p-3.5 rounded-xl border border-emerald-100">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] bg-emerald-600 text-white font-extrabold px-1.5 py-0.5 rounded tracking-wide">
+                                            FINALIZADO
+                                        </span>
+                                        <label className="text-[11px] text-gray-800 font-bold uppercase tracking-tight">
+                                            Pedido Finalizado / Entregado
+                                        </label>
+                                    </div>
+                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-500 hover:text-gray-700 select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!settings.whatsapp_templates?.silenciar_entregado}
+                                            onChange={e => setSettings({
+                                                ...settings,
+                                                whatsapp_templates: { ...(settings.whatsapp_templates || {}), silenciar_entregado: e.target.checked } as any
+                                            })}
+                                            className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                        />
+                                        <span className="font-semibold text-emerald-700">Silenciar</span>
+                                    </label>
+                                </div>
+                                <textarea
+                                    value={settings.whatsapp_templates?.entregado ?? ""}
+                                    onChange={e => setSettings({
+                                        ...settings,
+                                        whatsapp_templates: { ...(settings.whatsapp_templates || {}), entregado: e.target.value } as any
+                                    })}
+                                    className="w-full h-20 bg-white border border-emerald-200 rounded-lg p-2.5 text-xs resize-none focus:ring-2 focus:ring-emerald-400/20 outline-none"
+                                    placeholder="Ej: ¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido."
+                                />
+                                <p className="text-[10px] text-gray-500 italic">
+                                    Si marcas 'Silenciar' o dejas este campo vacío, no se abrirá WhatsApp al finalizar o entregar pedidos.
+                                </p>
                             </div>
                         </div>
                     </section>

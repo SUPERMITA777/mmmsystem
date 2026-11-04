@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink, QrCode } from "lucide-react";
+import { Search, Plus, Clock, MapPin, Phone, User, Bike, ChefHat, X, Check, Truck, ChevronDown, Settings as SettingsIcon, Pencil, Trash2, ExternalLink, QrCode, MessageSquare } from "lucide-react";
 import dynamic from "next/dynamic";
 import ConfirmTimeModal from "@/components/admin/ConfirmTimeModal";
 import { printComanda, printCocina, printCocinaIncremental, printPreCuenta, printPromoQrWeb, printFacturaFiscal } from "@/lib/printUtils";
@@ -564,24 +564,74 @@ export default function PanelPedidosPage() {
   const sendWhatsAppNotification = useCallback((pedido: Pedido, type: 'confirmado' | 'listo' | 'entregado') => {
     if (!pedido.cliente_telefono) return;
 
-    // Get template from settings or use default
+    const rawPhone = pedido.cliente_telefono.replace(/\D/g, "");
+    if (!rawPhone || rawPhone === "0000000000" || rawPhone.length < 6) return;
+
     const templates = sucursalConfig?.panel_settings?.whatsapp_templates;
+    const isPeya = pedido.origen === 'pedidosya' || pedido.numero_pedido?.toLowerCase().startsWith('py-');
+
+    // Comprobación de silenciamientos configurados por el administrador
+    if (type === 'entregado' && templates?.silenciar_entregado) return;
+    if (type === 'listo' && templates?.silenciar_listo) return;
+    if (type === 'confirmado') {
+      if (isPeya && templates?.silenciar_pedidosya) return;
+      if (!isPeya && templates?.silenciar_confirmado) return;
+    }
+
     let msg = "";
 
     if (type === 'confirmado') {
-      msg = templates?.confirmado || `Tu pedido realizado a MMM ha sido confirmado.`;
+      if (isPeya) {
+        msg = templates?.pedidosya ?? "¡Hola! Recibimos tu pedido de PedidosYa y ya se encuentra en preparación. ¡Muchas gracias por elegirnos!";
+      } else {
+        msg = templates?.confirmado ?? "Tu pedido realizado a MMM ha sido confirmado.";
+      }
     } else if (type === 'listo') {
-      msg = templates?.listo || `TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!`;
+      msg = templates?.listo ?? "TU PEDIDO YA ESTÁ LISTO Y EN CAMINO A TU DOMICILIO. QUE LO DISFRUTES!!!";
     } else if (type === 'entregado') {
-      msg = templates?.entregado || `¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido.`;
+      msg = templates?.entregado ?? "¡Gracias por elegirnos! Esperamos que hayas disfrutado tu pedido.";
     }
 
-    if (!msg) return;
+    if (!msg || !msg.trim()) return;
 
-    const rawPhone = pedido.cliente_telefono.replace(/\D/g, "");
+    // Sustitución de variables dinámicas (%NOMBRE%, %PEDIDO%)
+    if (pedido.cliente_nombre) {
+      msg = msg.replace(/%NOMBRE%/gi, pedido.cliente_nombre.replace(/\(peya\)/gi, '').trim());
+    } else {
+      msg = msg.replace(/%NOMBRE%/gi, '');
+    }
+    if (pedido.numero_pedido) {
+      msg = msg.replace(/%PEDIDO%/gi, pedido.numero_pedido);
+    }
+
     const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
     const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
     window.open(waUrl, '_blank');
+  }, [sucursalConfig]);
+
+  const getWhatsAppUrl = useCallback((p: Pedido) => {
+    if (!p.cliente_telefono) return null;
+    const rawPhone = p.cliente_telefono.replace(/\D/g, "");
+    if (!rawPhone || rawPhone === "0000000000" || rawPhone.length < 6) return null;
+
+    const templates = sucursalConfig?.panel_settings?.whatsapp_templates;
+    const isPeya = p.origen === 'pedidosya' || p.numero_pedido?.toLowerCase().startsWith('py-');
+
+    let msg = isPeya
+      ? (templates?.pedidosya ?? "¡Hola! Recibimos tu pedido de PedidosYa y ya se encuentra en preparación. ¡Muchas gracias por elegirnos!")
+      : (templates?.confirmado ?? "Tu pedido realizado a MMM ha sido confirmado.");
+
+    if (p.cliente_nombre) {
+      msg = msg.replace(/%NOMBRE%/gi, p.cliente_nombre.replace(/\(peya\)/gi, '').trim());
+    } else {
+      msg = msg.replace(/%NOMBRE%/gi, '');
+    }
+    if (p.numero_pedido) {
+      msg = msg.replace(/%PEDIDO%/gi, p.numero_pedido);
+    }
+
+    const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;
+    return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
   }, [sucursalConfig]);
 
   async function cambiarEstado(pedido: Pedido, nuevoEstado: string) {
@@ -1220,12 +1270,14 @@ export default function PanelPedidosPage() {
                     {selectedPedido.cliente_telefono && (
                       <div className="flex items-center justify-between px-4 py-3">
                         <a
-                          href={`https://wa.me/${selectedPedido.cliente_telefono.replace(/\D/g, "").replace(/^(?!54)/, "54")}`}
+                          href={getWhatsAppUrl(selectedPedido) || `https://wa.me/${selectedPedido.cliente_telefono.replace(/\D/g, "").replace(/^(?!54)/, "54")}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm text-purple-600 font-medium hover:underline cursor-pointer"
+                          className="text-sm text-purple-600 font-medium hover:underline cursor-pointer flex items-center gap-1.5"
+                          title="Enviar mensaje de WhatsApp"
                         >
-                          WhatsApp: {selectedPedido.cliente_telefono}
+                          <MessageSquare size={14} className="text-emerald-600" />
+                          <span>WhatsApp: {selectedPedido.cliente_telefono}</span>
                         </a>
                         <button
                           onClick={() => navigator.clipboard.writeText(selectedPedido.cliente_telefono)}
