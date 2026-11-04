@@ -38,10 +38,12 @@ export default function ProductDetailModal({
     producto,
     onClose,
     descuentos = [],
+    onOpenCart,
 }: {
     producto: Producto;
     onClose: () => void;
     descuentos?: any[];
+    onOpenCart?: () => void;
 }) {
     const [cantidad, setCantidad] = useState(1);
     const [grupos, setGrupos] = useState<GrupoAdicional[]>([]);
@@ -113,11 +115,12 @@ export default function ProductDetailModal({
         }
     }
 
-    // Validar si todos los grupos obligatorios cumplen su mínimo
+    // Validar si todos los grupos obligatorios cumplen su mínimo (mínimo al menos 1 si es obligatorio)
     const isCartValid = grupos.every(g => {
-        if (!g.seleccion_obligatoria) return true;
+        const minRequired = g.seleccion_obligatoria ? Math.max(1, g.seleccion_minima || 0) : (g.seleccion_minima || 0);
+        if (minRequired === 0) return true;
         const count = (seleccion[g.id] || []).length;
-        return count >= g.seleccion_minima;
+        return count >= minRequired;
     });
 
     function handleAgregar() {
@@ -179,6 +182,9 @@ export default function ProductDetailModal({
             } : null,
         });
         window.location.hash = "#carrito";
+        if (onOpenCart) {
+            onOpenCart();
+        }
         handleClose();
     }
 
@@ -306,20 +312,21 @@ export default function ProductDetailModal({
                         <div className="space-y-8 pb-10 mt-6">
                             {grupos.map(g => {
                                 const selectedCount = (seleccion[g.id] || []).length;
-                                const isGroupValid = !g.seleccion_obligatoria || selectedCount >= g.seleccion_minima;
+                                const minRequired = g.seleccion_obligatoria ? Math.max(1, g.seleccion_minima || 0) : (g.seleccion_minima || 0);
+                                const isGroupValid = minRequired === 0 || selectedCount >= minRequired;
 
                                 return (
                                     <div key={g.id} className={`rounded-2xl border ${!isGroupValid ? 'border-orange-500/50 bg-orange-500/5' : 'border-slate-800/50 bg-slate-900/20'} overflow-hidden`}>
                                         <div className={`px-4 py-4 border-b ${!isGroupValid ? 'border-orange-500/20' : 'border-slate-800/50'}`}>
                                             <div className="flex items-center justify-between mb-1">
                                                 <h3 className="text-base font-black text-white uppercase tracking-wider">{g.titulo}</h3>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${g.seleccion_obligatoria ? "bg-orange-500 text-white" : "bg-slate-800 text-slate-400"}`}>
-                                                    {g.seleccion_obligatoria ? "Requerido" : "Opcional"}
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${g.seleccion_obligatoria || minRequired > 0 ? "bg-orange-500 text-white" : "bg-slate-800 text-slate-400"}`}>
+                                                    {g.seleccion_obligatoria || minRequired > 0 ? "Requerido" : "Opcional"}
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs text-slate-400">
                                                 <span>Seleccionados {selectedCount} de {g.seleccion_maxima}</span>
-                                                {g.seleccion_obligatoria && <span>Mínimo {g.seleccion_minima}</span>}
+                                                {minRequired > 0 && <span>Mínimo {minRequired}</span>}
                                             </div>
                                         </div>
                                         <div className="divide-y divide-slate-800/50">

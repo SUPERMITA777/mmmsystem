@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, ShoppingCart, BookOpen } from "lucide-react";
+import { X, ShoppingCart, BookOpen, Loader2 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import { getProductDiscount, Descuento } from "@/lib/discountUtils";
 
 interface FlyerData {
     id: string;
@@ -20,6 +21,15 @@ interface Producto {
     precio: number;
     imagen_url?: string;
     descripcion?: string;
+    categoria_nombre?: string;
+    categoria_id?: string;
+    precio_promocional?: number;
+    promo_activo?: boolean;
+    promo_desde?: string;
+    promo_hasta?: string;
+    promo_hora_desde?: string;
+    promo_hora_hasta?: string;
+    promo_dias?: number[];
 }
 
 export default function FlyerOverlay({
@@ -27,14 +37,19 @@ export default function FlyerOverlay({
     onClose,
     onOpenProduct,
     onOpenCart,
+    categorias = [],
+    descuentos = [],
 }: {
     sucursalId: string;
     onClose: () => void;
     onOpenProduct: (producto: Producto) => void;
     onOpenCart?: () => void;
+    categorias?: any[];
+    descuentos?: any[];
 }) {
     const [flyer, setFlyer] = useState<FlyerData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [adding, setAdding] = useState(false);
     const { addItem } = useCart();
 
     useEffect(() => {
@@ -71,43 +86,122 @@ export default function FlyerOverlay({
     }
 
     async function handleAgregarAlCarrito() {
-        if (!flyer?.producto_id) {
+        if (!flyer?.producto_id || adding) {
             onClose();
             return;
         }
 
+        setAdding(true);
         try {
-            const { data: prod } = await supabase
-                .from("productos")
-                .select("*")
-                .eq("id", flyer.producto_id)
-                .single();
+            // 1. Obtener datos del producto (primero de categorías ya cargadas, o de la base de datos)
+            let prod: any = null;
+            if (categorias && categorias.length > 0) {
+                for (const cat of categorias) {
+                    const found = (cat.productos || []).find((p: any) => p.id === flyer.producto_id);
+                    if (found) {
+                        prod = {
+                            ...found,
+                            categoria_nombre: cat.nombre,
+                            categoria_id: cat.id,
+                        };
+                        break;
+                    }
+                }
+            }
 
-            if (!prod) return;
+            if (!prod) {
+                const { data: fetchedProd, error: prodErr } = await supabase
+                    .from("productos")
+                    .select("*, categorias(id, nombre)")
+                    .eq("id", flyer.producto_id)
+                    .maybeSingle();
 
-            // Verificar si tiene opciones / adicionales
-            const { data: options } = await supabase
+                if (prodErr || !fetchedProd) {
+                    console.error("Error obteniendo producto del flyer:", prodErr);
+                    onClose();
+                    return;
+                }
+
+                prod = {
+                    ...fetchedProd,
+                    categoria_nombre: fetchedProd.categorias?.nombre,
+                    categoria_id: fetchedProd.categoria_id || fetchedProd.categorias?.id,
+                };
+            }
+
+            // 2. Verificar si el producto tiene grupos de adicionales asociados
+            const { data: asignaciones, error: asigErr } = await supabase
                 .from("producto_grupos_adicionales")
-                .select("id")
-                .eq("producto_id", prod.id)
-                .limit(1);
+                .select("grupo_id")
+                .eq("producto_id", prod.id);
 
-            if (options && options.length > 0) {
+            if (asigErr) {
+                console.error("Error consultando producto_grupos_adicionales:", asigErr);
+            }
+
+            let tieneEleccionesObligatorias = false;
+
+            if (asignaciones && asignaciones.length > 0) {
+                const grupoIds = asignaciones.map((a: any) => a.grupo_id);
+                const { data: gruposData, error: gruposErr } = await supabase
+                    .from("grupos_adicionales")
+                    .select("id, titulo, seleccion_obligatoria, seleccion_minima, seleccion_maxima")
+                    .in("id", grupoIds);
+
+                if (gruposErr) {
+                    console.error("Error consultando grupos_adicionales:", gruposErr);
+                }
+
+                if (gruposData && gruposData.length > 0) {
+                    tieneEleccionesObligatorias = gruposData.some((g: any) => {
+                        const esObligatorio = Boolean(g.seleccion_obligatoria);
+                        const minRequerido = Number(g.seleccion_minima || 0);
+                        return esObligatorio || minRequerido > 0;
+                    });
+                }
+            }
+
+            // 3. Si tiene elecciones obligatorias, obligar a seleccionar opciones abriendo el detalle del producto
+            if (tieneEleccionesObligatorias) {
                 onOpenProduct(prod);
                 onClose();
-            } else {
-                addItem({
-                    productoId: prod.id,
-                    nombre: prod.nombre,
-                    precio: prod.precio,
-                    cantidad: 1,
-                    imagen_url: prod.imagen_url,
-                    adicionales: [],
-                });
-                onClose();
+                return;
+            }
+
+            // 4. Si no tiene elecciones obligatorias, agregar directamente al carrito
+            const discount = getProductDiscount(
+                prod.id,
+                prod.categoria_id || "",
+                descuentos as Descuento[],
+                prod as any
+            );
+            const precioBase = discount ? discount.precioFinal(prod.precio) : prod.precio;
+
+            addItem({
+                productoId: prod.id,
+                nombre: prod.nombre,
+                precio: precioBase,
+                cantidad: 1,
+                imagen_url: prod.imagen_url,
+                adicionales: [],
+                categoriaNombre: prod.categoria_nombre,
+                descuentoInfo: discount ? {
+                    id: discount.id,
+                    porcentaje: discount.porcentaje,
+                    no_acumulable: discount.no_acumulable,
+                    nombre: discount.nombre,
+                } : null,
+            });
+
+            onClose();
+            if (onOpenCart) {
+                onOpenCart();
             }
         } catch (err) {
-            console.error("Error al agregar al carrito:", err);
+            console.error("Error al agregar al carrito desde flyer:", err);
+            onClose();
+        } finally {
+            setAdding(false);
         }
     }
 
@@ -160,10 +254,20 @@ export default function FlyerOverlay({
                     {/* AGREGAR AL CARRITO - derecha, verde */}
                     <button
                         onClick={handleAgregarAlCarrito}
-                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm"
+                        disabled={adding}
+                        className="flex-1 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 active:scale-95 text-white font-bold py-3.5 px-4 rounded-2xl shadow-lg transition-all text-sm disabled:opacity-75"
                     >
-                        <ShoppingCart size={18} />
-                        AGREGAR
+                        {adding ? (
+                            <>
+                                <Loader2 size={18} className="animate-spin" />
+                                <span>CARGANDO...</span>
+                            </>
+                        ) : (
+                            <>
+                                <ShoppingCart size={18} />
+                                <span>AGREGAR</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

@@ -493,6 +493,7 @@ function PublicMenuContent() {
           producto={selectedProduct}
           onClose={closeProduct}
           descuentos={descuentos}
+          onOpenCart={openCart}
         />
       )}
 
@@ -521,6 +522,8 @@ function PublicMenuContent() {
           onClose={() => setFlyerOpen(false)}
           onOpenProduct={openProduct}
           onOpenCart={openCart}
+          categorias={categorias}
+          descuentos={descuentos}
         />
       )}
     </main>
