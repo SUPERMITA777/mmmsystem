@@ -8,13 +8,21 @@ import {
     ChevronDown, ChevronRight, Phone, Clock, Zap,
     Eye, Pencil, X, AlertCircle, CheckCircle,
     MessageCircle, Activity, Settings2, GraduationCap,
-    UserCheck, Timer, SmilePlus, HandMetal, ArrowLeftRight, Send
+    UserCheck, Timer, SmilePlus, HandMetal, ArrowLeftRight, Send,
+    Upload, FileText, Star, Cpu, Coins, ShoppingCart, Check, RefreshCw
 } from "lucide-react";
 
 interface TrainingSnippet {
     id: string;
     title: string;
     content: string;
+}
+
+interface FewShotExample {
+    id: string;
+    situation: string;
+    customer: string;
+    reply: string;
 }
 
 interface PersonalityMode {
@@ -40,9 +48,52 @@ interface AgentConfig {
     handoff_triggers: string[];
     resume_triggers: string[];
     handoff_timeout_seconds: number;
+    ai_provider?: "gemini" | "openai";
+    ai_model?: string;
+    show_bot_prefix?: boolean;
+    human_pause_minutes?: number;
+    out_of_hours_message?: string;
+    monthly_token_limit?: number;
+    style_guide?: string;
+    few_shot_examples?: FewShotExample[];
     whatsapp_status?: 'disconnected' | 'connecting' | 'qr' | 'connected';
     whatsapp_qr?: string | null;
     whatsapp_phone?: string | null;
+}
+
+interface AvailableProviders {
+    gemini: boolean;
+    openai: boolean;
+    groq: boolean;
+}
+
+interface MonthlyUsageStats {
+    totalTokens: number;
+    promptTokens: number;
+    cachedTokens: number;
+    outputTokens: number;
+    estimatedCostUsd: number;
+    requestsCount: number;
+    tableReady: boolean;
+}
+
+interface SyncedWaStats {
+    totalMessages: number;
+    humanBusinessReplies: number;
+    customerMessages: number;
+    conversationsWithHumanReplies: number;
+}
+
+interface ExtractedTrainingResult {
+    summary: string;
+    style_guide: string;
+    few_shot_examples: FewShotExample[];
+    suggested_snippets: TrainingSnippet[];
+    stats: {
+        total_messages_analyzed: number;
+        conversations_analyzed: number;
+        business_replies_found: number;
+    };
 }
 
 interface Conversation {
@@ -118,8 +169,35 @@ export default function AgenteIAPage() {
 
     // Simulator State
     const [simulatorMessages, setSimulatorMessages] = useState<{ role: "user" | "assistant", content: string, action?: any }[]>([]);
+    const [simCart, setSimCart] = useState<any | null>(null);
     const [simInput, setSimInput] = useState("");
     const [simLoading, setSimLoading] = useState(false);
+
+    // Providers & Token Usage
+    const [availableProviders, setAvailableProviders] = useState<AvailableProviders>({
+        gemini: true,
+        openai: false,
+        groq: false,
+    });
+    const [usageStats, setUsageStats] = useState<MonthlyUsageStats | null>(null);
+
+    // WhatsApp Training State
+    const [syncedStats, setSyncedStats] = useState<SyncedWaStats | null>(null);
+    const [waTxtFiles, setWaTxtFiles] = useState<Array<{ name: string; content: string }>>([]);
+    const [waPastedText, setWaPastedText] = useState("");
+    const [waAuthors, setWaAuthors] = useState<Array<{ name: string; count: number }>>([]);
+    const [selectedBusinessAuthors, setSelectedBusinessAuthors] = useState<string[]>([]);
+    const [analyzingChats, setAnalyzingChats] = useState(false);
+    const [previewingTxt, setPreviewingTxt] = useState(false);
+    const [trainingError, setTrainingError] = useState<string | null>(null);
+    const [extractedResult, setExtractedResult] = useState<ExtractedTrainingResult | null>(null);
+    const [appliedBanner, setAppliedBanner] = useState<string | null>(null);
+
+    // Manual Few-Shot Examples State
+    const [newExampleSituation, setNewExampleSituation] = useState("");
+    const [newExampleCustomer, setNewExampleCustomer] = useState("");
+    const [newExampleReply, setNewExampleReply] = useState("");
+    const [addedExampleMsgIds, setAddedExampleMsgIds] = useState<Record<string, boolean>>({});
 
     // Auto-scroll simulator
     useEffect(() => {
@@ -129,7 +207,7 @@ export default function AgenteIAPage() {
         }
     }, [simulatorMessages, simLoading, activeSection]);
 
-    // Load config
+    // Load config + providers
     const loadConfig = useCallback(async () => {
         if (!sucursalId) return;
         setLoading(true);
@@ -138,6 +216,9 @@ export default function AgenteIAPage() {
             const data = await res.json();
             if (data.success) {
                 setConfig(data.config);
+                if (data.available_providers) {
+                    setAvailableProviders(data.available_providers);
+                }
             }
         } catch (err) {
             console.error("Error loading config:", err);
@@ -146,7 +227,39 @@ export default function AgenteIAPage() {
         }
     }, [sucursalId]);
 
-    useEffect(() => { loadConfig(); }, [loadConfig]);
+    const loadUsageStats = useCallback(async () => {
+        if (!sucursalId) return;
+        try {
+            const res = await fetch(`/api/ai/agent-config?sucursal_id=${sucursalId}&section=usage`);
+            const data = await res.json();
+            if (data.success) {
+                setUsageStats(data.usage);
+                if (data.available_providers) {
+                    setAvailableProviders(data.available_providers);
+                }
+            }
+        } catch (err) {
+            console.error("Error loading usage:", err);
+        }
+    }, [sucursalId]);
+
+    const loadSyncedTrainingStats = useCallback(async () => {
+        if (!sucursalId) return;
+        try {
+            const res = await fetch(`/api/ai/train-from-whatsapp?sucursal_id=${sucursalId}`);
+            const data = await res.json();
+            if (data.success) {
+                setSyncedStats(data.stats);
+            }
+        } catch (err) {
+            console.error("Error loading synced WA stats:", err);
+        }
+    }, [sucursalId]);
+
+    useEffect(() => {
+        loadConfig();
+        loadUsageStats();
+    }, [loadConfig, loadUsageStats]);
 
     useEffect(() => {
         if (!sucursalId || !config?.whatsapp_enabled || config?.whatsapp_status === 'connected') return;
@@ -244,7 +357,168 @@ export default function AgenteIAPage() {
     useEffect(() => {
         if (activeSection === "conversations") loadConversations();
         if (activeSection === "actions") loadActions();
-    }, [activeSection, sucursalId]);
+        if (activeSection === "training") loadSyncedTrainingStats();
+        if (activeSection === "config") loadUsageStats();
+    }, [activeSection, sucursalId, loadSyncedTrainingStats, loadUsageStats]);
+
+    // WhatsApp Training Handlers
+    async function previewTxtAuthors(texts: string[]) {
+        if (!sucursalId || texts.length === 0) {
+            setWaAuthors([]);
+            setSelectedBusinessAuthors([]);
+            return;
+        }
+        setPreviewingTxt(true);
+        setTrainingError(null);
+        try {
+            const res = await fetch("/api/ai/train-from-whatsapp", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursalId,
+                    mode: "preview_txt",
+                    rawTexts: texts,
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setWaAuthors(data.authors || []);
+                if (data.authors && data.authors.length > 0 && selectedBusinessAuthors.length === 0) {
+                    setSelectedBusinessAuthors([data.authors[0].name]);
+                }
+            }
+        } catch (err: any) {
+            setTrainingError(err.message || "Error leyendo archivo");
+        } finally {
+            setPreviewingTxt(false);
+        }
+    }
+
+    async function handleTxtFilesUpload(files: FileList | null) {
+        if (!files || files.length === 0) return;
+        const loaded: Array<{ name: string; content: string }> = [];
+        for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const content = await f.text();
+            loaded.push({ name: f.name, content });
+        }
+        const merged = [...waTxtFiles, ...loaded];
+        setWaTxtFiles(merged);
+        const allTexts = [
+            ...merged.map((x) => x.content),
+            ...(waPastedText.trim() ? [waPastedText.trim()] : []),
+        ];
+        await previewTxtAuthors(allTexts);
+    }
+
+    async function handleAnalyzeWhatsApp(source: "db" | "txt" | "both") {
+        if (!sucursalId) return;
+        setAnalyzingChats(true);
+        setTrainingError(null);
+        setExtractedResult(null);
+        setAppliedBanner(null);
+
+        const rawTexts = [
+            ...waTxtFiles.map((f) => f.content),
+            ...(waPastedText.trim() ? [waPastedText.trim()] : []),
+        ];
+
+        try {
+            const res = await fetch("/api/ai/train-from-whatsapp", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sucursalId,
+                    mode: "analyze",
+                    source,
+                    rawTexts,
+                    businessNames: selectedBusinessAuthors,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.result) {
+                setExtractedResult(data.result);
+                loadUsageStats();
+            } else {
+                setTrainingError(data.error || "No se pudieron analizar los chats");
+            }
+        } catch (err: any) {
+            setTrainingError(err.message || "Error de conexión al analizar chats");
+        } finally {
+            setAnalyzingChats(false);
+        }
+    }
+
+    function applyExtractedTraining(mode: "all" | "style" | "examples" | "snippets") {
+        if (!config || !extractedResult) return;
+        const nextConfig: AgentConfig = { ...config };
+
+        if (mode === "all" || mode === "style") {
+            nextConfig.style_guide = extractedResult.style_guide;
+        }
+        if (mode === "all" || mode === "examples") {
+            const existing = nextConfig.few_shot_examples || [];
+            const seen = new Set(existing.map((e) => e.customer.toLowerCase() + "||" + e.reply.toLowerCase()));
+            const toAdd = extractedResult.few_shot_examples.filter(
+                (e) => !seen.has(e.customer.toLowerCase() + "||" + e.reply.toLowerCase())
+            );
+            nextConfig.few_shot_examples = [...existing, ...toAdd];
+        }
+        if (mode === "all" || mode === "snippets") {
+            const existing = nextConfig.training_snippets || [];
+            const seenTitles = new Set(existing.map((s) => s.title.toLowerCase()));
+            const toAdd = extractedResult.suggested_snippets.filter(
+                (s) => !seenTitles.has(s.title.toLowerCase())
+            );
+            nextConfig.training_snippets = [...existing, ...toAdd];
+        }
+
+        setConfig(nextConfig);
+        setAppliedBanner("Cambios aplicados en memoria. Hacé clic en \"Guardar Cambios\" arriba a la derecha para activarlos.");
+    }
+
+    function addManualExample() {
+        if (!config || !newExampleCustomer.trim() || !newExampleReply.trim()) return;
+        const example: FewShotExample = {
+            id: `ex-${Date.now()}`,
+            situation: newExampleSituation.trim() || "Conversación",
+            customer: newExampleCustomer.trim(),
+            reply: newExampleReply.trim(),
+        };
+        setConfig({
+            ...config,
+            few_shot_examples: [...(config.few_shot_examples || []), example],
+        });
+        setNewExampleSituation("");
+        setNewExampleCustomer("");
+        setNewExampleReply("");
+    }
+
+    function removeExample(id: string) {
+        if (!config) return;
+        setConfig({
+            ...config,
+            few_shot_examples: (config.few_shot_examples || []).filter((e) => e.id !== id),
+        });
+    }
+
+    function addConversationMessageAsExample(msgKey: string, customerText: string, replyText: string) {
+        if (!config || !customerText.trim() || !replyText.trim()) return;
+        const cleanReply = replyText.replace(/^(?:🤖|⚡)\s+/u, "").trim();
+        const example: FewShotExample = {
+            id: `conv-ex-${Date.now()}`,
+            situation: "Chat real guardado",
+            customer: customerText.trim(),
+            reply: cleanReply,
+        };
+        setConfig({
+            ...config,
+            few_shot_examples: [...(config.few_shot_examples || []), example],
+        });
+        setAddedExampleMsgIds((prev) => ({ ...prev, [msgKey]: true }));
+        setSaveMessage({ type: "ok", text: "Ejemplo agregado. No olvides pulsar Guardar Cambios." });
+        setTimeout(() => setSaveMessage(null), 3500);
+    }
 
     // Toggle operations
     function toggleOperation(op: string) {
@@ -313,11 +587,15 @@ export default function AgenteIAPage() {
         });
     }
 
-    // Simulator logic
+    // Simulator logic (with full multi-turn history & cart memory)
     async function handleSimSend() {
         if (!simInput.trim() || !sucursalId || simLoading) return;
 
         const userMsg = simInput.trim();
+        const historySnapshot = simulatorMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+        }));
         setSimInput("");
         setSimulatorMessages(prev => [...prev, { role: "user", content: userMsg }]);
         setSimLoading(true);
@@ -329,12 +607,16 @@ export default function AgenteIAPage() {
                 body: JSON.stringify({
                     sucursalId,
                     text: userMsg,
-                    // We could send history here if needed
+                    conversationHistory: historySnapshot,
+                    cartState: simCart,
                 }),
             });
             const data = await res.json();
             
             if (data.success) {
+                if (data.cart !== undefined) {
+                    setSimCart(data.cart);
+                }
                 setSimulatorMessages(prev => [...prev, { 
                     role: "assistant", 
                     content: data.reply,
@@ -346,7 +628,7 @@ export default function AgenteIAPage() {
                     content: "❌ Error: " + (data.error || "No se pudo conectar con el agente.")
                 }]);
             }
-        } catch (err) {
+        } catch {
             setSimulatorMessages(prev => [...prev, { 
                 role: "assistant", 
                 content: "❌ Error de conexión al simular."
@@ -358,6 +640,7 @@ export default function AgenteIAPage() {
 
     function clearSimulator() {
         setSimulatorMessages([]);
+        setSimCart(null);
         setSimInput("");
     }
 
@@ -693,7 +976,172 @@ export default function AgenteIAPage() {
                                     }
                                 </button>
                             </div>
+
+                            {config.business_hours_only && (
+                                <div className="p-4 rounded-xl bg-amber-50/40 border border-amber-100 space-y-2">
+                                    <label className="block text-xs font-semibold text-amber-800">
+                                        Mensaje fuera de horario (opcional)
+                                    </label>
+                                    <textarea
+                                        value={config.out_of_hours_message || ""}
+                                        onChange={e => setConfig({ ...config, out_of_hours_message: e.target.value })}
+                                        rows={2}
+                                        placeholder="Ej: ¡Hola! Ahora estamos cerrados. Abrimos a las 19:30 hs, apenas abramos te respondemos."
+                                        className="w-full border border-amber-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+                                        <Bot size={18} className="text-purple-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-gray-800">Mostrar prefijo 🤖 en las respuestas</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">Desactivado para que responda más parecido a un humano</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setConfig({ ...config, show_bot_prefix: !config.show_bot_prefix })}
+                                    className={`p-1 rounded-full transition-colors ${config.show_bot_prefix ? "text-purple-600" : "text-gray-400"}`}
+                                >
+                                    {config.show_bot_prefix
+                                        ? <ToggleRight size={40} strokeWidth={1.5} />
+                                        : <ToggleLeft size={40} strokeWidth={1.5} />
+                                    }
+                                </button>
+                            </div>
                         </div>
+                    </div>
+
+                    {/* Motor IA & Consumo Mensual */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                                <Cpu size={18} className="text-purple-500" /> Motor IA y Consumo Mensual
+                            </h3>
+                            <button
+                                onClick={loadUsageStats}
+                                className="text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
+                            >
+                                <RefreshCw size={12} /> Actualizar
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Proveedor Principal</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfig({ ...config, ai_provider: "gemini", ai_model: "gemini-2.5-flash" })}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${
+                                            (config.ai_provider || "gemini") === "gemini"
+                                                ? "border-purple-400 bg-purple-50/50"
+                                                : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-sm text-gray-800">Google Gemini</span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                                availableProviders.gemini ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                                            }`}>
+                                                {availableProviders.gemini ? "Activa" : "Sin key"}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1">Audios e imágenes nativos</p>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setConfig({ ...config, ai_provider: "openai", ai_model: "gpt-4.1-mini" })}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${
+                                            config.ai_provider === "openai"
+                                                ? "border-purple-400 bg-purple-50/50"
+                                                : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-sm text-gray-800">OpenAI GPT</span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                                availableProviders.openai ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"
+                                            }`}>
+                                                {availableProviders.openai ? "Activa" : "Sin key"}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 mt-1">Máxima precisión en pedidos</p>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">Modelo</label>
+                                    <select
+                                        value={config.ai_model || ((config.ai_provider || "gemini") === "openai" ? "gpt-4.1-mini" : "gemini-2.5-flash")}
+                                        onChange={e => setConfig({ ...config, ai_model: e.target.value })}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                    >
+                                        {(config.ai_provider || "gemini") === "openai" ? (
+                                            <>
+                                                <option value="gpt-4.1-mini">GPT-4.1 mini (Recomendado — $0.40 / $1.60 M)</option>
+                                                <option value="gpt-5-mini">GPT-5 mini ($0.25 / $2.00 M)</option>
+                                                <option value="gpt-4o-mini">GPT-4o mini ($0.15 / $0.60 M)</option>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recomendado — $0.30 / $2.50 M)</option>
+                                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Económico — $0.10 / $0.40 M)</option>
+                                                <option value="gemini-2.5-pro">Gemini 2.5 Pro ($1.25 / $10.00 M)</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                        Límite mensual de tokens (0 = ilimitado)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="100000"
+                                        value={config.monthly_token_limit ?? 0}
+                                        onChange={e => setConfig({ ...config, monthly_token_limit: Number(e.target.value) })}
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {usageStats && (
+                            <div className="grid grid-cols-3 gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                <div>
+                                    <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                                        <Coins size={12} className="text-purple-500" /> Tokens del mes
+                                    </p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                        {new Intl.NumberFormat("es-AR").format(usageStats.totalTokens)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] text-gray-500">Costo estimado (USD)</p>
+                                    <p className="text-lg font-bold text-emerald-700">
+                                        US$ {usageStats.estimatedCostUsd.toFixed(4)}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[11px] text-gray-500">Interacciones IA</p>
+                                    <p className="text-lg font-bold text-gray-800">{usageStats.requestsCount}</p>
+                                </div>
+                                {!usageStats.tableReady && (
+                                    <p className="col-span-3 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                                        Ejecutá la migración <code className="font-mono">supabase/migrations/20261119_ai_agent_v2.sql</code> en Supabase para persistir métricas mensuales.
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Handoff Configuration */}
@@ -705,19 +1153,19 @@ export default function AgenteIAPage() {
                             Configurá frases que activan la derivación a un operador humano y el retorno al agente.
                         </p>
 
-                        {/* Timeout */}
-                        <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                                    <Timer size={18} className="text-blue-600" />
+                        {/* Timeout & Pausa Automática */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                                        <Timer size={18} className="text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-gray-800 text-sm">Timeout por pedido de humano</p>
+                                        <p className="text-xs text-gray-500">Si nadie contesta tras derivar, el bot retoma</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="font-medium text-gray-800 text-sm">Timeout de Derivación</p>
-                                    <p className="text-xs text-gray-500">Si el operador no contesta, el agente retoma automáticamente</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 ml-[52px]">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 ml-[52px]">
                                     <input
                                         type="number"
                                         value={config.handoff_timeout_seconds || 0}
@@ -727,9 +1175,28 @@ export default function AgenteIAPage() {
                                     />
                                     <span className="text-sm text-gray-500 font-medium">segundos</span>
                                 </div>
-                                <p className="text-[10px] text-gray-400">
-                                    (0 = Desactivado, siempre esperar al humano)
-                                </p>
+                            </div>
+
+                            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                                        <UserCheck size={18} className="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-gray-800 text-sm">Pausa si responde un operador</p>
+                                        <p className="text-xs text-gray-500">Cuando respondés manual desde el celular, el bot se silencia</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 ml-[52px]">
+                                    <input
+                                        type="number"
+                                        value={config.human_pause_minutes ?? 15}
+                                        onChange={e => setConfig({ ...config, human_pause_minutes: Number(e.target.value) })}
+                                        className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                        min="1"
+                                    />
+                                    <span className="text-sm text-gray-500 font-medium">minutos</span>
+                                </div>
                             </div>
                         </div>
 
@@ -834,6 +1301,331 @@ export default function AgenteIAPage() {
             {/* ═══ SECTION: Training / Knowledge Base ═══ */}
             {activeSection === "training" && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    {/* Entrenamiento con chats reales de WhatsApp */}
+                    <div className="bg-white rounded-2xl border border-purple-200 p-6 shadow-sm">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <div>
+                                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                    <Sparkles size={18} className="text-purple-600" /> Entrenar con tus chats reales de WhatsApp
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    La IA analiza cómo atendés hoy a tus clientes para copiar tu tono, modismos, saludos y ejemplos reales (sin copiar precios viejos).
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Opción 1: Historial ya sincronizado */}
+                            <div className="p-4 rounded-xl bg-purple-50/40 border border-purple-100 flex flex-col justify-between gap-3">
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-purple-700">Opción 1 · Automática</span>
+                                        <button
+                                            onClick={loadSyncedTrainingStats}
+                                            className="text-[11px] text-purple-600 hover:underline flex items-center gap-1"
+                                        >
+                                            <RefreshCw size={11} /> Actualizar
+                                        </button>
+                                    </div>
+                                    <h4 className="font-semibold text-sm text-gray-800">Usar chats ya sincronizados</h4>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        {syncedStats
+                                            ? `Detectamos ${syncedStats.humanBusinessReplies} respuestas reales tuyas en ${syncedStats.conversationsWithHumanReplies} conversaciones.`
+                                            : "Revisando historial guardado en la base de datos..."}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => handleAnalyzeWhatsApp("db")}
+                                    disabled={analyzingChats || !syncedStats || syncedStats.humanBusinessReplies === 0}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
+                                >
+                                    {analyzingChats ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                    Analizar historial sincronizado
+                                </button>
+                            </div>
+
+                            {/* Opción 2: Exportar .txt desde WhatsApp */}
+                            <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col justify-between gap-3">
+                                <div>
+                                    <span className="text-xs font-bold uppercase tracking-wider text-gray-600">Opción 2 · Exportar Chat (.txt)</span>
+                                    <h4 className="font-semibold text-sm text-gray-800 mt-1">Subir chats exportados de WhatsApp</h4>
+                                    <p className="text-[11px] text-gray-500 mt-1">
+                                        En WhatsApp: abrí un chat → <strong>⋮ → Más → Exportar chat → Sin archivos</strong>. Podés subir varios <code className="font-mono">.txt</code> juntos.
+                                    </p>
+
+                                    <label className="mt-3 flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-gray-300 hover:border-purple-400 rounded-xl bg-white cursor-pointer text-xs font-medium text-gray-600 hover:text-purple-700 transition-colors">
+                                        <Upload size={14} />
+                                        {waTxtFiles.length > 0
+                                            ? `${waTxtFiles.length} archivo(s) cargado(s) — Agregar más`
+                                            : "Seleccionar archivos .txt de WhatsApp"}
+                                        <input
+                                            type="file"
+                                            accept=".txt"
+                                            multiple
+                                            className="hidden"
+                                            onChange={e => handleTxtFilesUpload(e.target.files)}
+                                        />
+                                    </label>
+
+                                    {waTxtFiles.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {waTxtFiles.map((f, idx) => (
+                                                <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-white border border-gray-200 px-2 py-0.5 rounded-lg text-gray-700">
+                                                    <FileText size={11} className="text-purple-500" />
+                                                    {f.name}
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            const next = waTxtFiles.filter((_, i) => i !== idx);
+                                                            setWaTxtFiles(next);
+                                                            await previewTxtAuthors([
+                                                                ...next.map(x => x.content),
+                                                                ...(waPastedText.trim() ? [waPastedText.trim()] : []),
+                                                            ]);
+                                                        }}
+                                                        className="text-gray-400 hover:text-red-500"
+                                                    >
+                                                        <X size={11} />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <textarea
+                                        value={waPastedText}
+                                        onChange={e => setWaPastedText(e.target.value)}
+                                        rows={2}
+                                        placeholder="O pegá acá fragmentos de un chat exportado..."
+                                        className="w-full mt-2 border border-gray-200 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                    />
+                                    {waPastedText.trim().length > 20 && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                previewTxtAuthors([
+                                                    ...waTxtFiles.map(x => x.content),
+                                                    waPastedText.trim(),
+                                                ])
+                                            }
+                                            disabled={previewingTxt}
+                                            className="mt-1 text-[11px] text-purple-600 font-semibold hover:underline"
+                                        >
+                                            {previewingTxt ? "Detectando autores..." : "Detectar nombres del chat pegado"}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {waAuthors.length > 0 && (
+                                    <div className="p-3 bg-white rounded-xl border border-gray-200 space-y-2">
+                                        <p className="text-[11px] font-semibold text-gray-700">
+                                            ¿Cuál(es) nombre(s) corresponden a TU negocio?
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                                            {waAuthors.slice(0, 12).map(a => {
+                                                const checked = selectedBusinessAuthors.includes(a.name);
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={a.name}
+                                                        onClick={() => {
+                                                            setSelectedBusinessAuthors(prev =>
+                                                                checked ? prev.filter(x => x !== a.name) : [...prev, a.name]
+                                                            );
+                                                        }}
+                                                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
+                                                            checked
+                                                                ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                                                                : "bg-gray-50 text-gray-600 border-gray-200 hover:border-purple-300"
+                                                        }`}
+                                                    >
+                                                        {a.name} ({a.count})
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={() =>
+                                        handleAnalyzeWhatsApp(
+                                            syncedStats && syncedStats.humanBusinessReplies > 0 ? "both" : "txt"
+                                        )
+                                    }
+                                    disabled={
+                                        analyzingChats ||
+                                        (waTxtFiles.length === 0 && !waPastedText.trim()) ||
+                                        (waAuthors.length > 0 && selectedBusinessAuthors.length === 0)
+                                    }
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
+                                >
+                                    {analyzingChats ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                    Analizar archivos y clonar estilo
+                                </button>
+                            </div>
+                        </div>
+
+                        {trainingError && (
+                            <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                                <AlertCircle size={15} /> {trainingError}
+                            </div>
+                        )}
+
+                        {appliedBanner && (
+                            <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 flex items-center gap-2">
+                                <CheckCircle size={15} /> {appliedBanner}
+                            </div>
+                        )}
+
+                        {extractedResult && (
+                            <div className="mt-5 p-5 rounded-2xl bg-purple-50/40 border border-purple-200 space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <h4 className="font-bold text-sm text-purple-900">Resultado del análisis</h4>
+                                        <p className="text-xs text-purple-700 mt-0.5">
+                                            {extractedResult.stats.conversations_analyzed} chats · {extractedResult.stats.business_replies_found} respuestas del negocio analizadas
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => applyExtractedTraining("all")}
+                                        className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm"
+                                    >
+                                        <Check size={14} /> Aplicar todo al agente
+                                    </button>
+                                </div>
+
+                                <p className="text-xs text-gray-700 bg-white p-3 rounded-xl border border-purple-100">
+                                    {extractedResult.summary}
+                                </p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                    <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-bold text-gray-800">Guía de estilo detectada</span>
+                                            <button
+                                                onClick={() => applyExtractedTraining("style")}
+                                                className="text-purple-600 font-semibold hover:underline"
+                                            >
+                                                Aplicar solo estilo
+                                            </button>
+                                        </div>
+                                        <p className="text-gray-600 whitespace-pre-line leading-relaxed">
+                                            {extractedResult.style_guide}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-white p-3 rounded-xl border border-purple-100 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-bold text-gray-800">
+                                                {extractedResult.few_shot_examples.length} Ejemplos + {extractedResult.suggested_snippets.length} FAQs
+                                            </span>
+                                            <button
+                                                onClick={() => applyExtractedTraining("examples")}
+                                                className="text-purple-600 font-semibold hover:underline"
+                                            >
+                                                Sumar ejemplos
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                                            {extractedResult.few_shot_examples.slice(0, 4).map((ex, i) => (
+                                                <div key={i} className="p-2 rounded-lg bg-gray-50 border border-gray-100">
+                                                    <p className="text-[10px] font-bold text-purple-600">{ex.situation}</p>
+                                                    <p className="text-[11px] text-gray-500">Cliente: {ex.customer}</p>
+                                                    <p className="text-[11px] text-gray-800">Local: {ex.reply}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Guía de Estilo Real */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <h3 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                            <SmilePlus size={18} className="text-purple-500" /> Guía de Estilo Real del Negocio
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-4">
+                            Describí (o dejá que la IA genere arriba) cómo saluda, qué modismos usa y cómo trata a los clientes tu equipo.
+                        </p>
+                        <textarea
+                            value={config.style_guide || ""}
+                            onChange={e => setConfig({ ...config, style_guide: e.target.value })}
+                            rows={4}
+                            placeholder="Ej: Saludamos con 'Holaa! Cómo va?'. Tratamos de vos, mensajes cortos y buena onda. Confirmamos siempre el tiempo estimado de demora..."
+                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50 resize-y"
+                        />
+                    </div>
+
+                    {/* Ejemplos Reales de Respuesta (Few-Shot) */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                        <h3 className="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+                            <Star size={18} className="text-amber-500" /> Ejemplos Reales de Respuesta ({(config.few_shot_examples || []).length})
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-4">
+                            El agente imita el estilo y tono de estos ejemplos sin copiar precios viejos. También podés guardar respuestas desde la pestaña Conversaciones.
+                        </p>
+
+                        <div className="space-y-2.5 mb-5 max-h-80 overflow-y-auto pr-1">
+                            {(config.few_shot_examples || []).length === 0 ? (
+                                <div className="text-center py-6 text-xs text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+                                    Aún no cargaste ejemplos reales. Usá el analizador de WhatsApp arriba o agregá uno abajo.
+                                </div>
+                            ) : (
+                                (config.few_shot_examples || []).map((ex) => (
+                                    <div key={ex.id} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/70 flex items-start justify-between gap-3 group">
+                                        <div className="space-y-1 flex-1 min-w-0 text-xs">
+                                            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-100 text-purple-700">
+                                                {ex.situation}
+                                            </span>
+                                            <p className="text-gray-600"><strong>Cliente:</strong> {ex.customer}</p>
+                                            <p className="text-gray-800"><strong>Negocio:</strong> {ex.reply}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => removeExample(ex.id)}
+                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="border-t border-gray-200 pt-4 space-y-2.5">
+                            <p className="text-xs font-semibold text-gray-700">Agregar ejemplo manualmente</p>
+                            <input
+                                value={newExampleSituation}
+                                onChange={e => setNewExampleSituation(e.target.value)}
+                                placeholder="Situación (ej: Saludo inicial / Pedido con demora)"
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                <input
+                                    value={newExampleCustomer}
+                                    onChange={e => setNewExampleCustomer(e.target.value)}
+                                    placeholder="Lo que escribe el cliente..."
+                                    className="border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                />
+                                <input
+                                    value={newExampleReply}
+                                    onChange={e => setNewExampleReply(e.target.value)}
+                                    placeholder="Cómo respondés vos..."
+                                    className="border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-300"
+                                />
+                            </div>
+                            <button
+                                onClick={addManualExample}
+                                disabled={!newExampleCustomer.trim() || !newExampleReply.trim()}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-medium disabled:opacity-40"
+                            >
+                                <Plus size={13} /> Agregar ejemplo
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                         <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
                             <BookOpen size={18} className="text-purple-500" /> Base de Conocimiento
@@ -988,15 +1780,23 @@ export default function AgenteIAPage() {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-gray-800 text-sm">Simulador de Agente IA</h3>
-                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Entorno de prueba (Dry-run)</p>
+                                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Entorno de prueba con memoria y carrito (Dry-run)</p>
                             </div>
                         </div>
-                        <button 
-                            onClick={clearSimulator}
-                            className="text-xs text-gray-400 hover:text-gray-600 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                            Limpiar Chat
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {simCart && simCart.items && simCart.items.length > 0 && (
+                                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-700 font-semibold">
+                                    <ShoppingCart size={13} />
+                                    {simCart.items.reduce((acc: number, it: any) => acc + (it.cantidad || 1), 0)} ítem(s) · ${new Intl.NumberFormat("es-AR").format(simCart.total || 0)}
+                                </div>
+                            )}
+                            <button 
+                                onClick={clearSimulator}
+                                className="text-xs text-gray-400 hover:text-gray-600 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                            >
+                                Limpiar Chat
+                            </button>
+                        </div>
                     </div>
 
                     {/* Chat Area */}
@@ -1163,19 +1963,57 @@ export default function AgenteIAPage() {
 
                                         {selectedConversation === conv.id && (
                                             <div className="px-6 pb-4 bg-gray-50/50 border-t border-gray-100">
-                                                <div className="max-h-64 overflow-y-auto space-y-2 py-3 custom-scrollbar">
-                                                    {messages.map((msg, i) => (
-                                                        <div key={i} className={`flex ${msg.from_me ? "justify-end" : "justify-start"}`}>
-                                                            <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs ${
-                                                                msg.from_me
-                                                                    ? "bg-purple-100 text-purple-800"
-                                                                    : "bg-white text-gray-700 border border-gray-200"
-                                                            }`}>
-                                                                <p className="whitespace-pre-line">{msg.from_me ? msg.reply_text : msg.message_text}</p>
-                                                                <p className="text-[10px] opacity-50 mt-1">{new Date(msg.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</p>
+                                                <div className="max-h-72 overflow-y-auto space-y-2 py-3 custom-scrollbar">
+                                                    {(() => {
+                                                        const bubbles: Array<{ key: string; fromMe: boolean; text: string; time: string; prevCustomerText?: string }> = [];
+                                                        let lastCustomerText = "";
+                                                        messages.forEach((msg, idx) => {
+                                                            const timeStr = new Date(msg.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+                                                            if (msg.from_me) {
+                                                                const t = (msg.reply_text || msg.message_text || "").trim();
+                                                                if (t) {
+                                                                    bubbles.push({ key: `${idx}-me`, fromMe: true, text: t, time: timeStr, prevCustomerText: lastCustomerText });
+                                                                }
+                                                            } else {
+                                                                const cust = (msg.message_text || "").trim();
+                                                                if (cust) {
+                                                                    lastCustomerText = cust;
+                                                                    bubbles.push({ key: `${idx}-cust`, fromMe: false, text: cust, time: timeStr });
+                                                                }
+                                                                const rep = (msg.reply_text || "").trim();
+                                                                if (rep) {
+                                                                    bubbles.push({ key: `${idx}-rep`, fromMe: true, text: rep, time: timeStr, prevCustomerText: cust || lastCustomerText });
+                                                                }
+                                                            }
+                                                        });
+
+                                                        return bubbles.map((b) => (
+                                                            <div key={b.key} className={`flex flex-col ${b.fromMe ? "items-end" : "items-start"}`}>
+                                                                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs ${
+                                                                    b.fromMe
+                                                                        ? "bg-purple-100 text-purple-800"
+                                                                        : "bg-white text-gray-700 border border-gray-200"
+                                                                }`}>
+                                                                    <p className="whitespace-pre-line">{b.text}</p>
+                                                                    <div className="flex items-center justify-between gap-3 mt-1">
+                                                                        <p className="text-[10px] opacity-50">{b.time}</p>
+                                                                        {b.fromMe && b.prevCustomerText && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => addConversationMessageAsExample(b.key, b.prevCustomerText!, b.text)}
+                                                                                disabled={Boolean(addedExampleMsgIds[b.key])}
+                                                                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 hover:text-purple-900 disabled:text-emerald-700"
+                                                                                title="Guardar este intercambio como ejemplo de entrenamiento"
+                                                                            >
+                                                                                <Star size={10} />
+                                                                                {addedExampleMsgIds[b.key] ? "Guardado" : "Usar como ejemplo"}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        ));
+                                                    })()}
                                                     {messages.length === 0 && <p className="text-center text-gray-400 text-xs py-4">No hay mensajes</p>}
                                                 </div>
                                             </div>

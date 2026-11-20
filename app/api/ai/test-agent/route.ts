@@ -1,17 +1,22 @@
 /**
  * test-agent/route.ts
- * 
+ *
  * Endpoint para simular conversaciones con el Agente IA desde el panel de administración.
- * No guarda mensajes en la base de datos (dryRun) para evitar ensuciar métricas reales.
+ * No guarda mensajes ni pedidos en la base de datos (dryRun) y mantiene historial + carrito en memoria.
  */
 
 import { NextResponse } from "next/server";
-import { processWhatsAppMessage, getAgentConfig } from "@/lib/aiAgentService";
+import { processWhatsAppMessage } from "@/lib/aiAgentService";
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { sucursalId, text, conversationHistory = [] } = body;
+        const {
+            sucursalId,
+            text,
+            conversationHistory = [],
+            cartState = null,
+        } = body;
 
         if (!sucursalId || !text) {
             return NextResponse.json(
@@ -20,28 +25,22 @@ export async function POST(request: Request) {
             );
         }
 
-        // Verify agent config exists
-        const config = await getAgentConfig(sucursalId);
-        
-        // Use a dummy sender for simulation
         const dummySender = "simulador-admin";
 
-        // Process message with dryRun = true
-        // We pass the conversation history if provided to maintain context in the simulation
-        const result = await processWhatsAppMessage(
-            sucursalId,
-            dummySender,
-            text,
-            false,
-            true // dryRun flag
-        );
+        const result = await processWhatsAppMessage(sucursalId, dummySender, text, {
+            fromMe: false,
+            dryRun: true,
+            simulatorHistory: Array.isArray(conversationHistory) ? conversationHistory : [],
+            simulatorCart: cartState,
+        });
 
         return NextResponse.json({
             success: true,
             reply: result.reply,
-            action: result.action
+            action: result.action,
+            cart: result.cart ?? null,
+            usage: result.usage ?? null,
         });
-
     } catch (error: any) {
         console.error("[test-agent] Error:", error.message);
         return NextResponse.json(

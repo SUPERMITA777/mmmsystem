@@ -1,21 +1,40 @@
 /**
  * sync-agent/route.ts
- * 
+ *
  * Webhook endpoint para el agente local de WhatsApp.
- * Recibe mensajes del cliente WhatsApp, los procesa con Gemini,
- * y devuelve la respuesta para enviar.
+ * Recibe mensajes (texto, audios, imágenes, ubicación GPS) o eventos de
+ * intervención humana (`humanTakeover`) y devuelve la respuesta para enviar.
  */
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { processWhatsAppMessage, getAgentConfig, updateAgentConfig } from "@/lib/aiAgentService";
+import {
+    processWhatsAppMessage,
+    getAgentConfig,
+    updateAgentConfig,
+    handleHumanTakeover,
+} from "@/lib/aiAgentService";
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { tenantId, sender, text, fromMe, status, qr, phone, audio, audioMime } = body;
+        const {
+            tenantId,
+            sender,
+            senderName,
+            text,
+            fromMe,
+            humanTakeover,
+            status,
+            qr,
+            phone,
+            audio,
+            audioMime,
+            image,
+            imageMime,
+            location,
+        } = body;
 
-        // Validate required fields
         if (!tenantId) {
             return NextResponse.json(
                 { error: "Falta campo requerido: tenantId" },
@@ -23,12 +42,10 @@ export async function POST(request: Request) {
             );
         }
 
-        // Resolve tenantId → sucursal_id
-        // tenantId can be the slug or the UUID
+        // Resolve tenantId -> sucursal_id
         let sucursalId = tenantId;
-
-        // Check if tenantId is a slug
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
+        const isUUID =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId);
         if (!isUUID) {
             const { data: sucursal } = await supabaseAdmin
                 .from("sucursales")
@@ -37,10 +54,7 @@ export async function POST(request: Request) {
                 .single();
 
             if (!sucursal) {
-                return NextResponse.json(
-                    { error: "Tenant no encontrado" },
-                    { status: 404 }
-                );
+                return NextResponse.json({ error: "Tenant no encontrado" }, { status: 404 });
             }
             sucursalId = sucursal.id;
         }
@@ -55,10 +69,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ success });
         }
 
-        // Validate message fields
-        if (!sender || !text) {
+        if (!sender || (!text && !audio && !image && !location)) {
             return NextResponse.json(
-                { error: "Faltan campos requeridos para procesar mensaje: sender, text" },
+                { error: "Faltan campos requeridos para procesar mensaje: sender y contenido" },
                 { status: 400 }
             );
         }
@@ -72,21 +85,40 @@ export async function POST(request: Request) {
             );
         }
 
-        // Process the message
-        const result = await processWhatsAppMessage(
-            sucursalId,
-            sender,
-            text,
-            fromMe || false,
-            false,
-            audio,
-            audioMime
-        );
+        // Human-in-the-loop takeover: a human staff member answered manually on WhatsApp
+        if (fromMe && humanTakeover) {
+            const pauseResult = await handleHumanTakeover(
+                sucursalId,
+                sender,
+                text || "[Mensaje del local]",
+                senderName
+            );
+            return NextResponse.json({
+                reply: null,
+                paused: true,
+                pausedMinutes: pauseResult.pausedMinutes,
+            });
+        }
 
-        // Return reply
+        if (fromMe) {
+            return NextResponse.json({ reply: null });
+        }
+
+        const result = await processWhatsAppMessage(sucursalId, sender, text || "", {
+            fromMe: false,
+            dryRun: false,
+            audioBase64: audio,
+            audioMimeType: audioMime,
+            imageBase64: image,
+            imageMimeType: imageMime,
+            location,
+            senderName,
+        });
+
         return NextResponse.json({
             reply: result.reply || null,
             action: result.action || null,
+            handoff: result.handoff || false,
         });
     } catch (error: any) {
         console.error("[sync-agent] Error:", error.message);

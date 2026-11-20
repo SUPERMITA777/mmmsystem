@@ -1,21 +1,21 @@
 /**
  * agent-config/route.ts
- * 
+ *
  * CRUD endpoint for AI agent configuration.
- * GET: Retrieve agent config + conversations + action history
- * PUT: Update agent config (system prompt, training snippets, permissions, etc.)
+ * GET: Retrieve agent config + conversations + action history + monthly token usage
+ * PUT: Update agent config (system prompt, style guide, few-shot examples, snippets, permissions, etc.)
  */
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAgentConfig, updateAgentConfig } from "@/lib/aiAgentService";
+import { getAvailableProviders, getMonthlyTokenUsage } from "@/lib/aiProviders";
 
-// GET: Retrieve agent config + data for the admin panel
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
         const sucursalId = searchParams.get("sucursal_id");
-        const section = searchParams.get("section") || "config"; // config | conversations | actions
+        const section = searchParams.get("section") || "config";
 
         if (!sucursalId) {
             return NextResponse.json({ error: "sucursal_id requerido" }, { status: 400 });
@@ -24,7 +24,20 @@ export async function GET(request: Request) {
         switch (section) {
             case "config": {
                 const config = await getAgentConfig(sucursalId);
-                return NextResponse.json({ success: true, config });
+                return NextResponse.json({
+                    success: true,
+                    config,
+                    available_providers: getAvailableProviders(),
+                });
+            }
+
+            case "usage": {
+                const usage = await getMonthlyTokenUsage(sucursalId);
+                return NextResponse.json({
+                    success: true,
+                    usage,
+                    available_providers: getAvailableProviders(),
+                });
             }
 
             case "conversations": {
@@ -49,7 +62,10 @@ export async function GET(request: Request) {
             case "messages": {
                 const conversationId = searchParams.get("conversation_id");
                 if (!conversationId) {
-                    return NextResponse.json({ error: "conversation_id requerido" }, { status: 400 });
+                    return NextResponse.json(
+                        { error: "conversation_id requerido" },
+                        { status: 400 }
+                    );
                 }
 
                 const { data } = await supabaseAdmin
@@ -57,7 +73,7 @@ export async function GET(request: Request) {
                     .select("*")
                     .eq("conversation_id", conversationId)
                     .order("created_at", { ascending: true })
-                    .limit(100);
+                    .limit(120);
 
                 return NextResponse.json({ success: true, messages: data || [] });
             }
@@ -82,23 +98,21 @@ export async function GET(request: Request) {
     }
 }
 
-// PUT: Update agent config
 export async function PUT(request: Request) {
     try {
         const body = await request.json();
         const { sucursal_id, section, config, conversation_id } = body;
 
         if (!sucursal_id) {
-            return NextResponse.json(
-                { error: "sucursal_id es requerido" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "sucursal_id es requerido" }, { status: 400 });
         }
 
-        // Handle special sections
         if (section === "resume_conversation") {
             if (!conversation_id) {
-                return NextResponse.json({ error: "conversation_id requerido" }, { status: 400 });
+                return NextResponse.json(
+                    { error: "conversation_id requerido" },
+                    { status: 400 }
+                );
             }
             await supabaseAdmin
                 .from("whatsapp_conversations")
@@ -106,15 +120,14 @@ export async function PUT(request: Request) {
                 .eq("id", conversation_id)
                 .eq("sucursal_id", sucursal_id);
 
-            return NextResponse.json({ success: true, message: "Conversación retomada por el agente" });
+            return NextResponse.json({
+                success: true,
+                message: "Conversación retomada por el agente",
+            });
         }
 
-        // Default: update agent config
         if (!config) {
-            return NextResponse.json(
-                { error: "config es requerido" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "config es requerido" }, { status: 400 });
         }
 
         const success = await updateAgentConfig(sucursal_id, config);
@@ -122,7 +135,10 @@ export async function PUT(request: Request) {
         if (success) {
             return NextResponse.json({ success: true, message: "Configuración actualizada" });
         } else {
-            return NextResponse.json({ error: "Error al guardar configuración" }, { status: 500 });
+            return NextResponse.json(
+                { error: "Error al guardar configuración" },
+                { status: 500 }
+            );
         }
     } catch (error: any) {
         console.error("[agent-config PUT]:", error.message);

@@ -349,8 +349,85 @@ async function connectToWhatsApp(config: SavedConfig) {
     });
 
     // ═══════════════════════════════════════════
-    // MESSAGE HANDLER
+    // MESSAGE HANDLER (Debounce + Multimedia + Human Takeover)
     // ═══════════════════════════════════════════
+
+    interface PendingBuffer {
+        texts: string[];
+        senderName?: string;
+        audioBase64?: string;
+        audioMimeType?: string;
+        imageBase64?: string;
+        imageMimeType?: string;
+        location?: { lat: number; lng: number; address?: string };
+        timer: ReturnType<typeof setTimeout>;
+    }
+
+    const DEBOUNCE_MS = 4500;
+    const pendingBuffers = new Map<string, PendingBuffer>();
+    const botSentIds = new Set<string>();
+
+    const trackBotSentId = (msgId?: string | null) => {
+        if (!msgId) return;
+        botSentIds.add(msgId);
+        setTimeout(() => botSentIds.delete(msgId), 90000);
+    };
+
+    const flushPendingBuffer = async (sender: string) => {
+        const buf = pendingBuffers.get(sender);
+        pendingBuffers.delete(sender);
+        if (!buf) return;
+
+        const senderShort = sender.split('@')[0];
+        const combinedText = buf.texts.filter(Boolean).join('\n').trim();
+        if (!combinedText && !buf.audioBase64 && !buf.imageBase64 && !buf.location) return;
+
+        try {
+            await sock.sendPresenceUpdate('composing', sender);
+
+            const response = await axios.post(
+                `${config.serverUrl}/api/ai/sync-agent`,
+                {
+                    tenantId: config.tenantId,
+                    sender,
+                    senderName: buf.senderName,
+                    text: combinedText || (buf.imageBase64 ? '[Imagen]' : buf.location ? '[Ubicación]' : '[Nota de voz]'),
+                    fromMe: false,
+                    audio: buf.audioBase64,
+                    audioMime: buf.audioMimeType,
+                    image: buf.imageBase64,
+                    imageMime: buf.imageMimeType,
+                    location: buf.location,
+                },
+                { headers: { 'Content-Type': 'application/json' }, timeout: 45000 }
+            );
+
+            const data = response.data;
+            await sock.sendPresenceUpdate('paused', sender);
+
+            if (data.reply) {
+                const sent = await sock.sendMessage(sender, { text: data.reply });
+                trackBotSentId(sent?.key?.id);
+                logMsg('>>', senderShort, data.reply);
+
+                if (data.action) {
+                    log('⚡', `Acción ejecutada: ${c.bold}${data.action.type}${c.reset}`, c.magenta);
+                }
+            }
+        } catch (error: any) {
+            await sock.sendPresenceUpdate('paused', sender).catch(() => { });
+
+            if (error.code === 'ECONNREFUSED') {
+                logError(`No se pudo conectar al servidor. ¿Está corriendo en ${config.serverUrl}?`);
+            } else if (error.code === 'ECONNABORTED') {
+                logError('El servidor tardó demasiado en responder.');
+            } else if (error.response?.status === 404) {
+                logError(`Negocio "${config.tenantId}" no encontrado en el servidor.`);
+            } else {
+                logError(`Error: ${error.response?.data?.error || error.message}`);
+            }
+        }
+    };
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
@@ -359,14 +436,67 @@ async function connectToWhatsApp(config: SavedConfig) {
             if (!msg.message) continue;
 
             const sender = msg.key.remoteJid;
-            const fromMe = msg.key.fromMe;
-            
-            let text = msg.message.conversation
-                || msg.message.extendedTextMessage?.text;
+            if (!sender) continue;
+            if (sender.includes('@g.us') || sender === 'status@broadcast') continue;
+
+            const fromMe = Boolean(msg.key.fromMe);
+            const msgId = msg.key.id;
+
+            // Ignorar eco de mensajes que envió este mismo bot
+            if (fromMe && msgId && botSentIds.has(msgId)) {
+                continue;
+            }
+
+            let text =
+                msg.message.conversation ||
+                msg.message.extendedTextMessage?.text ||
+                msg.message.imageMessage?.caption ||
+                '';
+
+            // Si un humano del local respondió manualmente desde el celular o WhatsApp Web:
+            // cancelamos cualquier respuesta pendiente del bot y pausamos el chat automáticamente.
+            if (fromMe) {
+                const existingBuf = pendingBuffers.get(sender);
+                if (existingBuf) {
+                    clearTimeout(existingBuf.timer);
+                    pendingBuffers.delete(sender);
+                }
+
+                const humanText =
+                    text ||
+                    (msg.message.audioMessage ? '[Nota de voz del local]' : '') ||
+                    (msg.message.imageMessage ? '[Imagen enviada por el local]' : '');
+
+                if (!humanText) continue;
+
+                const senderShort = sender.split('@')[0];
+                log('🙋', `Respuesta humana a ${c.bold}${senderShort}${c.reset} → pausando bot`, c.yellow);
+
+                try {
+                    await axios.post(
+                        `${config.serverUrl}/api/ai/sync-agent`,
+                        {
+                            tenantId: config.tenantId,
+                            sender,
+                            text: humanText,
+                            fromMe: true,
+                            humanTakeover: true,
+                        },
+                        { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+                    );
+                } catch (err: any) {
+                    logWarn(`No se pudo notificar pausa humana: ${err.message}`);
+                }
+                continue;
+            }
+
             let audioBase64: string | undefined;
             let audioMimeType: string | undefined;
+            let imageBase64: string | undefined;
+            let imageMimeType: string | undefined;
+            let location: { lat: number; lng: number; address?: string } | undefined;
 
-            if (msg.message.audioMessage && sender) {
+            if (msg.message.audioMessage) {
                 try {
                     log('🎤 ' + sender.split('@')[0] + ': Recibiendo nota de voz...', c.cyan);
                     const buffer = await downloadMediaMessage(
@@ -375,73 +505,101 @@ async function connectToWhatsApp(config: SavedConfig) {
                         {},
                         {
                             logger: silentLogger,
-                            reuploadRequest: sock.updateMediaMessage
+                            reuploadRequest: sock.updateMediaMessage,
                         }
                     );
                     if (Buffer.isBuffer(buffer)) {
                         audioBase64 = buffer.toString('base64');
                         audioMimeType = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
-                        text = '[Nota de voz]';
+                        if (!text) text = '[Nota de voz]';
                     }
                 } catch (err: any) {
                     logError(`Error al descargar nota de voz: ${err.message}`);
                 }
             }
 
-            if (!text && !audioBase64) continue;
-            if (!sender) continue;
-            if (sender.includes('@g.us') || sender === 'status@broadcast') continue;
+            if (msg.message.imageMessage) {
+                try {
+                    log('🖼️ ' + sender.split('@')[0] + ': Recibiendo imagen...', c.cyan);
+                    const buffer = await downloadMediaMessage(
+                        msg,
+                        'buffer',
+                        {},
+                        {
+                            logger: silentLogger,
+                            reuploadRequest: sock.updateMediaMessage,
+                        }
+                    );
+                    if (Buffer.isBuffer(buffer)) {
+                        if (buffer.length <= 4 * 1024 * 1024) {
+                            imageBase64 = buffer.toString('base64');
+                            imageMimeType = msg.message.imageMessage.mimetype || 'image/jpeg';
+                            if (!text) text = '[Imagen]';
+                        } else {
+                            logWarn('Imagen mayor a 4MB omitida.');
+                        }
+                    }
+                } catch (err: any) {
+                    logError(`Error al descargar imagen: ${err.message}`);
+                }
+            }
+
+            const locMsg = msg.message.locationMessage || msg.message.liveLocationMessage;
+            if (locMsg && typeof locMsg.degreesLatitude === 'number' && typeof locMsg.degreesLongitude === 'number') {
+                const addrParts = [
+                    (msg.message.locationMessage as any)?.name,
+                    (msg.message.locationMessage as any)?.address,
+                ]
+                    .filter(Boolean)
+                    .join(' - ');
+                location = {
+                    lat: locMsg.degreesLatitude,
+                    lng: locMsg.degreesLongitude,
+                    address: addrParts || undefined,
+                };
+                if (!text) text = '[Ubicación]';
+            }
+
+            if (!text && !audioBase64 && !imageBase64 && !location) continue;
 
             const senderShort = sender.split('@')[0];
-            logMsg('<<', senderShort, text || '[Audio]');
+            logMsg('<<', senderShort, text || '[Multimedia]');
             messageCount++;
 
-            try {
-                // Typing indicator
-                await sock.sendPresenceUpdate('composing', sender);
-
-                // Human-like delay (1.5-3s)
-                const delay = Math.floor(Math.random() * 1500) + 1500;
-                await new Promise(r => setTimeout(r, delay));
-
-                // Send to API
-                const response = await axios.post(
-                    `${config.serverUrl}/api/ai/sync-agent`,
-                    { 
-                        tenantId: config.tenantId, 
-                        sender, 
-                        text, 
-                        fromMe,
-                        audio: audioBase64,
-                        audioMime: audioMimeType
-                    },
-                    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-                );
-
-                const data = response.data;
-                await sock.sendPresenceUpdate('paused', sender);
-
-                if (data.reply) {
-                    await sock.sendMessage(sender, { text: data.reply });
-                    logMsg('>>', senderShort, data.reply);
-
-                    if (data.action) {
-                        log('⚡', `Acción ejecutada: ${c.bold}${data.action.type}${c.reset}`, c.magenta);
-                    }
+            // Agrupar mensajes consecutivos (debounce 4.5s) antes de consultar a la IA
+            const existing = pendingBuffers.get(sender);
+            if (existing) {
+                clearTimeout(existing.timer);
+                if (text) existing.texts.push(text);
+                if (msg.pushName && !existing.senderName) existing.senderName = msg.pushName;
+                if (audioBase64) {
+                    existing.audioBase64 = audioBase64;
+                    existing.audioMimeType = audioMimeType;
                 }
-
-            } catch (error: any) {
-                await sock.sendPresenceUpdate('paused', sender).catch(() => { });
-
-                if (error.code === 'ECONNREFUSED') {
-                    logError(`No se pudo conectar al servidor. ¿Está corriendo en ${config.serverUrl}?`);
-                } else if (error.code === 'ECONNABORTED') {
-                    logError('El servidor tardó demasiado en responder.');
-                } else if (error.response?.status === 404) {
-                    logError(`Negocio "${config.tenantId}" no encontrado en el servidor.`);
-                } else {
-                    logError(`Error: ${error.response?.data?.error || error.message}`);
+                if (imageBase64) {
+                    existing.imageBase64 = imageBase64;
+                    existing.imageMimeType = imageMimeType;
                 }
+                if (location) {
+                    existing.location = location;
+                }
+                existing.timer = setTimeout(() => {
+                    void flushPendingBuffer(sender);
+                }, DEBOUNCE_MS);
+            } else {
+                const timer = setTimeout(() => {
+                    void flushPendingBuffer(sender);
+                }, DEBOUNCE_MS);
+                pendingBuffers.set(sender, {
+                    texts: text ? [text] : [],
+                    senderName: msg.pushName || undefined,
+                    audioBase64,
+                    audioMimeType,
+                    imageBase64,
+                    imageMimeType,
+                    location,
+                    timer,
+                });
             }
         }
     });
