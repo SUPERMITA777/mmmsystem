@@ -6,6 +6,7 @@ import { useCart } from "@/context/CartContext";
 import { useTenant } from "@/context/TenantContext";
 import { supabase } from "@/lib/supabaseClient";
 import { pointInPolygon, getDistance, LatLng } from "@/lib/geoutils";
+import { buildWhatsAppOrderMessage } from "@/lib/whatsappUtils";
 
 // ========== Tipos de Entrega ==========
 type ZonaEntrega = {
@@ -480,40 +481,29 @@ export default function CartModal({
                 whatsappNum = s?.whatsapp_numero;
             }
 
-            const groupedByCategory = items.reduce((acc: Record<string, any[]>, item) => {
-                const cat = item.categoriaNombre || "PRODUCTOS";
-                if (!acc[cat]) acc[cat] = [];
-                acc[cat].push(item);
-                return acc;
-            }, {});
-
-            const itemsTexto = Object.entries(groupedByCategory).map(([cat, catItems]) => {
-                const catHeader = `*${cat.toUpperCase()}:*`;
-                const productsText = catItems.map(i => {
-                    const groupedAds = (i.adicionales || []).reduce((acc: Record<string, { precio: number, qty: number }>, a: { nombre: string; precio: number }) => {
-                        if (!acc[a.nombre]) acc[a.nombre] = { precio: 0, qty: 0 };
-                        acc[a.nombre].qty += 1;
-                        acc[a.nombre].precio += a.precio;
-                        return acc;
-                    }, {} as Record<string, { precio: number, qty: number }>);
-                    const ads = Object.entries(groupedAds).map(([nombre, data]) => `  + ${(data as { qty: number }).qty > 1 ? `${nombre} x ${(data as { qty: number }).qty}` : nombre} (+$${(data as { precio: number }).precio})`).join("\n");
-                    const notaTexto = i.notas ? `\n  ⚠️ NOTA: ${i.notas}` : "";
-                    return `• ${i.cantidad}x ${i.nombre} - $${new Intl.NumberFormat("es-AR").format(i.precio * i.cantidad)}${ads ? `\n${ads}` : ""}${notaTexto}`;
-                }).join("\n");
-                return `${catHeader}\n${productsText}`;
-            }).join("\n\n");
-
-            const msg = `🍕 *NUEVO PEDIDO*\n\n` +
-                `*ID:* ${pedido.numero_pedido || pedido.id.slice(0, 8)}\n` +
-                `*Tipo:* ${tipoEntrega === "delivery" ? "Delivery" : "Take Away"}\n` +
-                `*Cliente:* ${nombre}\n` +
-                `*Teléfono:* +54 ${telefono}\n` +
-                (tipoEntrega === "delivery" ? `*Dirección:* ${direccion}\n` : "") +
-                `\n${itemsTexto}\n\n` +
-                `*Subtotal:* $${new Intl.NumberFormat("es-AR").format(total)}\n` +
-                (propina > 0 ? `*Propina:* $${new Intl.NumberFormat("es-AR").format(propina)}\n` : "") +
-                `*Total:* $${new Intl.NumberFormat("es-AR").format(totalConPropina)}\n` +
-                `*Pago:* ${metodoPago === "efectivo" ? `Efectivo${conCuanto ? ` (con $${conCuanto})` : ""}` : "Transferencia"}`;
+            const msg = buildWhatsAppOrderMessage({
+                numeroPedido: pedido.numero_pedido || pedido.id.slice(0, 8),
+                tipo: tipoEntrega,
+                clienteNombre: nombre,
+                clienteTelefono: telefono,
+                clienteDireccion: tipoEntrega === "delivery" ? direccion : undefined,
+                items: items.map(i => ({
+                    nombre: i.nombre,
+                    cantidad: i.cantidad,
+                    precioUnitario: i.precio,
+                    categoriaNombre: i.categoriaNombre || "PRODUCTOS",
+                    adicionales: i.adicionales || [],
+                    notas: i.notas,
+                })),
+                subtotal: total,
+                costoEnvio: COSTO_ENVIO,
+                envioGratis: tipoEntrega === "delivery" && geocodingState === "ok" && COSTO_ENVIO === 0,
+                propina: propina > 0 ? propina : 0,
+                descuento: promoDescuento + autoDescuento,
+                total: totalConPropina,
+                metodoPago: metodoPago === "efectivo" ? "Efectivo" : "Transferencia",
+                abonaCon: metodoPago === "efectivo" ? conCuanto : undefined,
+            });
 
             const rawPhone = (whatsappNum || "").replace(/\D/g, "");
             const waPhone = rawPhone.startsWith("54") ? rawPhone : `54${rawPhone}`;

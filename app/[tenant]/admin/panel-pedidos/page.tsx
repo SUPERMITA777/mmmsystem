@@ -14,6 +14,7 @@ import { descontarStockDePedido } from "@/lib/stockUtils";
 import { getArgentinaDate, getStartOfDayArgentina, getEndOfDayArgentina, formatToArgentinaDateTime, formatToArgentinaTime } from "@/lib/dateUtils";
 import { useHybridPedidos } from "@/hooks/useHybridPedidos";
 import { db } from "@/lib/db";
+import { buildWhatsAppOrderUrlFromPedido } from "@/lib/whatsappUtils";
 
 const DynamicMap = dynamic(() => import("@/components/admin/PanelPedidosMap"), { ssr: false });
 
@@ -1288,6 +1289,24 @@ export default function PanelPedidosPage() {
                         </button>
                       </div>
                     )}
+                    {selectedPedido.tipo !== "salon" && (() => {
+                      const resumenUrl = buildWhatsAppOrderUrlFromPedido(selectedPedido);
+                      if (!resumenUrl) return null;
+                      return (
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-50/50">
+                          <a
+                            href={resumenUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer flex items-center gap-1.5"
+                            title="Enviar resumen completo del pedido por WhatsApp"
+                          >
+                            <MessageSquare size={14} className="text-emerald-600" />
+                            <span>Enviar detalle del pedido por WhatsApp</span>
+                          </a>
+                        </div>
+                      );
+                    })()}
                     {selectedPedido.cliente_direccion && (
                       <div className="flex items-center justify-between px-4 py-3">
                         <span className="text-sm text-purple-600 font-medium truncate max-w-[180px]">{selectedPedido.cliente_direccion}</span>

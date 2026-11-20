@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft, Lock, User } from "lucide-react";
+import { X, Search, Plus, Minus, Trash2, ShoppingBag, Bike, MapPin, AlertCircle, CheckCircle2, Loader2, ArrowLeft, Lock, User, MessageSquare } from "lucide-react";
 import { useAuth } from "@/components/admin/AuthProvider";
 import { LatLng, pointInPolygon, getDistance } from "@/lib/geoutils";
 import { getProductDiscount } from "@/lib/discountUtils";
@@ -10,6 +10,7 @@ import { useTenant } from "@/context/TenantContext";
 import { db, guardarPedidoLocal, generateLocalId, marcarSincronizado } from "@/lib/db";
 import { printCocina, printCocinaIncremental, printPreCuenta } from "@/lib/printUtils";
 import { persistirPedidoHibrido } from "@/lib/hybridService";
+import { buildWhatsAppOrderUrl, formatWhatsAppPhone, WhatsAppOrderItem } from "@/lib/whatsappUtils";
 
 interface NuevoPedidoModalProps {
     isOpen: boolean;
@@ -120,6 +121,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const [direccionGeocoded, setDireccionGeocoded] = useState<LatLng | null>(null);
     const [alternativas, setAlternativas] = useState<any[]>([]);
     const [showPreCuentaModal, setShowPreCuentaModal] = useState(false);
+    const [enviarWhatsApp, setEnviarWhatsApp] = useState(true);
 
     useEffect(() => {
         if (isOpen && sucursalId) {
@@ -128,6 +130,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
             setView("catalog");
             if (editPedido) {
                 isLoadingEditPedido.current = true;
+                setEnviarWhatsApp(false);
                 // Pre-fill from existing order
                 const items: CartItem[] = (editPedido.pedido_items || []).map((item: any) => {
                     const match = item.notas?.match(/\[Descuento: (.*?)\]/);
@@ -211,6 +214,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 setTimeout(() => { isLoadingEditPedido.current = false; }, 200);
             } else {
                 isLoadingEditPedido.current = false;
+                setEnviarWhatsApp(true);
                 setCarrito([]);
                 setCliente({ nombre: "", telefono: "", direccion: "", entreCalles: "", instrucciones: "" });
                 setNotaPedido("");
@@ -1145,6 +1149,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     const recargoTotal = baseParaRecargo > 0 ? Math.round((baseParaRecargo * recargoPorcentaje) / 100) : 0;
 
     const total = subtotal + costoEnvio + recargoTotal + cubiertoTotal - promoDescuento - codigoDescuento;
+    const hasValidPhone = !!formatWhatsAppPhone(cliente.telefono);
 
     // Auto-apply discounts logic
     useEffect(() => {
@@ -1203,8 +1208,17 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
     async function crearPedido() {
         if (carrito.length === 0) return;
         if (!omitirCliente && !cliente.nombre && tipo !== "salon") { alert("Ingresá el nombre del cliente"); return; }
+        const shouldSendWhatsApp =
+            enviarWhatsApp &&
+            !camareroMode &&
+            tipo !== "salon" &&
+            !omitirCliente &&
+            !!formatWhatsAppPhone(cliente.telefono);
+        // Abrir ventana sincrónicamente en el evento de click para evitar bloqueo de popups tras awaits
+        const waWindow = shouldSendWhatsApp ? window.open("", "_blank") : null;
         setLoading(true);
         let pedidoFinalId: string | null = null;
+        let numeroPedidoFinal = editPedido?.numero_pedido || editPedido?.id?.slice(0, 8) || "";
         try {
             const mPago = metodosPago.find(m => m.id === metodoPagoId);
             const mPagoNombre1 = mPago ? mPago.nombre : (metodoPagoId ? "Transferencia" : "Efectivo");
@@ -1327,7 +1341,7 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 const tipoPrefix = tipo === "delivery" ? "DELIVERY" : tipo === "takeaway" ? "TAKE AWAY" : "SALON";
 
                 // 1. Intentar obtener número real si hay red
-                let numeroPedidoFinal = `${tipoPrefix}-${datePart}-LOCAL-${localId.slice(0, 6).toUpperCase()}`;
+                numeroPedidoFinal = `${tipoPrefix}-${datePart}-LOCAL-${localId.slice(0, 6).toUpperCase()}`;
                 if (navigator.onLine) {
                     try {
                         const { data: nextSeq } = await supabase.rpc('get_next_order_number', {
@@ -1402,6 +1416,66 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 console.log(`[Hybrid] Pedido guardado via: ${result.source}`);
             }
 
+            if (shouldSendWhatsApp) {
+                const waItems: WhatsAppOrderItem[] = carrito.map((item) => {
+                    const fullProd =
+                        productos.find((p) => p.id === item.producto_id) ||
+                        productos.find((p) => p.nombre === item.nombre);
+                    const catOfProd = categorias.find((c) => c.id === fullProd?.categoria_id);
+                    const ads = item.adicionales || [];
+                    const adTotalUnit = ads.reduce((sum, a) => {
+                        const qty = a.cantidad && a.cantidad > 0 ? a.cantidad : 1;
+                        return sum + Number(a.precio || 0) * qty;
+                    }, 0);
+                    const unitWithOverride = Number(
+                        item.precioOverride !== undefined && item.precioOverride !== null
+                            ? item.precioOverride
+                            : item.precio
+                    );
+                    const isWebOriginalPrice = editPedido?.origen === "web" && item.precioOverride === item.precio;
+                    const baseUnitPrice =
+                        !isWebOriginalPrice && adTotalUnit > 0 && unitWithOverride >= adTotalUnit
+                            ? unitWithOverride - adTotalUnit
+                            : unitWithOverride;
+
+                    return {
+                        nombre: item.nombre,
+                        cantidad: item.cantidad,
+                        precioUnitario: baseUnitPrice,
+                        categoriaNombre: catOfProd?.nombre || "PRODUCTOS",
+                        adicionales: ads,
+                        notas: item.nota,
+                    };
+                });
+
+                const waUrl = buildWhatsAppOrderUrl(cliente.telefono, {
+                    numeroPedido: numeroPedidoFinal || pedidoFinalId?.slice(0, 8) || "",
+                    tipo,
+                    clienteNombre: omitirCliente ? "Consumidor Final" : cliente.nombre,
+                    clienteTelefono: cliente.telefono,
+                    clienteDireccion: tipo === "delivery" ? cliente.direccion : undefined,
+                    items: waItems,
+                    subtotal,
+                    costoEnvio,
+                    envioGratis: tipo === "delivery" && validacionDelivery.valid && costoEnvio === 0,
+                    descuento: promoDescuento + codigoDescuento,
+                    recargo: recargoTotal,
+                    total,
+                    metodoPago: metodoPagoNombre,
+                    abonaCon: seAbona || undefined,
+                });
+
+                if (waUrl) {
+                    if (waWindow && !waWindow.closed) {
+                        waWindow.location.href = waUrl;
+                    } else {
+                        window.open(waUrl, "_blank");
+                    }
+                } else if (waWindow && !waWindow.closed) {
+                    waWindow.close();
+                }
+            }
+
             onCreated();
             onClose();
 
@@ -1416,6 +1490,9 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                 } catch { /* Se sincronizará después */ }
             }
         } catch (e: any) {
+            if (waWindow && !waWindow.closed) {
+                waWindow.close();
+            }
             console.error(e);
             alert("Error al " + (editPedido ? "editar" : "crear") + " pedido: " + (e.message || ""));
         } finally { setLoading(false); }
@@ -2172,6 +2249,24 @@ export default function NuevoPedidoModal({ isOpen, onClose, onCreated, editPedid
                         <div className="flex justify-between text-sm font-black text-gray-900 pt-2 border-t border-gray-200">
                             <span>Total</span><span>$ {fmt(total)}</span>
                         </div>
+
+                        {!camareroMode && tipo !== "salon" && !omitirCliente && (
+                            <label className="flex items-center gap-2 cursor-pointer pt-1 select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={enviarWhatsApp}
+                                    onChange={e => setEnviarWhatsApp(e.target.checked)}
+                                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                                />
+                                <MessageSquare size={14} className={hasValidPhone ? "text-emerald-600 shrink-0" : "text-gray-300 shrink-0"} />
+                                <span className="text-xs font-medium text-gray-700 leading-tight">
+                                    Enviar detalle por WhatsApp
+                                    {!hasValidPhone && (
+                                        <span className="text-[10px] text-gray-400 font-normal ml-1">(sin teléfono)</span>
+                                    )}
+                                </span>
+                            </label>
+                        )}
 
                         <div className="flex items-center gap-3 pt-1">
                             <button onClick={onClose} className="text-red-500 font-bold text-xs hover:text-red-600 transition-colors">
