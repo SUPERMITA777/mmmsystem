@@ -2305,6 +2305,24 @@ function getOpenAICopilotTools(compact = false) {
     });
 }
 
+const WRITE_INTENT_RE =
+    /(propon|propone|crea|crear|edit|modific|cambi|sub[ie]|aument|baj[ae]|rebaj|activ|paus|ocult|promo|descuento|cupon|precio|cerr|abri|agreg|suma|snippet|bot|dale|hacelo|aplic|confirm|^si\b|^ok\b)/;
+
+function hasWriteIntent(message: string, history: CopilotMessage[]): boolean {
+    if (WRITE_INTENT_RE.test(normalizeText(message))) return true;
+    const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
+    return Boolean(lastAssistant && /propuesta|propon/i.test(lastAssistant.content) && message.trim().length < 60);
+}
+
+function parseRetryAfterSeconds(errMsg: string): number | null {
+    const m = errMsg.match(/try again in ([\d.]+)(ms|s)/i);
+    if (!m) return null;
+    const value = Number(m[1]);
+    return m[2].toLowerCase() === "ms" ? value / 1000 : value;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function truncateToolOutput(raw: string, maxChars = 3600): string {
     if (!raw || raw.length <= maxChars) return raw;
     return JSON.stringify({
@@ -2643,7 +2661,25 @@ export async function runBusinessCopilot(params: {
             maxRetries: 0,
             timeout: 20_000,
         });
-        const groqTools = getOpenAICopilotTools(true);
+        const includeProposals = hasWriteIntent(message, cleanHistory);
+        const groqTools = getOpenAICopilotTools(true).filter(
+            (t: any) => includeProposals || !t.function.name.startsWith("propose_")
+        );
+        const groqStartedAt = Date.now();
+        const callGroqWithRetry = async (payload: any) => {
+            try {
+                return await groq.chat.completions.create(payload);
+            } catch (err: any) {
+                const errMsg = err?.message || String(err);
+                const waitS = Number(err?.status) === 429 ? parseRetryAfterSeconds(errMsg) : null;
+                // Reintento único si el límite por minuto se libera en pocos segundos y hay margen de tiempo
+                if (waitS !== null && waitS <= 12 && Date.now() - groqStartedAt + waitS * 1000 < 40_000) {
+                    await sleep(Math.ceil(waitS * 1000) + 300);
+                    return await groq.chat.completions.create(payload);
+                }
+                throw err;
+            }
+        };
         const groqSystemPrompt = buildCopilotSystemPrompt({
             sucursalName,
             todayArgentina,
@@ -2652,10 +2688,13 @@ export async function runBusinessCopilot(params: {
             activePage,
             compact: true,
         });
-        const groqHistory = cleanHistory.slice(-6).map((m) => ({
+        const groqHistory = cleanHistory.slice(-4).map((m) => ({
             role: m.role,
-            content: m.content.length > 700 ? `${m.content.slice(0, 700)}…` : m.content,
+            content: m.content.length > 500 ? `${m.content.slice(0, 500)}…` : m.content,
         }));
+        while (groqHistory.length > 0 && groqHistory[0].role === "assistant") {
+            groqHistory.shift();
+        }
 
         for (const modelId of GROQ_CHAT_MODELS) {
             try {
@@ -2672,12 +2711,12 @@ export async function runBusinessCopilot(params: {
                 let lastFingerprint = "";
                 while (maxIter > 0) {
                     maxIter--;
-                    const response = await groq.chat.completions.create({
+                    const response: any = await callGroqWithRetry({
                         model: modelId,
                         messages,
                         tools: groqTools,
                         tool_choice: "auto",
-                        max_completion_tokens: 1400,
+                        max_completion_tokens: 1300,
                     });
 
                     const u: any = response.usage || {};
@@ -2754,7 +2793,7 @@ export async function runBusinessCopilot(params: {
                             tool_call_id: tc.id,
                             role: "tool",
                             name: tc.function.name,
-                            content: truncateToolOutput(result, 3600),
+                            content: truncateToolOutput(result, 3000),
                         });
                     }
                 }
