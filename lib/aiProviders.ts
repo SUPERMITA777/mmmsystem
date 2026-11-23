@@ -8,7 +8,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export type AIProviderId = "gemini" | "openai" | "groq";
-export type TokenUsageSource = "whatsapp" | "simulator" | "training";
+export type TokenUsageSource = "whatsapp" | "simulator" | "training" | "copilot";
 
 export interface TokenUsageRecord {
     provider: AIProviderId;
