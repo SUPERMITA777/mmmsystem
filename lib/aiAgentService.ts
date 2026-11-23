@@ -8,6 +8,7 @@ import {
     estimateCostUsd,
     getAvailableProviders,
     getMonthlyTokenUsage,
+    GROQ_CHAT_MODELS,
     logTokenUsage,
     type GeminiContent,
     type GeminiPart,
@@ -2555,20 +2556,23 @@ function filterToolsByPermissions(allowedOps: string[], userRole: string) {
     ];
 }
 
-function normalizeSchemaForOpenAI(schema: any): any {
+function normalizeSchemaForOpenAI(schema: any, allowNull = false): any {
     if (!schema || typeof schema !== "object") return schema;
+    if (Array.isArray(schema)) return schema.map((x) => normalizeSchemaForOpenAI(x, false));
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(schema)) {
         if (k === "type" && typeof v === "string") {
-            out.type = v.toLowerCase();
+            const lower = v.toLowerCase();
+            out.type = allowNull ? [lower, "null"] : lower;
         } else if (k === "properties" && v && typeof v === "object") {
+            const reqSet = new Set(Array.isArray((schema as any).required) ? (schema as any).required : []);
             const props: Record<string, any> = {};
             for (const [pk, pv] of Object.entries(v as Record<string, any>)) {
-                props[pk] = normalizeSchemaForOpenAI(pv);
+                props[pk] = normalizeSchemaForOpenAI(pv, !reqSet.has(pk));
             }
             out.properties = props;
         } else if (k === "items" && v && typeof v === "object") {
-            out.items = normalizeSchemaForOpenAI(v);
+            out.items = normalizeSchemaForOpenAI(v, false);
         } else {
             out[k] = v;
         }
@@ -2576,21 +2580,38 @@ function normalizeSchemaForOpenAI(schema: any): any {
     return out;
 }
 
+function cleanToolArgs(args: Record<string, any> | null | undefined): Record<string, any> {
+    if (!args || typeof args !== "object") return {};
+    const cleaned: Record<string, any> = {};
+    for (const [k, v] of Object.entries(args)) {
+        if (v !== null && v !== undefined) {
+            cleaned[k] = v;
+        }
+    }
+    return cleaned;
+}
+
 function convertToolsToOpenAIFormat(geminiTools: any[]) {
     if (!geminiTools || geminiTools.length === 0) return undefined;
     const declarations = geminiTools[0].functionDeclarations || [];
-    const tools = declarations.map((fd: any) => ({
-        type: "function",
-        function: {
-            name: fd.name,
-            description: fd.description,
-            parameters: {
-                type: "object",
-                properties: normalizeSchemaForOpenAI(fd.parameters?.properties || {}),
-                required: fd.parameters?.required || [],
+    const tools = declarations.map((fd: any) => {
+        const normalized = normalizeSchemaForOpenAI(
+            fd.parameters || { type: "object", properties: {} },
+            false
+        );
+        return {
+            type: "function",
+            function: {
+                name: fd.name,
+                description: fd.description,
+                parameters: {
+                    type: "object",
+                    properties: normalized?.properties || {},
+                    required: Array.isArray(normalized?.required) ? normalized.required : [],
+                },
             },
-        },
-    }));
+        };
+    });
     return tools.length > 0 ? tools : undefined;
 }
 
@@ -2957,7 +2978,7 @@ export async function processWhatsAppMessage(
 
     // B. Fallback to Groq if available
     if (providers.groq) {
-        const groqCandidates = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+        const groqCandidates = [...GROQ_CHAT_MODELS];
         for (const modelId of groqCandidates) {
             try {
                 const out = await runGroqLoop({
@@ -3222,7 +3243,7 @@ async function runOpenAILoop(input: LoopInput) {
             const functionName = toolCall.function.name;
             let functionArgs: Record<string, any> = {};
             try {
-                functionArgs = JSON.parse(toolCall.function.arguments || "{}");
+                functionArgs = cleanToolArgs(JSON.parse(toolCall.function.arguments || "{}"));
             } catch {
                 functionArgs = {};
             }
@@ -3309,8 +3330,12 @@ async function runGroqLoop(input: LoopInput) {
             estimatedCostUsd: estimateCostUsd(input.modelId, promptTokens, 0, outputTokens),
         });
 
-        const responseMessage = response.choices[0].message;
-        messages.push(responseMessage);
+        const responseMessage: any = response.choices?.[0]?.message || {};
+        messages.push({
+            role: "assistant",
+            content: responseMessage.content ?? null,
+            ...(responseMessage.tool_calls ? { tool_calls: responseMessage.tool_calls } : {}),
+        });
 
         if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
             return {
@@ -3324,7 +3349,7 @@ async function runGroqLoop(input: LoopInput) {
             const functionName = toolCall.function.name;
             let functionArgs: Record<string, any> = {};
             try {
-                functionArgs = JSON.parse(toolCall.function.arguments || "{}");
+                functionArgs = cleanToolArgs(JSON.parse(toolCall.function.arguments || "{}"));
             } catch {
                 functionArgs = {};
             }

@@ -22,6 +22,7 @@ import {
     estimateCostUsd,
     getAvailableProviders,
     getMonthlyTokenUsage,
+    GROQ_CHAT_MODELS,
     logTokenUsage,
     type GeminiContent,
     type GeminiPart,
@@ -298,10 +299,6 @@ const COPILOT_TOOLS: any[] = [
                 name: "get_stock_alerts",
                 description:
                     "Consultar ingredientes debajo o cerca del stock mínimo, productos con control de stock bajo/agotado y qué platos del menú dependen de insumos críticos.",
-                parameters: {
-                    type: "OBJECT",
-                    properties: {},
-                },
             },
             {
                 name: "get_finance_cashflow",
@@ -352,10 +349,6 @@ const COPILOT_TOOLS: any[] = [
                 name: "get_store_overview",
                 description:
                     "Consultar configuración general del local: nombre, horarios semanales, zonas de entrega, medios de pago, estado cerrado temporalmente y consumo del bot WhatsApp.",
-                parameters: {
-                    type: "OBJECT",
-                    properties: {},
-                },
             },
 
             // ── PROPOSAL (CONFIRMATION-REQUIRED) WRITE TOOLS ──
@@ -2234,20 +2227,23 @@ export async function undoCopilotLogEntry(
 // LLM TOOL NORMALIZATION & LOOP
 // ═══════════════════════════════════════════
 
-function normalizeSchemaForOpenAI(schema: any): any {
+function normalizeSchemaForOpenAI(schema: any, allowNull = false): any {
     if (!schema || typeof schema !== "object") return schema;
+    if (Array.isArray(schema)) return schema.map((x) => normalizeSchemaForOpenAI(x, false));
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(schema)) {
         if (k === "type" && typeof v === "string") {
-            out.type = v.toLowerCase();
+            const lower = v.toLowerCase();
+            out.type = allowNull ? [lower, "null"] : lower;
         } else if (k === "properties" && v && typeof v === "object") {
+            const reqSet = new Set(Array.isArray((schema as any).required) ? (schema as any).required : []);
             const props: Record<string, any> = {};
             for (const [pk, pv] of Object.entries(v as Record<string, any>)) {
-                props[pk] = normalizeSchemaForOpenAI(pv);
+                props[pk] = normalizeSchemaForOpenAI(pv, !reqSet.has(pk));
             }
             out.properties = props;
         } else if (k === "items" && v && typeof v === "object") {
-            out.items = normalizeSchemaForOpenAI(v);
+            out.items = normalizeSchemaForOpenAI(v, false);
         } else {
             out[k] = v;
         }
@@ -2257,18 +2253,35 @@ function normalizeSchemaForOpenAI(schema: any): any {
 
 function getOpenAICopilotTools() {
     const declarations = COPILOT_TOOLS[0].functionDeclarations || [];
-    return declarations.map((fd: any) => ({
-        type: "function",
-        function: {
-            name: fd.name,
-            description: fd.description,
-            parameters: {
-                type: "object",
-                properties: normalizeSchemaForOpenAI(fd.parameters?.properties || {}),
-                required: fd.parameters?.required || [],
+    return declarations.map((fd: any) => {
+        const normalized = normalizeSchemaForOpenAI(
+            fd.parameters || { type: "object", properties: {} },
+            false
+        );
+        return {
+            type: "function",
+            function: {
+                name: fd.name,
+                description: fd.description,
+                parameters: {
+                    type: "object",
+                    properties: normalized?.properties || {},
+                    required: Array.isArray(normalized?.required) ? normalized.required : [],
+                },
             },
-        },
-    }));
+        };
+    });
+}
+
+function cleanToolArgs(args: Record<string, any> | null | undefined): Record<string, any> {
+    if (!args || typeof args !== "object") return {};
+    const cleaned: Record<string, any> = {};
+    for (const [k, v] of Object.entries(args)) {
+        if (v !== null && v !== undefined) {
+            cleaned[k] = v;
+        }
+    }
+    return cleaned;
 }
 
 async function dispatchTool(
@@ -2277,10 +2290,16 @@ async function dispatchTool(
     sucursalId: string,
     proposals: PendingActionProposal[]
 ): Promise<string> {
-    if (toolName.startsWith("propose_")) {
-        return executeProposalTool(toolName, args, sucursalId, proposals);
+    try {
+        const safeArgs = cleanToolArgs(args);
+        if (toolName.startsWith("propose_")) {
+            return await executeProposalTool(toolName, safeArgs, sucursalId, proposals);
+        }
+        return await executeReadTool(toolName, safeArgs, sucursalId);
+    } catch (err: any) {
+        console.error(`[Copilot Tool ${toolName}] Error:`, err?.message || err);
+        return JSON.stringify({ error: err?.message || "Error consultando datos." });
     }
-    return executeReadTool(toolName, args, sucursalId);
 }
 
 function aggregateUsage(
@@ -2343,6 +2362,7 @@ export async function runBusinessCopilot(params: {
     }
 
     const providers = getAvailableProviders();
+    const providerErrors: string[] = [];
 
     // 1. Try Gemini 2.5 Flash (con thinking moderado para análisis BI)
     if (providers.gemini) {
@@ -2447,7 +2467,12 @@ export async function runBusinessCopilot(params: {
                     model: "gemini-2.5-flash",
                 };
             } catch (err: any) {
-                console.warn(`[Copilot Gemini thinking=${thinkingBudget}] Error:`, err.message || err);
+                const errMsg = err?.message || String(err);
+                console.warn(`[Copilot Gemini thinking=${thinkingBudget}] Error:`, errMsg);
+                providerErrors.push(`Gemini (thinking=${thinkingBudget}): ${errMsg}`);
+                if ([401, 402, 403, 429].includes(Number(err?.status))) {
+                    break;
+                }
             }
         }
     }
@@ -2466,6 +2491,7 @@ export async function runBusinessCopilot(params: {
             ];
 
             let maxIter = 8;
+            let lastFingerprint = "";
             while (maxIter > 0) {
                 maxIter--;
                 const res = await callOpenAIChatCompletion({
@@ -2478,13 +2504,21 @@ export async function runBusinessCopilot(params: {
                 usages.push(res.usage);
 
                 const msg = res.message;
-                messages.push(msg);
+                messages.push({
+                    role: "assistant",
+                    content: msg.content ?? null,
+                    ...(msg.tool_calls ? { tool_calls: msg.tool_calls } : {}),
+                });
 
                 if (!msg.tool_calls || msg.tool_calls.length === 0) {
                     const totalUsage = aggregateUsage("openai", "gpt-4.1-mini", usages);
                     await logTokenUsage(sucursalId, "copilot", totalUsage);
                     return {
-                        reply: msg.content || "Listo.",
+                        reply:
+                            msg.content ||
+                            (proposals.length > 0
+                                ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                                : "Listo."),
                         proposals,
                         toolsUsed: Array.from(toolsUsed),
                         usage: totalUsage,
@@ -2493,6 +2527,30 @@ export async function runBusinessCopilot(params: {
                     };
                 }
 
+                const turnFingerprint = JSON.stringify(
+                    msg.tool_calls.map((tc: any) => ({
+                        name: tc.function.name,
+                        args: tc.function.arguments || "",
+                    }))
+                );
+                if (turnFingerprint === lastFingerprint) {
+                    const totalUsage = aggregateUsage("openai", "gpt-4.1-mini", usages);
+                    await logTokenUsage(sucursalId, "copilot", totalUsage);
+                    return {
+                        reply:
+                            msg.content ||
+                            (proposals.length > 0
+                                ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                                : "Análisis completado."),
+                        proposals,
+                        toolsUsed: Array.from(toolsUsed),
+                        usage: totalUsage,
+                        provider: "openai",
+                        model: "gpt-4.1-mini",
+                    };
+                }
+                lastFingerprint = turnFingerprint;
+
                 for (const tc of msg.tool_calls) {
                     let args: Record<string, any> = {};
                     try {
@@ -2510,85 +2568,164 @@ export async function runBusinessCopilot(params: {
                     });
                 }
             }
+
+            const totalUsage = aggregateUsage("openai", "gpt-4.1-mini", usages);
+            await logTokenUsage(sucursalId, "copilot", totalUsage);
+            return {
+                reply:
+                    proposals.length > 0
+                        ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                        : "Completé la consulta. Si quedó alguna propuesta pendiente, podés revisarla abajo.",
+                proposals,
+                toolsUsed: Array.from(toolsUsed),
+                usage: totalUsage,
+                provider: "openai",
+                model: "gpt-4.1-mini",
+            };
         } catch (err: any) {
-            console.warn("[Copilot OpenAI] Error:", err.message || err);
+            const errMsg = err?.message || String(err);
+            console.warn("[Copilot OpenAI] Error:", errMsg);
+            providerErrors.push(`OpenAI: ${errMsg}`);
         }
     }
 
     // 3. Fallback Groq
     if (providers.groq) {
-        try {
-            const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
-            const proposals: PendingActionProposal[] = [];
-            const toolsUsed = new Set<string>();
-            const usages: TokenUsageRecord[] = [];
-            const groqTools = getOpenAICopilotTools();
-            const messages: any[] = [
-                { role: "system", content: systemPrompt },
-                ...cleanHistory.map((m) => ({ role: m.role, content: m.content })),
-                { role: "user", content: message },
-            ];
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+        const groqTools = getOpenAICopilotTools();
 
-            let maxIter = 6;
-            while (maxIter > 0) {
-                maxIter--;
-                const response = await groq.chat.completions.create({
-                    model: "llama-3.3-70b-versatile",
-                    messages,
-                    tools: groqTools,
-                    tool_choice: "auto",
-                });
+        for (const modelId of GROQ_CHAT_MODELS) {
+            try {
+                const proposals: PendingActionProposal[] = [];
+                const toolsUsed = new Set<string>();
+                const usages: TokenUsageRecord[] = [];
+                const messages: any[] = [
+                    { role: "system", content: systemPrompt },
+                    ...cleanHistory.map((m) => ({ role: m.role, content: m.content })),
+                    { role: "user", content: message },
+                ];
 
-                const u: any = response.usage || {};
-                const pt = Number(u.prompt_tokens || 0);
-                const ot = Number(u.completion_tokens || 0);
-                usages.push({
-                    provider: "groq",
-                    model: "llama-3.3-70b-versatile",
-                    promptTokens: pt,
-                    cachedTokens: 0,
-                    outputTokens: ot,
-                    totalTokens: Number(u.total_tokens || pt + ot),
-                    estimatedCostUsd: estimateCostUsd("llama-3.3-70b-versatile", pt, 0, ot),
-                });
-
-                const msg = response.choices[0].message;
-                messages.push(msg);
-
-                if (!msg.tool_calls || msg.tool_calls.length === 0) {
-                    const totalUsage = aggregateUsage("groq", "llama-3.3-70b-versatile", usages);
-                    await logTokenUsage(sucursalId, "copilot", totalUsage);
-                    return {
-                        reply: msg.content || "Listo.",
-                        proposals,
-                        toolsUsed: Array.from(toolsUsed),
-                        usage: totalUsage,
-                        provider: "groq",
-                        model: "llama-3.3-70b-versatile",
-                    };
-                }
-
-                for (const tc of msg.tool_calls) {
-                    let args: Record<string, any> = {};
-                    try {
-                        args = JSON.parse(tc.function.arguments || "{}");
-                    } catch {
-                        args = {};
-                    }
-                    toolsUsed.add(tc.function.name);
-                    const result = await dispatchTool(tc.function.name, args, sucursalId, proposals);
-                    messages.push({
-                        tool_call_id: tc.id,
-                        role: "tool",
-                        name: tc.function.name,
-                        content: result,
+                let maxIter = 8;
+                let lastFingerprint = "";
+                while (maxIter > 0) {
+                    maxIter--;
+                    const response = await groq.chat.completions.create({
+                        model: modelId,
+                        messages,
+                        tools: groqTools,
+                        tool_choice: "auto",
+                        max_completion_tokens: 2500,
                     });
+
+                    const u: any = response.usage || {};
+                    const pt = Number(u.prompt_tokens || 0);
+                    const ot = Number(u.completion_tokens || 0);
+                    usages.push({
+                        provider: "groq",
+                        model: modelId,
+                        promptTokens: pt,
+                        cachedTokens: 0,
+                        outputTokens: ot,
+                        totalTokens: Number(u.total_tokens || pt + ot),
+                        estimatedCostUsd: estimateCostUsd(modelId, pt, 0, ot),
+                    });
+
+                    const msg: any = response.choices?.[0]?.message || {};
+                    messages.push({
+                        role: "assistant",
+                        content: msg.content ?? null,
+                        ...(msg.tool_calls ? { tool_calls: msg.tool_calls } : {}),
+                    });
+
+                    if (!msg.tool_calls || msg.tool_calls.length === 0) {
+                        const totalUsage = aggregateUsage("groq", modelId, usages);
+                        await logTokenUsage(sucursalId, "copilot", totalUsage);
+                        return {
+                            reply:
+                                msg.content ||
+                                (proposals.length > 0
+                                    ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                                    : "Listo."),
+                            proposals,
+                            toolsUsed: Array.from(toolsUsed),
+                            usage: totalUsage,
+                            provider: "groq",
+                            model: modelId,
+                        };
+                    }
+
+                    const turnFingerprint = JSON.stringify(
+                        msg.tool_calls.map((tc: any) => ({
+                            name: tc.function.name,
+                            args: tc.function.arguments || "",
+                        }))
+                    );
+                    if (turnFingerprint === lastFingerprint) {
+                        const totalUsage = aggregateUsage("groq", modelId, usages);
+                        await logTokenUsage(sucursalId, "copilot", totalUsage);
+                        return {
+                            reply:
+                                msg.content ||
+                                (proposals.length > 0
+                                    ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                                    : "Análisis completado."),
+                            proposals,
+                            toolsUsed: Array.from(toolsUsed),
+                            usage: totalUsage,
+                            provider: "groq",
+                            model: modelId,
+                        };
+                    }
+                    lastFingerprint = turnFingerprint;
+
+                    for (const tc of msg.tool_calls) {
+                        let args: Record<string, any> = {};
+                        try {
+                            args = JSON.parse(tc.function.arguments || "{}");
+                        } catch {
+                            args = {};
+                        }
+                        toolsUsed.add(tc.function.name);
+                        const result = await dispatchTool(tc.function.name, args, sucursalId, proposals);
+                        messages.push({
+                            tool_call_id: tc.id,
+                            role: "tool",
+                            name: tc.function.name,
+                            content: result,
+                        });
+                    }
                 }
+
+                const totalUsage = aggregateUsage("groq", modelId, usages);
+                await logTokenUsage(sucursalId, "copilot", totalUsage);
+                return {
+                    reply:
+                        proposals.length > 0
+                            ? "Preparé la propuesta de cambio abajo para que la revises y confirmes."
+                            : "Completé la consulta. Si quedó alguna propuesta pendiente, podés revisarla abajo.",
+                    proposals,
+                    toolsUsed: Array.from(toolsUsed),
+                    usage: totalUsage,
+                    provider: "groq",
+                    model: modelId,
+                };
+            } catch (err: any) {
+                const errMsg = err?.message || String(err);
+                console.warn(`[Copilot Groq ${modelId}] Error:`, errMsg);
+                providerErrors.push(`Groq (${modelId}): ${errMsg}`);
             }
-        } catch (err: any) {
-            console.error("[Copilot Groq] Error:", err.message || err);
         }
     }
 
-    throw new Error("No hay proveedores IA disponibles o fallaron al responder.");
+    console.error("[Copilot] All providers failed:", providerErrors);
+    if (providerErrors.some((e) => e.includes("credits are depleted") || e.includes("402"))) {
+        throw new Error(
+            `Créditos de Gemini agotados y fallaron los respaldos (${providerErrors[providerErrors.length - 1] || "sin respuesta"}).`
+        );
+    }
+    throw new Error(
+        providerErrors.length > 0
+            ? `No se pudo obtener respuesta de la IA: ${providerErrors[providerErrors.length - 1]}`
+            : "No hay proveedores IA configurados en el servidor (GEMINI_API_KEY, OPENAI_API_KEY o GROQ_API_KEY)."
+    );
 }

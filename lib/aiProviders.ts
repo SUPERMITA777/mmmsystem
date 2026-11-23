@@ -42,6 +42,12 @@ interface ModelRatesPerMillion {
     output: number;
 }
 
+export const GROQ_CHAT_MODELS = [
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-20b",
+] as const;
+
 const MODEL_RATES: Record<string, ModelRatesPerMillion> = {
     "gemini-2.5-flash": { input: 0.30, cached: 0.03, output: 2.50 },
     "gemini-2.5-flash-lite": { input: 0.10, cached: 0.01, output: 0.40 },
@@ -51,6 +57,9 @@ const MODEL_RATES: Record<string, ModelRatesPerMillion> = {
     "gpt-5-mini": { input: 0.25, cached: 0.025, output: 2.00 },
     "gpt-5-nano": { input: 0.05, cached: 0.005, output: 0.40 },
     "gpt-4o-mini": { input: 0.15, cached: 0.075, output: 0.60 },
+    "openai/gpt-oss-120b": { input: 0.15, cached: 0.15, output: 0.60 },
+    "qwen/qwen3.8-27b": { input: 0.20, cached: 0.20, output: 0.60 },
+    "openai/gpt-oss-20b": { input: 0.075, cached: 0.075, output: 0.30 },
     "llama-3.3-70b-versatile": { input: 0.59, cached: 0.59, output: 0.79 },
     "llama-3.1-8b-instant": { input: 0.05, cached: 0.05, output: 0.08 },
 };

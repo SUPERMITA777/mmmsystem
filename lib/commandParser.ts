@@ -93,29 +93,35 @@ async function parseWithAI(input: string): Promise<ParseResult> {
         return { success: false, error: "NO_API_KEY" };
     }
 
-    try {
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    let lastError = "Error desconocido de Groq";
 
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                { role: "user", content: input }
-            ],
-            model: "llama-3.3-70b-versatile",
-            temperature: 0,
-            max_tokens: 200,
-            response_format: { type: "json_object" },
-        });
+    for (const model of ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]) {
+        try {
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT },
+                    { role: "user", content: input }
+                ],
+                model,
+                temperature: 0,
+                max_tokens: 400,
+                response_format: { type: "json_object" },
+            });
 
-        const text = completion.choices[0]?.message?.content;
-        if (!text) throw new Error("Empty response from Groq");
+            const text = completion.choices[0]?.message?.content;
+            if (!text) throw new Error("Empty response from Groq");
 
-        const parsed = JSON.parse(text);
-        return { success: true, command: parsed as ParsedCommand };
-    } catch (error: any) {
-        console.warn("Groq parser failed, falling back to regex:", error.message);
-        return { success: false, error: error.message };
+            const parsed = JSON.parse(text);
+            return { success: true, command: parsed as ParsedCommand };
+        } catch (error: any) {
+            lastError = error.message || String(error);
+            console.warn(`Groq parser (${model}) failed:`, lastError);
+        }
     }
+
+    console.warn("Groq parser failed on all models, falling back to regex:", lastError);
+    return { success: false, error: lastError };
 }
 
 // ═══════════════════════════════════════════════════
