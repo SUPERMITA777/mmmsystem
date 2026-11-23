@@ -760,10 +760,10 @@ async function executeReadTool(
                 })
                 .sort((a, b) => b.unidades - a.unidades);
 
-            const zeroSalesActive = rows
-                .filter((r) => r.unidades === 0 && r.activo)
+            const allZeroSalesActive = rows.filter((r) => r.unidades === 0 && r.activo);
+            const zeroSalesActive = allZeroSalesActive
                 .map((r) => ({ nombre: r.nombre, categoria: r.categoria, precio_actual: r.precio_actual }))
-                .slice(0, 15);
+                .slice(0, 8);
 
             const missingCostCount = rows.filter((r) => !r.has_cost && r.activo).length;
             const highFoodCost = analyzed.filter((a) => a.food_cost_pct !== null && a.food_cost_pct > 38);
@@ -771,9 +771,12 @@ async function executeReadTool(
             return JSON.stringify({
                 period: `${fromDate} a ${toDate}`,
                 total_products_evaluated: rows.length,
+                evaluated_sold_count: analyzed.length,
                 products_without_cost_count: missingCostCount,
-                high_food_cost_alerts: highFoodCost.slice(0, 10),
-                top_products: analyzed.slice(0, 25),
+                high_food_cost_count: highFoodCost.length,
+                high_food_cost_alerts: highFoodCost.slice(0, 8),
+                top_products: analyzed.slice(0, 15),
+                zero_sales_active_count: allZeroSalesActive.length,
                 zero_sales_active_products: zeroSalesActive,
             });
         }
@@ -794,9 +797,14 @@ async function executeReadTool(
                     .eq("activo", true),
             ]);
 
-            const criticalIngredients = (ingredientes || []).filter(
-                (i: any) => Number(i.stock_actual || 0) <= Number(i.stock_minimo || 0)
-            );
+            const criticalIngredients = (ingredientes || [])
+                .filter((i: any) => Number(i.stock_actual || 0) <= Number(i.stock_minimo || 0))
+                .sort(
+                    (a: any, b: any) =>
+                        Number(b.stock_minimo || 0) -
+                        Number(b.stock_actual || 0) -
+                        (Number(a.stock_minimo || 0) - Number(a.stock_actual || 0))
+                );
             const warningIngredients = (ingredientes || []).filter((i: any) => {
                 const act = Number(i.stock_actual || 0);
                 const min = Number(i.stock_minimo || 0);
@@ -807,33 +815,39 @@ async function executeReadTool(
                 (p: any) => Number(p.stock_actual || 0) <= Number(p.stock_minimo || 0)
             );
 
-            const affectedByCritical: Array<{ ingrediente: string; productos_afectados: string[] }> = [];
-            for (const ing of criticalIngredients.slice(0, 10)) {
+            const affectedByCritical: Array<{
+                ingrediente: string;
+                total_afectados: number;
+                productos_afectados: string[];
+            }> = [];
+            for (const ing of criticalIngredients.slice(0, 6)) {
                 const res = await findProductsByIngredientForSucursal(sucursalId, ing.nombre);
                 if (res.products.length > 0) {
                     affectedByCritical.push({
                         ingrediente: ing.nombre,
-                        productos_afectados: res.products.map((p: any) => p.nombre),
+                        total_afectados: res.products.length,
+                        productos_afectados: res.products.slice(0, 8).map((p: any) => p.nombre),
                     });
                 }
             }
 
             return JSON.stringify({
                 total_active_ingredients: (ingredientes || []).length,
-                critical_ingredients: criticalIngredients.map((i: any) => ({
+                critical_ingredients_count: criticalIngredients.length,
+                critical_ingredients: criticalIngredients.slice(0, 15).map((i: any) => ({
                     nombre: i.nombre,
                     stock_actual: Number(i.stock_actual || 0),
                     stock_minimo: Number(i.stock_minimo || 0),
                     unidad: i.unidad,
                     proveedor: i.proveedor || null,
                 })),
-                warning_ingredients: warningIngredients.map((i: any) => ({
+                warning_ingredients: warningIngredients.slice(0, 8).map((i: any) => ({
                     nombre: i.nombre,
                     stock_actual: Number(i.stock_actual || 0),
                     stock_minimo: Number(i.stock_minimo || 0),
                     unidad: i.unidad,
                 })),
-                critical_direct_stock_products: criticalProducts.map((p: any) => ({
+                critical_direct_stock_products: criticalProducts.slice(0, 10).map((p: any) => ({
                     nombre: p.nombre,
                     stock_actual: Number(p.stock_actual || 0),
                     stock_minimo: Number(p.stock_minimo || 0),
@@ -962,14 +976,16 @@ async function executeReadTool(
                 }
             }
 
-            const inactiveRepeat = (clientes || [])
+            const inactiveRepeatAll = (clientes || [])
                 .filter((c: any) => Number(c.total_pedidos || 0) >= 2)
                 .filter((c: any) => {
                     const phone = (c.telefono || "").replace(/\D/g, "").slice(-10);
                     const lastAt = (phone && lastOrderByPhone.get(phone)) || c.updated_at;
                     return lastAt && lastAt < getStartOfDayArgentina(cutoffDate);
-                })
-                .slice(0, 15)
+                });
+
+            const inactiveRepeat = inactiveRepeatAll
+                .slice(0, 8)
                 .map((c: any) => ({
                     nombre: c.nombre,
                     total_pedidos: c.total_pedidos,
@@ -978,13 +994,13 @@ async function executeReadTool(
 
             return JSON.stringify({
                 total_clientes_top_sample: (clientes || []).length,
-                top_10_customers: (clientes || []).slice(0, 10).map((c: any) => ({
+                top_10_customers: (clientes || []).slice(0, 8).map((c: any) => ({
                     nombre: c.nombre,
                     total_pedidos: c.total_pedidos,
                     total_gastado: Number(c.total_gastado || 0),
                 })),
                 inactive_repeat_customers_threshold_days: daysInactive,
-                inactive_repeat_customers_count: inactiveRepeat.length,
+                inactive_repeat_customers_count: inactiveRepeatAll.length,
                 inactive_repeat_sample: inactiveRepeat,
                 delivery_zones_performance: zoneCounts,
             });
@@ -1058,8 +1074,9 @@ async function executeReadTool(
             return JSON.stringify({
                 categories: cats || [],
                 products_count: filteredProds.length,
-                products: filteredProds.slice(0, 80),
-                discounts: (descs || []).map((d: any) => ({
+                products_truncated: filteredProds.length > 40,
+                products: filteredProds.slice(0, 40),
+                discounts: (descs || []).slice(0, 20).map((d: any) => ({
                     id: d.id,
                     nombre: d.nombre,
                     codigo: d.codigo,
@@ -2227,23 +2244,36 @@ export async function undoCopilotLogEntry(
 // LLM TOOL NORMALIZATION & LOOP
 // ═══════════════════════════════════════════
 
-function normalizeSchemaForOpenAI(schema: any, allowNull = false): any {
+let geminiBillingBlockedUntil = 0;
+
+function compactDescription(desc: string | undefined, maxLen = 110): string {
+    if (!desc) return "";
+    const firstSentence = desc.split(/\.\s+/)[0].trim();
+    const base = firstSentence.length > 0 ? firstSentence : desc;
+    return base.length > maxLen ? `${base.slice(0, maxLen - 1)}…` : base;
+}
+
+function normalizeSchemaForOpenAI(schema: any, allowNull = false, compact = false, isProp = false): any {
     if (!schema || typeof schema !== "object") return schema;
-    if (Array.isArray(schema)) return schema.map((x) => normalizeSchemaForOpenAI(x, false));
+    if (Array.isArray(schema)) return schema.map((x) => normalizeSchemaForOpenAI(x, false, compact, false));
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(schema)) {
         if (k === "type" && typeof v === "string") {
             const lower = v.toLowerCase();
             out.type = allowNull ? [lower, "null"] : lower;
+        } else if (k === "description" && compact && isProp && typeof v === "string") {
+            if (v.includes("'") || v.includes("=")) {
+                out.description = compactDescription(v, 42);
+            }
         } else if (k === "properties" && v && typeof v === "object") {
             const reqSet = new Set(Array.isArray((schema as any).required) ? (schema as any).required : []);
             const props: Record<string, any> = {};
             for (const [pk, pv] of Object.entries(v as Record<string, any>)) {
-                props[pk] = normalizeSchemaForOpenAI(pv, !reqSet.has(pk));
+                props[pk] = normalizeSchemaForOpenAI(pv, !reqSet.has(pk), compact, true);
             }
             out.properties = props;
         } else if (k === "items" && v && typeof v === "object") {
-            out.items = normalizeSchemaForOpenAI(v, false);
+            out.items = normalizeSchemaForOpenAI(v, false, compact, false);
         } else {
             out[k] = v;
         }
@@ -2251,18 +2281,20 @@ function normalizeSchemaForOpenAI(schema: any, allowNull = false): any {
     return out;
 }
 
-function getOpenAICopilotTools() {
+function getOpenAICopilotTools(compact = false) {
     const declarations = COPILOT_TOOLS[0].functionDeclarations || [];
     return declarations.map((fd: any) => {
         const normalized = normalizeSchemaForOpenAI(
             fd.parameters || { type: "object", properties: {} },
+            false,
+            compact,
             false
         );
         return {
             type: "function",
             function: {
                 name: fd.name,
-                description: fd.description,
+                description: compact ? compactDescription(fd.description, 110) : fd.description,
                 parameters: {
                     type: "object",
                     properties: normalized?.properties || {},
@@ -2270,6 +2302,15 @@ function getOpenAICopilotTools() {
                 },
             },
         };
+    });
+}
+
+function truncateToolOutput(raw: string, maxChars = 3600): string {
+    if (!raw || raw.length <= maxChars) return raw;
+    return JSON.stringify({
+        truncated: true,
+        note: "Datos resumidos por límite de contexto.",
+        preview: raw.slice(0, maxChars - 140),
     });
 }
 
@@ -2363,9 +2404,10 @@ export async function runBusinessCopilot(params: {
 
     const providers = getAvailableProviders();
     const providerErrors: string[] = [];
+    const geminiInCooldown = Date.now() < geminiBillingBlockedUntil;
 
     // 1. Try Gemini 2.5 Flash (con thinking moderado para análisis BI)
-    if (providers.gemini) {
+    if (providers.gemini && !geminiInCooldown) {
         for (const thinkingBudget of [1024, 0]) {
             try {
                 const proposals: PendingActionProposal[] = [];
@@ -2470,11 +2512,16 @@ export async function runBusinessCopilot(params: {
                 const errMsg = err?.message || String(err);
                 console.warn(`[Copilot Gemini thinking=${thinkingBudget}] Error:`, errMsg);
                 providerErrors.push(`Gemini (thinking=${thinkingBudget}): ${errMsg}`);
+                if (Number(err?.status) === 402) {
+                    geminiBillingBlockedUntil = Date.now() + 5 * 60 * 1000;
+                }
                 if ([401, 402, 403, 429].includes(Number(err?.status))) {
                     break;
                 }
             }
         }
+    } else if (providers.gemini && geminiInCooldown) {
+        providerErrors.push("Gemini: créditos prepagos agotados (en espera de recarga).");
     }
 
     // 2. Fallback OpenAI (if configured)
@@ -2589,10 +2636,26 @@ export async function runBusinessCopilot(params: {
         }
     }
 
-    // 3. Fallback Groq
+    // 3. Fallback Groq (prompt, tools e historial compactos para respetar límite TPM free-tier)
     if (providers.groq) {
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
-        const groqTools = getOpenAICopilotTools();
+        const groq = new Groq({
+            apiKey: process.env.GROQ_API_KEY || "",
+            maxRetries: 0,
+            timeout: 20_000,
+        });
+        const groqTools = getOpenAICopilotTools(true);
+        const groqSystemPrompt = buildCopilotSystemPrompt({
+            sucursalName,
+            todayArgentina,
+            userName,
+            userRole,
+            activePage,
+            compact: true,
+        });
+        const groqHistory = cleanHistory.slice(-6).map((m) => ({
+            role: m.role,
+            content: m.content.length > 700 ? `${m.content.slice(0, 700)}…` : m.content,
+        }));
 
         for (const modelId of GROQ_CHAT_MODELS) {
             try {
@@ -2600,12 +2663,12 @@ export async function runBusinessCopilot(params: {
                 const toolsUsed = new Set<string>();
                 const usages: TokenUsageRecord[] = [];
                 const messages: any[] = [
-                    { role: "system", content: systemPrompt },
-                    ...cleanHistory.map((m) => ({ role: m.role, content: m.content })),
+                    { role: "system", content: groqSystemPrompt },
+                    ...groqHistory,
                     { role: "user", content: message },
                 ];
 
-                let maxIter = 8;
+                let maxIter = 5;
                 let lastFingerprint = "";
                 while (maxIter > 0) {
                     maxIter--;
@@ -2614,7 +2677,7 @@ export async function runBusinessCopilot(params: {
                         messages,
                         tools: groqTools,
                         tool_choice: "auto",
-                        max_completion_tokens: 2500,
+                        max_completion_tokens: 1400,
                     });
 
                     const u: any = response.usage || {};
@@ -2691,7 +2754,7 @@ export async function runBusinessCopilot(params: {
                             tool_call_id: tc.id,
                             role: "tool",
                             name: tc.function.name,
-                            content: result,
+                            content: truncateToolOutput(result, 3600),
                         });
                     }
                 }
@@ -2718,7 +2781,18 @@ export async function runBusinessCopilot(params: {
     }
 
     console.error("[Copilot] All providers failed:", providerErrors);
-    if (providerErrors.some((e) => e.includes("credits are depleted") || e.includes("402"))) {
+    const geminiDepleted = providerErrors.some(
+        (e) =>
+            e.includes("credits are depleted") ||
+            e.includes("402") ||
+            e.includes("créditos prepagos agotados")
+    );
+    if (geminiDepleted && !providers.groq && !providers.openai) {
+        throw new Error(
+            "Créditos de Gemini agotados y no hay respaldo configurado en el servidor (verificá GROQ_API_KEY u OPENAI_API_KEY en el entorno)."
+        );
+    }
+    if (geminiDepleted) {
         throw new Error(
             `Créditos de Gemini agotados y fallaron los respaldos (${providerErrors[providerErrors.length - 1] || "sin respuesta"}).`
         );

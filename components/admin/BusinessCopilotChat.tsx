@@ -358,9 +358,15 @@ export function BusinessCopilotChat({
                 }),
             });
 
-            const data = await res.json();
+            const rawText = await res.text();
+            let data: any = null;
+            try {
+                data = rawText ? JSON.parse(rawText) : {};
+            } catch {
+                data = null;
+            }
 
-            if (res.ok && data.success) {
+            if (res.ok && data?.success) {
                 const newProps: PendingActionProposal[] = data.proposals || [];
                 if (newProps.length > 0) {
                     setProposalStates((prev) => {
@@ -388,12 +394,14 @@ export function BusinessCopilotChat({
                     loadHistory();
                 }
             } else {
+                const errDetail = data?.error || rawText.slice(0, 300) || `Error del servidor (HTTP ${res.status})`;
+                console.error("[BusinessCopilot] Error HTTP", res.status, errDetail);
                 setMessages((prev) => [
                     ...prev,
                     {
                         id: `err-${Date.now()}`,
                         role: "assistant",
-                        content: `⚠️ ${data.error || "No se pudo procesar tu consulta."}`,
+                        content: `⚠️ ${data?.error || `Error del servidor (HTTP ${res.status}). Revisá la configuración o volvé a intentar.`}`,
                     },
                 ]);
             }

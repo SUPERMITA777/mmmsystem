@@ -96,6 +96,21 @@ export async function verifyTenantSession(
         }
     }
 
+    if (!userSucursalId && rol !== "super_admin") {
+        const { data: ownerSuc } = await supabaseAdmin
+            .from("sucursales")
+            .select("id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+        if (ownerSuc?.id) {
+            userSucursalId = ownerSuc.id;
+            if (rol === "empleado") {
+                rol = "admin";
+            }
+        }
+    }
+
     // Aislamiento estricto multi-tenant
     if (rol !== "super_admin" && userSucursalId !== sucursalId) {
         return {

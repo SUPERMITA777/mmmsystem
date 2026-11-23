@@ -11,6 +11,8 @@ import { verifyTenantSession } from "@/lib/serverAuth";
 import { runBusinessCopilot, type CopilotMessage } from "@/lib/businessCopilot";
 import { getMonthlyTokenUsage } from "@/lib/aiProviders";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
     try {
         const body = await request.json();
